@@ -244,8 +244,19 @@ export const authApi = {
         throw new Error('Invalid response from server: missing access token');
       }
 
-      localStorage.setItem('access_token', response.data.access_token);
-      return response.data;
+      // Normalize user fields to match frontend interface
+      const normalizedResponse: AuthResponse = {
+        ...response.data,
+        user: {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          name: (response.data.user as any).full_name || response.data.user.name || '',
+          createdAt: (response.data.user as any).created_at || (response.data.user as any).createdAt || '',
+        },
+      };
+
+      localStorage.setItem('access_token', normalizedResponse.access_token);
+      return normalizedResponse;
     } catch (error: any) {
       localStorage.removeItem('access_token');
       
@@ -274,7 +285,17 @@ export const authApi = {
         full_name: credentials.name
       });
 
-      return response.data;
+      // Normalize user fields to match frontend interface
+      const normalizedResponse: AuthResponse = {
+        ...response.data,
+        user: {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          name: (response.data.user as any).full_name || response.data.user.name || '',
+          createdAt: (response.data.user as any).created_at || (response.data.user as any).createdAt || '',
+        },
+      };
+      return normalizedResponse;
     } catch (error) {
       localStorage.removeItem('access_token');
       throw error;

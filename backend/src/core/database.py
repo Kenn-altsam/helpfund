@@ -39,10 +39,10 @@ Base = declarative_base()
 # Metadata for database operations
 metadata = MetaData()
 
-def get_database() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session, None, None]:
     """
-    Database dependency that provides a database session.
-    
+    FastAPI dependency that provides a database session.
+
     Yields:
         Session: SQLAlchemy database session
     """
@@ -62,18 +62,6 @@ def get_database() -> Generator[Session, None, None]:
         )
     finally:
         db.close()
-
-
-# Alias for FastAPI dependency injection
-def get_db() -> Generator[Session, None, None]:
-    """
-    FastAPI dependency for database session.
-    Alias for get_database() function.
-    
-    Yields:
-        Session: SQLAlchemy database session
-    """
-    yield from get_database()
 
 def init_database():
     """

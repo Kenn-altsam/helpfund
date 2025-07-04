@@ -48,7 +48,8 @@ services:
       dockerfile: Dockerfile
       # Передаем URL бэкенда в процесс сборки фронтенда
       args:
-        VITE_API_BASE_URL: http://localhost:8000
+        # Use a relative URL so that the Nginx reverse-proxy handles routing
+        VITE_API_BASE_URL: /api/v1
     container_name: ayala_frontend
     restart: unless-stopped
     depends_on:
