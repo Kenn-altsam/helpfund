@@ -1,0 +1,529 @@
+# Cursor Rules for Ayala Foundation Backend Project
+
+## Project Overview
+This iOS app assists charity funds in discovering companies and their relevant data (e.g., contact info, industry, past donations, sponsorship opportunities) based on geographical location and AI-powered natural language input. The app uses artificial intelligence to interpret user prompts and intelligently match charity funds with potential corporate sponsors, streamlining the sponsorship discovery process.
+
+## Project Structure
+- Follow modular architecture with clear separation of concerns
+- Group related functionality into feature modules
+- Use consistent file naming conventions
+
+```
+src/
+├── auth/           # Authentication and authorization
+├── companies/      # Company-related functionality
+├── locations/      # Location-based services
+├── ai_conversation/# AI conversation and natural language processing
+├── core/           # Core utilities and shared components
+└── main.py        # Application entry point
+```
+
+## Code Organization
+
+### Imports
+- Group imports in the following order:
+  1. Standard library
+  2. Third-party packages
+  3. Local application imports
+- Use absolute imports over relative imports
+
+### Type Hints
+- Use type hints for all function parameters and return values
+- Define custom types in `types.py` within each module
+- Use Pydantic models for data validation
+
+### FastAPI Best Practices
+- Use APIRouter for route organization
+- Implement proper dependency injection
+- Follow REST conventions for endpoints
+- Use async where appropriate for I/O operations
+
+## API Design
+
+### Endpoints
+- Use clear, descriptive endpoint names
+- Group related endpoints under common prefixes
+- Include version number in API path
+- Document all endpoints with OpenAPI/Swagger
+
+### Response Format
+```python
+{
+    "status": "success|error",
+    "data": {...},  # Main response payload
+    "message": "...",  # Human-readable message
+    "metadata": {  # Optional metadata
+        "pagination": {...},
+        "filters": {...}
+    }
+}
+```
+
+### Error Handling
+- Use custom exception handlers
+- Return structured error responses
+- Include error codes and helpful messages
+- Log errors appropriately
+
+## Database
+- Use SQLAlchemy for database operations
+- Follow naming conventions for tables and columns
+- Implement proper indexing for location-based queries
+- Use migrations for database changes
+
+## Security
+- Implement proper authentication
+- Use environment variables for sensitive data
+- Follow security best practices
+- Rate limit API endpoints
+
+## Testing
+- Write unit tests for business logic
+- Write integration tests for API endpoints
+- Use async test client
+- Mock external dependencies
+
+## Documentation
+- Document all public functions and classes
+- Include examples in docstrings
+- Keep API documentation up-to-date
+- Document environment setup
+
+## Development Workflow
+- Use pre-commit hooks
+- Follow consistent commit message format
+- Review code before merging
+- Keep dependencies updated
+
+## Location-Based Features
+- Implement efficient location search
+- Use proper indexing for geographic queries
+- Support multiple location formats
+- Cache frequent location queries
+
+## Company Data Management
+- Validate company data
+- Implement company search filters
+- Support bulk operations
+- Track data freshness
+
+## Performance
+- Use async operations where appropriate
+- Implement caching strategy
+- Optimize database queries
+- Monitor API performance
+
+## Monitoring and Logging
+- Use structured logging
+- Implement proper error tracking
+- Monitor API usage
+- Track performance metrics
+
+## Code Style
+- Follow PEP 8
+- Use ruff for linting
+- Maintain consistent naming conventions
+- Keep functions focused and small
+
+## Dependencies
+- Keep dependencies minimal
+- Pin dependency versions
+- Document dependency purposes
+- Regular security updates
+
+## Configuration
+- Use environment variables
+- Implement configuration validation
+- Support multiple environments
+- Document configuration options
+
+## Data Processing and Storage
+
+### Data Sources
+- Parse data from company websites and save to PostgreSQL database
+- Maintain separate parsers for each data source (kazdata, statsnet, web scraping)
+- Document data source specifics and update frequency
+- Implement error handling for source-specific issues
+- Track data source versions and updates
+
+### Data Parser Structure
+```
+data/
+├── kazdata/
+│   ├── parser/          # Parser implementations
+│   └── regions/         # Regional data files
+└── statsnet/
+    ├── parser/          # Parser implementations
+    └── regions/         # Regional data files
+```
+
+### Parser Implementation
+- Follow consistent parser interface
+- Implement data validation before storage
+- Handle region-specific data variations
+- Log parsing errors and statistics
+- Support incremental updates
+
+### PostgreSQL Database Design
+
+#### Company Table
+```sql
+CREATE TABLE companies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    bin VARCHAR(12),
+    registration_date DATE,
+    company_type VARCHAR(50),
+    employee_count INTEGER,
+    revenue_range VARCHAR(50),
+    industry VARCHAR(100),
+
+    website VARCHAR(255),
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    description TEXT,
+
+    social_media JSONB DEFAULT '{}',
+    has_social_media BOOLEAN DEFAULT FALSE,
+    has_website BOOLEAN DEFAULT FALSE,
+    has_contact_info BOOLEAN DEFAULT FALSE,
+
+    annual_tax_paid FLOAT,
+    tax_reporting_year INTEGER,
+    tax_compliance_score FLOAT,
+    last_tax_update DATE,
+
+    past_donations TEXT,
+    sponsorship_interests TEXT,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_company_tax_paid ON companies(annual_tax_paid);
+CREATE INDEX idx_company_tax_year ON companies(tax_reporting_year);
+CREATE INDEX idx_company_has_website ON companies(has_website);
+CREATE INDEX idx_company_has_social_media ON companies(has_social_media);
+CREATE INDEX idx_company_has_contact_info ON companies(has_contact_info);
+```
+
+#### Location Table
+```sql
+CREATE TABLE locations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id UUID REFERENCES companies(id),
+    region VARCHAR(100) NOT NULL,
+    city VARCHAR(100),
+    address TEXT,
+    postal_code VARCHAR(10),
+    coordinates POINT DEFAULT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_company
+        FOREIGN KEY(company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_location_region ON locations(region);
+CREATE INDEX idx_location_coordinates ON locations USING GIST(coordinates);
+```
+
+### Data Import Rules
+- Validate data before insertion
+- Use batch processing for large imports
+- Implement upsert logic for updates
+- Handle duplicate records gracefully
+- Track import history and status
+
+### Data Quality
+- Enforce data validation rules
+- Handle missing or invalid data
+- Standardize region and city names
+- Normalize company names and addresses
+- Implement data cleansing procedures
+
+### Database Operations
+- Use database migrations for schema changes
+- Implement proper indexing for location queries
+- Optimize for geographic searches
+- Regular database maintenance
+- Monitor database performance
+
+### Data Access Patterns
+- Implement caching for frequent queries
+- Use connection pooling
+- Handle concurrent access
+- Implement rate limiting
+- Monitor query performance
+
+## Geographic Search Implementation
+- Use PostGIS for geographic queries
+- Implement radius search
+- Support multiple coordinate systems
+- Optimize spatial indexes
+- Cache common geographic queries
+
+## Data Synchronization
+- Schedule regular data updates
+- Track data freshness
+- Handle incremental updates
+- Log synchronization status
+- Monitor sync performance
+
+## Database Migrations
+
+### Basic Commands
+```bash
+# Create new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+### Guidelines
+- Use descriptive migration names
+- Test migrations before applying to production
+- Include both upgrade and downgrade paths
+- Back up database before major migrations
+
+## API Endpoints for Frontend Integration
+
+### Base URL
+All endpoints are prefixed with `/api/v1`
+
+### Authentication Endpoints
+```typescript
+// Login
+POST /auth/token
+Body: {
+  username: string,  // User's email
+  password: string
+}
+Response: {
+  access_token: string,
+  token_type: string  // "bearer"
+}
+
+// Register New User
+POST /auth/register
+Body: {
+  email: string,
+  password: string,
+  full_name: string
+}
+Response: {
+  id: string,
+  email: string,
+  full_name: string,
+  is_active: boolean,
+  is_verified: boolean,
+  created_at: string
+}
+
+// Password Reset Request
+POST /auth/password-reset-request
+Body: {
+  email: string
+}
+Response: {
+  message: string,
+  token: string  // In development only
+}
+
+// Reset Password
+POST /auth/password-reset
+Body: {
+  token: string,
+  new_password: string
+}
+Response: {
+  message: string
+}
+```
+
+### Fund Profile Endpoints
+```typescript
+// Create Fund Profile
+POST /funds/profile
+Body: {
+  fund_name: string,
+  fund_description: string,
+  fund_email: string
+}
+Response: {
+  id: string,
+  user_id: string,
+  fund_name: string,
+  fund_description: string,
+  fund_email: string,
+  conversation_state: object,
+  created_at: string,
+}
+
+// Get Fund Profile
+GET /funds/profile
+Response: {
+  id: string,
+  user_id: string,
+  fund_name: string,
+  fund_description: string,
+  fund_email: string,
+  conversation_state: object,
+  created_at: string,
+}
+
+// AI Conversation
+POST /funds/conversation
+Body: {
+  user_input: string
+}
+Response: {
+  message: string,
+  required_fields: string[],
+  is_complete: boolean
+}
+
+// Reset Conversation
+POST /funds/conversation/reset
+Response: {
+  message: string
+}
+```
+
+### Company Search Endpoints
+```typescript
+// Search Companies
+GET /companies/search
+Query Parameters: {
+  query?: string,          // Natural language search
+  region?: string,         // Region filter
+  city?: string,           // City filter
+  latitude?: number,       // Location-based search
+  longitude?: number,
+  radius?: number,         // Search radius in km
+  industry?: string,       // Industry filter
+  min_employees?: number,  // Employee count filter
+  max_employees?: number
+}
+Response: Array<{
+  id: string,
+  name: string,
+  bin: string,
+  industry: string,
+  employee_count: number,
+  region: string,
+  city: string,
+  has_contact_info: boolean,
+  has_website: boolean,
+  has_social_media: boolean
+}>
+
+// Get Company Details
+GET /companies/{company_id}
+Response: {
+  id: string,
+  name: string,
+  bin: string,
+  registration_date: string,
+  status: string,
+  company_type: string,
+  employee_count: number,
+  revenue_range: string,
+  industry: string,
+  website: string,
+  phone: string,
+  email: string,
+  description: string,
+  social_media: {
+    [key: string]: string
+  },
+  has_social_media: boolean,
+  has_website: boolean,
+  has_contact_info: boolean,
+  annual_tax_paid: number,
+  tax_reporting_year: number,
+  last_tax_update: string,
+  past_donations: string,
+  sponsorship_interests: string,
+  locations: Array<{
+    id: string,
+    region: string,
+    city: string,
+    address: string,
+    postal_code: string,
+    coordinates: [number, number],
+    is_primary: boolean
+  }>
+}
+
+// Get Companies by Region
+GET /companies/region/{region}
+Query Parameters: {
+  city?: string
+}
+Response: Array<{
+  id: string,
+  name: string,
+  bin: string,
+  industry: string,
+  employee_count: number,
+  region: string,
+  city: string,
+  has_contact_info: boolean,
+  has_website: boolean,
+  has_social_media: boolean
+}>
+
+// Get AI Suggestions
+GET /companies/suggest
+Query Parameters: {
+  charity_description: string,
+  region?: string
+}
+Response: Array<{
+  company: {
+    id: string,
+    name: string,
+    industry: string,
+    region: string
+  },
+  match_score: number,
+  reasoning: string,
+  approach_strategy: string
+}>
+```
+
+### Authentication Requirements
+- All endpoints except `/auth/*` require Bearer token authentication
+- Include token in Authorization header: `Authorization: Bearer <token>`
+- Token expiration: 30 minutes
+- Expired token requires re-authentication
+
+### Error Response Format
+```typescript
+{
+  status: "error",
+  message: string,
+  error_code?: string,
+  details?: object
+}
+```
+
+### Pagination Format (where applicable)
+```typescript
+{
+  data: Array<T>,
+  metadata: {
+    pagination: {
+      total: number,
+      page: number,
+      per_page: number,
+      total_pages: number
+    }
+  }
+}
+```

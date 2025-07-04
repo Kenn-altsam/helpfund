@@ -1,0 +1,104 @@
+# # version: "3.8"
+
+# services:
+#   # The Database Service (PostgreSQL)
+#   # This section configures the database container itself.
+#   db:
+#     image: postgres:15
+#     container_name: ayala_db
+#     restart: unless-stopped
+#     env_file:
+#       - .env  # <-- IMPORTANT: Loads variables like DB_NAME, DB_USER from the root .env file
+#     environment:
+#       # This maps the variables from .env to what the postgres image expects
+#       POSTGRES_DB: ${DB_NAME}
+#       POSTGRES_USER: ${DB_USER}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD}
+#     ports:
+#       # We map host port 5432 to container port 5432 to match your .env
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#       # - ./db-init:/docker-entrypoint-initdb.d
+
+#   # The Backend Application Service (FastAPI)
+#   # This section configures your Python application container.
+#   backend:
+#     build:
+#       context: ./backend      # <-- FIX: Tells Docker to look inside the 'backend' folder
+#       dockerfile: Dockerfile
+#     container_name: ayala_backend
+#     restart: unless-stopped
+#     depends_on:
+#       - db
+#     env_file:
+#       - .env                  # <-- IMPORTANT: Loads all variables from the root .env file
+#     environment:
+#       # This creates the final connection string for your app, using the service name 'db'
+#       DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
+#     ports:
+#       # Expose your application on port 8000
+#       - "8000:8000"
+
+#   # The Frontend Application Service (React/Vite)
+#   frontend:
+#     build: 
+#       context: ./frontend     # <-- This was already correct! Good job.
+#       dockerfile: Dockerfile
+#     container_name: ayala_frontend
+#     restart: unless-stopped
+#     depends_on:
+#       - backend
+#     ports:
+#       - "5173:5173"
+#     environment:
+#       # This tells your React/Node app how to find the backend
+#       - VITE_API_URL=http://backend:8000
+
+# # This defines the named volume for persistent database data.
+# volumes:
+#   postgres_data:
+
+services:
+  db:
+    image: postgres:15
+    container_name: ayala_db
+    restart: unless-stopped
+    env_file: .env # Reads the DB variables from the root .env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # UNCOMMENT the line below if you have your specific_migration.sql file in a 'db-init' folder
+      # - ./db-init:/docker-entrypoint-initdb.d
+
+  backend:
+    build:
+      context: ./backend      # Correctly points to the backend folder
+      dockerfile: Dockerfile
+    container_name: ayala_backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file: .env # Reads all variables from the root .env
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ayala_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"  # <-- CRITICAL FIX: Map host 5173 to container's NGINX port 80
+    env_file: .env # Reads VITE_API_URL from the root .env
+
+volumes:
+  postgres_data:

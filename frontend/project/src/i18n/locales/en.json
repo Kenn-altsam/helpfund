@@ -1,0 +1,219 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "save": "Save",
+    "edit": "Edit",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "clear": "Clear",
+    "add": "Add",
+    "remove": "Remove"
+  },
+  "header": {
+    "title": "helpfund.pro",
+    "home": "Home",
+    "finder": "Find Sponsors",
+    "consideration": "Consideration",
+    "profile": "Profile",
+    "login": "Login",
+    "register": "Register"
+  },
+  "footer": {
+    "description": "",
+    "about": "About",
+    "mission": "Mission",
+    "team": "Team",
+    "reports": "Reports",
+    "services": "Services",
+    "sponsorSearch": "Sponsor Search",
+    "consulting": "Consulting",
+    "training": "Training",
+    "contacts": "Contacts",
+    "copyright": "© 2025 helpfund.pro. All rights reserved."
+  },
+  "home": {
+    "hero": {
+      "title": "Find perfect corporate sponsors for your projects",
+      "subtitle": "helpfund.pro helps social projects find potential corporate partners using AI technologies",
+      "findSponsors": "Find Sponsors"
+    },
+    "features": {
+      "title": "How we help",
+      "subtitle": "Our platform uses advanced technologies to find suitable corporate partners",
+      "aiSearch": {
+        "title": "AI Search",
+        "description": "Smart algorithm analyzes your request and finds the most suitable corporate sponsors by region and industry"
+      },
+      "verifiedData": {
+        "title": "Verified Data",
+        "description": "Up-to-date company information: BIN, tax data, contacts and financial indicators"
+      },
+      "personalization": {
+        "title": "Personalization",
+        "description": "Save interesting companies to consideration list and maintain search query history"
+      }
+    },
+    "stats": {
+      "companies": "Companies in database",
+      "projects": "Successful projects",
+      "regions": "Kazakhstan regions",
+      "availability": "Service availability"
+    },
+    "cta": {
+      "title": "Ready to find your sponsors?",
+      "subtitle": "Start searching now. Describe your project, region or industry, and our AI will find suitable corporate partners",
+      "startSearch": "Start Search"
+    },
+    "about": {
+      "title": "About helpfund.pro",
+      "description1": "We are a website that helps social projects find corporate sponsors. Our mission is to create a bridge between those who need support and those who are ready to help.",
+      "description2": "Using modern technologies and big data, we make the sponsor search process more efficient and transparent."
+    }
+  },
+  "finder": {
+    "title": "Find Sponsors",
+    "newChat": "New Chat",
+    "historyEmpty": "Dialog history is empty",
+    "placeholder": "Describe your request: region, industry, company name...",
+    "sendHint": "Press Enter to send message",
+    "notLoggedIn": {
+      "title": "Authentication Required",
+      "description": "Please sign in to use the sponsor search feature",
+      "login": "Sign In"
+    },
+    "welcome": {
+      "title": "Start searching for sponsors",
+      "description": "Describe your project, specify region or industry, and we'll find suitable corporate partners",
+      "examples": "Example queries:",
+      "example1": "\"Find IT companies in Almaty\"",
+      "example2": "\"Mining companies of Kazakhstan\"",
+      "example3": "\"Large taxpayers of Shymkent\""
+    },
+    "response": "Found {{count}} companies for your request:",
+    "companiesFound": "Found {{count}} companies",
+    "searchError": "An error occurred while searching for companies",
+    "historyDeleted": "Dialog deleted",
+    "historyDeleteError": "Failed to delete dialog",
+    "resetError": "Failed to reset chat"
+  },
+  "company": {
+    "bin": "BIN",
+    "industry": "Industry",
+    "taxes": "Tax data",
+    "website": "Website",
+    "contacts": "Contacts",
+    "addToConsideration": "Add to Consideration",
+    "addedToConsideration": "Added to Consideration",
+    "companyAdded": "Company added to consideration"
+  },
+  "consideration": {
+    "title": "Consideration List",
+    "empty": {
+      "title": "Consideration list is empty",
+      "description": "Add companies to consideration during search to see them here",
+      "findSponsors": "Find Sponsors"
+    },
+    "count": "{{count}} company added for consideration",
+    "countPlural": "{{count}} companies added for consideration",
+    "clearAll": "Clear All",
+    "cleared": "Consideration list cleared",
+    "companyRemoved": "Company removed from consideration",
+    "nextSteps": {
+      "title": "Next Steps",
+      "step1": "• Study tax data and financial indicators of companies",
+      "step2": "• Visit company websites for additional information",
+      "step3": "• Prepare your project presentation",
+      "step4": "• Contact companies using provided contacts"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Sign In",
+      "subtitle": "Sign in to continue searching for sponsors",
+      "button": "Sign In",
+      "loading": "Signing in...",
+      "noAccount": "Don't have an account?",
+      "register": "Register"
+    },
+    "register": {
+      "title": "Create Account",
+      "subtitle": "Create an account to save search results",
+      "button": "Register",
+      "loading": "Registering...",
+      "hasAccount": "Already have an account?",
+      "login": "Sign In"
+    },
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "Enter your name",
+      "email": "Email",
+      "emailPlaceholder": "Enter your email",
+      "password": "Password",
+      "passwordPlaceholder": "Enter password"
+    },
+    "validation": {
+      "fillRequired": "Fill in all required fields",
+      "enterName": "Enter your name"
+    },
+    "success": {
+      "welcome": "Welcome!",
+      "accountCreated": "Account successfully created!"
+    },
+    "errors": {
+      "loginError": "Login error",
+      "registerError": "Registration error",
+      "serverError": "Server error occurred",
+      "invalidData": "Invalid data provided",
+      "emailExists": "Email already registered"
+    },
+    "terms": "By continuing, you agree to our Terms of Use and Privacy Policy"
+  },
+  "profile": {
+    "title": "User Profile",
+    "subtitle": "Manage your account settings",
+    "notLoggedIn": {
+      "title": "Not signed in",
+      "description": "Sign in to view profile",
+      "login": "Sign In"
+    },
+    "userInfo": {
+      "title": "User Information",
+      "email": "Email",
+      "name": "Name",
+      "registrationDate": "Registration Date"
+    },
+    "statistics": {
+      "title": "Statistics",
+      "dialogs": "Dialogs",
+      "companies": "Companies in consideration"
+    },
+    "actions": {
+      "title": "Actions",
+      "logout": "Sign Out",
+      "loggingOut": "Signing out...",
+      "deleteAccount": "Delete Account",
+      "deleting": "Deleting..."
+    },
+    "deleteDialog": {
+      "title": "Delete Account",
+      "description": "This action cannot be undone. All your data, including search history and consideration list, will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete Account"
+    },
+    "success": {
+      "loggedOut": "You have successfully signed out",
+      "accountDeleted": "Account successfully deleted"
+    },
+    "errors": {
+      "logoutError": "Error signing out",
+      "deleteError": "Error deleting account"
+    }
+  }
+}

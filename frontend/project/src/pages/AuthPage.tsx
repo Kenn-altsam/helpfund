@@ -1,0 +1,205 @@
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Heart, Mail, Lock, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useGlobalContext } from '@/context/GlobalContext';
+import { authApi } from '@/services/api';
+import { toast } from 'sonner';
+import { AuthResponse } from '@/types';
+
+export function AuthPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { dispatch } = useGlobalContext();
+  
+  const isLogin = location.pathname === '/login';
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    name: '',
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email || !formData.password) {
+      toast.error(t('auth.validation.fillRequired'));
+      return;
+    }
+
+    if (!isLogin && !formData.name) {
+      toast.error(t('auth.validation.enterName'));
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const response: AuthResponse = isLogin 
+        ? await authApi.login({ email: formData.email, password: formData.password })
+        : await authApi.register({ 
+            email: formData.email, 
+            password: formData.password, 
+            name: formData.name 
+          });
+
+      if (!response || !response.access_token) {
+        throw new Error('Invalid response from server');
+      }
+
+      localStorage.setItem('access_token', response.access_token);
+      
+      dispatch({ type: 'SET_USER', payload: response.user });
+      
+      toast.success(isLogin ? t('auth.success.welcome') : t('auth.success.accountCreated'), {
+        duration: 5000
+      });
+      navigate('/finder');
+    } catch (error: any) {
+      console.error('Auth error:', error);
+      
+      localStorage.removeItem('access_token');
+      
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data?.detail;
+        if (errorMessage === 'Email already registered') {
+          toast.error(t('auth.errors.emailExists'));
+        } else {
+          toast.error(t('auth.errors.invalidData'));
+        }
+      } else if (error.response?.status === 500) {
+        toast.error(t('auth.errors.serverError'));
+      } else {
+        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center space-x-2 mb-6">
+            <Heart className="h-8 w-8 text-primary" />
+            <span className="text-2xl font-bold">{t('header.title')}</span>
+          </Link>
+          <h1 className="text-2xl font-bold">
+            {isLogin ? t('auth.login.title') : t('auth.register.title')}
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            {isLogin ? t('auth.login.subtitle') : t('auth.register.subtitle')}
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-center">
+              {isLogin ? t('auth.login.button') : t('auth.register.button')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {!isLogin && (
+                <div className="space-y-2">
+                  <label htmlFor="name" className="text-sm font-medium">
+                    {t('auth.fields.name')}
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      name="name"
+                      type="text"
+                      placeholder={t('auth.fields.namePlaceholder')}
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                      required={!isLogin}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium">
+                  {t('auth.fields.email')}
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder={t('auth.fields.emailPlaceholder')}
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="password" className="text-sm font-medium">
+                  {t('auth.fields.password')}
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder={t('auth.fields.passwordPlaceholder')}
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading 
+                  ? (isLogin ? t('auth.login.loading') : t('auth.register.loading'))
+                  : (isLogin ? t('auth.login.button') : t('auth.register.button'))
+                }
+              </Button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {isLogin ? t('auth.login.noAccount') : t('auth.register.hasAccount')}{' '}
+                <Link
+                  to={isLogin ? '/register' : '/login'}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {isLogin ? t('auth.login.register') : t('auth.register.login')}
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="mt-8 text-center">
+          <p className="text-xs text-muted-foreground">
+            {t('auth.terms')}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

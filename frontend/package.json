@@ -1,0 +1,15 @@
+{
+  "name": "ayala-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "project"
+  ],
+  "scripts": {
+    "dev": "cd project && npm run dev",
+    "build": "cd project && npm run build",
+    "lint": "cd project && npm run lint",
+    "preview": "cd project && npm run preview",
+    "install-deps": "npm install && cd project && npm install"
+  }
+} 
