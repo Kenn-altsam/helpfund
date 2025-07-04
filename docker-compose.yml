@@ -35,7 +35,7 @@ services:
       # Собираем строку подключения к БД, используя имя сервиса 'db' вместо 'localhost'
       DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
       # Разрешаем запросы с нашего фронтенда
-      ALLOWED_ORIGINS: "http://localhost:5173"
+      # ALLOWED_ORIGINS: "http://localhost:5173"
       # Указываем порт, на котором работает бэкенд
       PORT: 8000
     ports:

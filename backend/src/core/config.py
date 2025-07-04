@@ -1,96 +1,215 @@
 """
-Configuration management for Ayala Foundation Backend using Pydantic Settings (v2).
+Simplified configuration management for the Ayala Foundation Backend using Pydantic Settings (v2).
 
-Loads environment variables from a .env file (if present) and provides
-validated, typed access to configuration values throughout the backend.
+Focus: make the settings class explicit and rely on Pydantic's built-in parsing for
+comma-separated ALLOWED_ORIGINS. All other fields are loaded directly from the
+environment (optionally from a .env file).
 """
 
 from functools import lru_cache
 from typing import List
 
-from pydantic import PostgresDsn, Field
+from pydantic import PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables (validated)."""
+    """Application settings validated and loaded from environment variables."""
 
-    # Pydantic-settings configuration: where to read env vars from
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # ------------------------------------------------------------------
+    # Base configuration for pydantic-settings
+    # ------------------------------------------------------------------
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,  # DB_HOST and db_host are treated the same
+        extra="ignore",
+    )
 
-    # ---------------------------------------------------------------------
-    # OpenAI
-    # ---------------------------------------------------------------------
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    # ------------------------------------------------------------------
+    # Database
+    # If DATABASE_URL is not provided directly, it can be assembled from the
+    # individual connection parts defined below (legacy support).
+    # ------------------------------------------------------------------
+    DATABASE_URL: PostgresDsn | None = None
 
-    # ---------------------------------------------------------------------
-    # FastAPI / Server
-    # ---------------------------------------------------------------------
-    host: str = Field(default="0.0.0.0", alias="HOST")
-    port: int = Field(default=8000, alias="PORT")
-    debug: bool = Field(default=True, alias="DEBUG")
+    # Individual parts (legacy)
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_NAME: str = "nFac_server"
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str = ""
 
-    # ---------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # JWT / Auth
+    # ------------------------------------------------------------------
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # ------------------------------------------------------------------
+    # FastAPI / Server toggles
+    # ------------------------------------------------------------------
+    DEBUG: bool = True
+
+    # ------------------------------------------------------------------
     # CORS
-    # ---------------------------------------------------------------------
-    allowed_origins: List[str] = Field(default_factory=lambda: ["*"], alias="ALLOWED_ORIGINS")
-    allow_credentials: bool = Field(default=True, alias="ALLOW_CREDENTIALS")
-    allow_methods: List[str] = Field(default_factory=lambda: [
+    # Pydantic automatically splits comma-separated strings for List[str]
+    # Example: "https://example.com, https://myapp.com"
+    # ------------------------------------------------------------------
+    ALLOWED_ORIGINS: List[str] = ["*"]
+
+    # Parse comma-separated strings like "http://localhost:3000,http://127.0.0.1:3000"
+    # into a proper Python list so we remain backwards-compatible with the old env syntax.
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def split_allowed_origins(cls, v):  # noqa: D401
+        if isinstance(v, str):
+            # Support empty strings by filtering out blanks after strip
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
+    # ------------------------------------------------------------------
+    # OpenAI
+    # ------------------------------------------------------------------
+    OPENAI_API_KEY: str = ""
+
+    # ------------------------------------------------------------------
+    # Backwards-compatibility helpers (legacy lowercase attributes)
+    # ------------------------------------------------------------------
+    # FastAPI / server networking
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+
+    # CORS extras used in middleware configuration
+    ALLOW_CREDENTIALS: bool = True
+    ALLOW_METHODS: List[str] = [
         "GET",
         "POST",
         "PUT",
         "DELETE",
         "OPTIONS",
         "PATCH",
-    ])
-    allow_headers: List[str] = Field(default_factory=lambda: ["*"], alias="ALLOW_HEADERS")
+    ]
+    ALLOW_HEADERS: List[str] = ["*"]
 
-    # ---------------------------------------------------------------------
-    # Database
-    # ---------------------------------------------------------------------
-    database_url: PostgresDsn | None = Field(default=None, alias="DATABASE_URL")
-    db_host: str = Field(default="localhost", alias="DB_HOST")
-    db_port: int = Field(default=5432, alias="DB_PORT")
-    db_name: str = Field(default="nFac_server", alias="DB_NAME")
-    db_user: str = Field(default="postgres", alias="DB_USER")
-    db_password: str = Field(default="", alias="DB_PASSWORD")
+    # ------------------------------------------------------------------
+    # Computed aliases – keep the rest of the codebase untouched
+    # ------------------------------------------------------------------
+    @property
+    def host(self) -> str:
+        return self.HOST
 
-    # ---------------------------------------------------------------------
-    # JWT / Auth
-    # ---------------------------------------------------------------------
-    secret_key: str = Field(default="your-secret-key-please-change-in-production", alias="SECRET_KEY")
-    algorithm: str = Field(default="HS256", alias="ALGORITHM")
-    access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    @property
+    def port(self) -> int:
+        return self.PORT
 
-    # ---------------------------------------------------------------------
-    # Validators / post-processing
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def _assemble_db_url(values: "Settings") -> str:
+    @property
+    def allowed_origins(self) -> List[str]:
+        return self.ALLOWED_ORIGINS
+
+    @property
+    def allow_credentials(self) -> bool:
+        return self.ALLOW_CREDENTIALS
+
+    @property
+    def allow_methods(self) -> List[str]:
+        return self.ALLOW_METHODS
+
+    @property
+    def allow_headers(self) -> List[str]:
+        return self.ALLOW_HEADERS
+
+    # ------------------------------------------------------------------
+    # Database helper properties (legacy attribute names)
+    # ------------------------------------------------------------------
+    @property
+    def db_host(self) -> str:  # noqa: D401
+        return self.DB_HOST
+
+    @property
+    def db_port(self) -> int:  # noqa: D401
+        return self.DB_PORT
+
+    @property
+    def db_name(self) -> str:  # noqa: D401
+        return self.DB_NAME
+
+    @property
+    def db_user(self) -> str:  # noqa: D401
+        return self.DB_USER
+
+    @property
+    def db_password(self) -> str:  # noqa: D401
+        return self.DB_PASSWORD
+
+    # Provide lowercase alias expected elsewhere
+    @property
+    def database_url(self) -> str:  # noqa: D401
+        """Return a ready-to-use DATABASE_URL.
+
+        Priority:
+        1. Explicit DATABASE_URL env variable.
+        2. Construct from individual DB_* parts for backwards compatibility.
+        """
+        if self.DATABASE_URL is not None:
+            return str(self.DATABASE_URL)
         return (
-            f"postgresql://{values.db_user}:{values.db_password}"  # type: ignore[attr-defined]
-            f"@{values.db_host}:{values.db_port}/{values.db_name}"
+            f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
-    # pydantic v2: model_post_init runs after validation
-    def model_post_init(self, __context):  # noqa: D401, N802
-        # Build DATABASE_URL if not provided.
-        if self.database_url is None:
-            object.__setattr__(self, "database_url", self._assemble_db_url(self))
+    # ------------------------------------------------------------------
+    # Security helpers (legacy lowercase attribute names)
+    # ------------------------------------------------------------------
+    @property
+    def secret_key(self) -> str:  # noqa: D401
+        return self.SECRET_KEY
 
-        # Warn if critical values are missing or insecure.
-        if not self.openai_api_key:
-            print("⚠️  Warning: OPENAI_API_KEY environment variable is not set")
-            print("    Please set it using: export OPENAI_API_KEY=<your_key_here>")
+    @property
+    def algorithm(self) -> str:  # noqa: D401
+        return self.ALGORITHM
 
-        if self.secret_key == "your-secret-key-please-change-in-production":
-            print("⚠️  Warning: Using default SECRET_KEY. Set a secure SECRET_KEY in production!")
+    @property
+    def access_token_expire_minutes(self) -> int:  # noqa: D401
+        return self.ACCESS_TOKEN_EXPIRE_MINUTES
+
+    # ------------------------------------------------------------------
+    # Post-initialisation validation / warnings
+    # ------------------------------------------------------------------
+    def model_post_init(self, __context):  # noqa: D401
+        if not self.OPENAI_API_KEY:
+            print("⚠️  Warning: OPENAI_API_KEY is not set.")
+        if "your-secret-key" in self.SECRET_KEY:
+            print(
+                "⚠️  Warning: Using a default SECRET_KEY. Please set a secure one for production."
+            )
+
+    # ------------------------------------------------------------------
+    # Misc lowercase aliases
+    # ------------------------------------------------------------------
+    @property
+    def debug(self) -> bool:  # noqa: D401
+        return self.DEBUG
+
+    @property
+    def openai_api_key(self) -> str:  # noqa: D401
+        return self.OPENAI_API_KEY
 
 
-# -------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # Cached accessor (keeps a single settings instance alive for the process)
-# -------------------------------------------------------------------------
-@lru_cache(maxsize=1)
+# ----------------------------------------------------------------------
+@lru_cache()
 def get_settings() -> Settings:
     """Return an application-wide, cached Settings instance."""
-    return Settings() 
+
+    print("⚙️  Loading settings…")
+    try:
+        settings = Settings()
+        print("✅ Settings loaded successfully.")
+        return settings
+    except Exception as e:
+        print(f"❌ FATAL: Failed to load settings. Error: {e}")
+        # Re-raise to expose validation errors clearly
+        raise 
