@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # Try SECRET_KEY first for backwards-compatibility, fall back to JWT_SECRET_KEY
     SECRET_KEY: str = Field(..., validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY"))
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
     # ------------------------------------------------------------------
     # FastAPI / Server toggles
