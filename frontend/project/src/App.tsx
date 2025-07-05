@@ -12,7 +12,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 function AppContent() {
   const location = useLocation();
-  const showFooter = location.pathname !== '/finder';
+  const showFooter = !['/finder', '/consideration'].includes(location.pathname);
 
   return (
     <div className="min-h-screen flex flex-col">

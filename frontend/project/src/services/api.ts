@@ -257,18 +257,8 @@ export const authApi = {
 
       localStorage.setItem('access_token', normalizedResponse.access_token);
       return normalizedResponse;
-    } catch (error: any) {
+    } catch (error) {
       localStorage.removeItem('access_token');
-      
-      // Enhance error handling with specific messages
-      if (error.response?.status === 401) {
-        throw new Error('Invalid email or password');
-      } else if (error.response?.status === 400) {
-        throw new Error(error.response.data?.detail || 'Invalid login data');
-      } else if (error.response?.status === 500) {
-        throw new Error('Server error occurred. Please try again later.');
-      }
-      
       throw error;
     }
   },

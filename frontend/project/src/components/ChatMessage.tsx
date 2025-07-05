@@ -1,5 +1,4 @@
-import React from 'react';
-import { User, Bot } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { CompanyCard } from './CompanyCard';
 import { CompanyCardSkeleton } from './CompanyCardSkeleton';
 import { Company } from '@/types';
@@ -30,15 +29,11 @@ export function ChatMessage({ type, content, companies }: ChatMessageProps) {
 
   return (
     <div className="flex items-start space-x-3 mb-6">
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-        type === 'user' ? 'bg-secondary' : 'bg-primary'
-      }`}>
-        {type === 'user' ? (
-          <User className="h-4 w-4 text-secondary-foreground" />
-        ) : (
+      {type === 'assistant' && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary">
           <Bot className="h-4 w-4 text-primary-foreground" />
-        )}
-      </div>
+        </div>
+      )}
       
       <div className="flex-1">
         {content && (

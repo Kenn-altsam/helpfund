@@ -140,7 +140,8 @@
       "button": "Кіру",
       "loading": "Кіру...",
       "noAccount": "Аккаунт жоқ па?",
-      "register": "Тіркелу"
+      "register": "Тіркелу",
+      "wrongPassword": "Құпия сөз қате"
     },
     "register": {
       "title": "Аккаунт құру",
@@ -167,11 +168,12 @@
       "accountCreated": "Аккаунт сәтті құрылды!"
     },
     "errors": {
-      "loginError": "Кіру қатесі",
+      "loginError": "Email табылмады",
       "registerError": "Тіркелу қатесі",
       "serverError": "Сервер қатесі орын алды",
       "invalidData": "Жарамсыз деректер берілді",
-      "emailExists": "Email тіркелген"
+      "emailExists": "Email тіркелген",
+      "wrongPassword": "Құпия сөз қате"
     },
     "terms": "Жалғастыра отырып, сіз біздің Пайдалану шарттары мен Құпиялылық саясатымызбен келісесіз"
   },

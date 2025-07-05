@@ -167,11 +167,12 @@
       "accountCreated": "Account successfully created!"
     },
     "errors": {
-      "loginError": "Login error",
+      "loginError": "Email not found",
       "registerError": "Registration error",
       "serverError": "Server error occurred",
       "invalidData": "Invalid data provided",
-      "emailExists": "Email already registered"
+      "emailExists": "Email already registered",
+      "wrongPassword": "Incorrect password"
     },
     "terms": "By continuing, you agree to our Terms of Use and Privacy Policy"
   },

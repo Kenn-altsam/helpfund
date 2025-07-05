@@ -6,10 +6,10 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-background">
-      <div className="container py-12">
+      <div className="container px-12 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
+          <div className="space-y-4 text-center">
+            <div className="flex items-center justify-center space-x-2">
               <Heart className="h-5 w-5 text-primary" />
               <span className="font-bold">{t('header.title')}</span>
             </div>
@@ -18,9 +18,9 @@ export function Footer() {
             </p>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-6 text-center">
             <h4 className="font-semibold text-base">{t('footer.about')}</h4>
-            <ul className="space-y-4 text-sm text-muted-foreground">
+            <ul className="space-y-4 text-sm text-muted-foreground text-center">
               <li><a href="#" className="hover:text-primary transition-colors">{t('footer.mission')}</a></li>
               <li><a href="#" className="hover:text-primary transition-colors">{t('footer.team')}</a></li>
               <li><a href="#" className="hover:text-primary transition-colors">{t('footer.reports')}</a></li>
@@ -36,9 +36,9 @@ export function Footer() {
             </div>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-6 text-center">
             <h4 className="font-semibold text-base">{t('footer.contacts')}</h4>
-            <ul className="space-y-4 text-sm text-muted-foreground">
+            <ul className="space-y-4 text-sm text-muted-foreground text-center">
               <li>
                 <a href="tel:+77271234567" className="hover:text-primary transition-colors">
                   +7 (727) 123-45-67

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Heart, Mail, Lock, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,7 @@ export function AuthPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { dispatch } = useGlobalContext();
+  const { state, dispatch } = useGlobalContext();
   
   const isLogin = location.pathname === '/login';
   const [isLoading, setIsLoading] = useState(false);
@@ -66,7 +66,8 @@ export function AuthPage() {
       toast.success(isLogin ? t('auth.success.welcome') : t('auth.success.accountCreated'), {
         duration: 5000
       });
-      navigate('/finder');
+      const redirectPath = (location.state as any)?.from?.pathname || '/finder';
+      navigate(redirectPath, { replace: true });
     } catch (error: any) {
       console.error('Auth error:', error);
       
@@ -79,6 +80,10 @@ export function AuthPage() {
         } else {
           toast.error(t('auth.errors.invalidData'));
         }
+      } else if (error.response?.status === 404) {
+        toast.error(t('auth.errors.loginError'));
+      } else if (error.response?.status === 401) {
+        toast.error(t('auth.errors.wrongPassword'));
       } else if (error.response?.status === 500) {
         toast.error(t('auth.errors.serverError'));
       } else {
@@ -88,6 +93,11 @@ export function AuthPage() {
       setIsLoading(false);
     }
   };
+
+  // Redirect authenticated users away from login/register pages
+  if (state.user) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 px-4">

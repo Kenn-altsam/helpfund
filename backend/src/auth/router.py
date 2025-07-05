@@ -18,6 +18,7 @@ from pydantic import BaseModel, EmailStr, Field
 from ..core.database import get_db
 from ..core.config import get_settings
 from .models import User
+from ..funds.models import FundProfile
 
 # Initialize settings
 settings = get_settings()
@@ -153,11 +154,23 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login and get access token (OAuth2 compatible)"""
-    user = authenticate_user(db, form_data.username, form_data.password)
+    normalized_email = form_data.username.lower()
+
+    # Проверяем, существует ли пользователь
+    user = db.query(User).filter(User.email.ilike(normalized_email)).first()
+
     if not user:
+        # Пользователь не найден
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email не найден",
+        )
+
+    # Проверяем пароль
+    if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Неправильный пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -193,11 +206,22 @@ async def login(request: Request, db: Session = Depends(get_db)):
         username = form.get("username") or form.get("email") or ""
         password = form.get("password") or ""
 
-    user = authenticate_user(db, username, password)
+    normalized_email = username.lower()
+
+    # Проверяем, существует ли пользователь
+    user = db.query(User).filter(User.email.ilike(normalized_email)).first()
+
     if not user:
         raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email не найден",
+        )
+
+    # Проверяем пароль
+    if not verify_password(password, user.hashed_password):
+        raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Неправильный пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -364,4 +388,22 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
         is_active=current_user.is_active,
         is_verified=current_user.is_verified,
         created_at=current_user.created_at
-    ) 
+    )
+
+
+@router.delete("/delete-account")
+async def delete_account(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Delete the currently authenticated user's account and related data."""
+    # Delete related fund profile (if exists) to avoid foreign key constraints
+    fund_profile = db.query(FundProfile).filter(FundProfile.user_id == current_user.id).first()
+    if fund_profile:
+        db.delete(fund_profile)
+
+    # Delete the user account
+    db.delete(current_user)
+    db.commit()
+
+    return {"message": "Account deleted successfully"} 
