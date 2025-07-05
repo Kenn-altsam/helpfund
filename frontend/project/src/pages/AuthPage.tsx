@@ -21,7 +21,7 @@ export function AuthPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    name: '',
+    full_name: '',
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,12 +35,12 @@ export function AuthPage() {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
-      toast.error(t('auth.validation.fillRequired'));
+      toast.error(t('auth.validation.fillRequired'), { duration: 3000 });
       return;
     }
 
-    if (!isLogin && !formData.name) {
-      toast.error(t('auth.validation.enterName'));
+    if (!isLogin && !formData.full_name) {
+      toast.error(t('auth.validation.enterName'), { duration: 3000 });
       return;
     }
 
@@ -52,7 +52,7 @@ export function AuthPage() {
         : await authApi.register({ 
             email: formData.email, 
             password: formData.password, 
-            name: formData.name 
+            full_name: formData.full_name 
           });
 
       if (!response || !response.access_token) {
@@ -62,9 +62,10 @@ export function AuthPage() {
       localStorage.setItem('access_token', response.access_token);
       
       dispatch({ type: 'SET_USER', payload: response.user });
+      dispatch({ type: 'SET_LOADING', payload: false });
       
       toast.success(isLogin ? t('auth.success.welcome') : t('auth.success.accountCreated'), {
-        duration: 5000
+        duration: 3000
       });
       const redirectPath = (location.state as any)?.from?.pathname || '/finder';
       navigate(redirectPath, { replace: true });
@@ -76,18 +77,18 @@ export function AuthPage() {
       if (error.response?.status === 400) {
         const errorMessage = error.response.data?.detail;
         if (errorMessage === 'Email already registered') {
-          toast.error(t('auth.errors.emailExists'));
+          toast.error(t('auth.errors.emailExists'), { duration: 3000 });
         } else {
-          toast.error(t('auth.errors.invalidData'));
+          toast.error(t('auth.errors.invalidData'), { duration: 3000 });
         }
       } else if (error.response?.status === 404) {
-        toast.error(t('auth.errors.loginError'));
+        toast.error(t('auth.errors.loginError'), { duration: 3000 });
       } else if (error.response?.status === 401) {
-        toast.error(t('auth.errors.wrongPassword'));
+        toast.error(t('auth.errors.wrongPassword'), { duration: 3000 });
       } else if (error.response?.status === 500) {
-        toast.error(t('auth.errors.serverError'));
+        toast.error(t('auth.errors.serverError'), { duration: 3000 });
       } else {
-        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'));
+        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'), { duration: 3000 });
       }
     } finally {
       setIsLoading(false);
@@ -132,10 +133,10 @@ export function AuthPage() {
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="name"
-                      name="name"
+                      name="full_name"
                       type="text"
                       placeholder={t('auth.fields.namePlaceholder')}
-                      value={formData.name}
+                      value={formData.full_name}
                       onChange={handleInputChange}
                       className="pl-10"
                       required={!isLogin}

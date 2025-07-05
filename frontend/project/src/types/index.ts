@@ -1,8 +1,10 @@
 export interface User {
   id: string;
   email: string;
-  name: string;
-  createdAt: string;
+  full_name: string;
+  is_verified: boolean;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface AuthResponse {
@@ -40,7 +42,7 @@ export interface ChatHistoryItem {
   id: string;
   userPrompt: string;
   aiResponse: Company[];
-  createdAt: string;
+  created_at: string;
 }
 
 export interface GlobalState {
@@ -83,5 +85,5 @@ export interface ChatResponse {
 export interface AuthCredentials {
   email: string;
   password: string;
-  name?: string;
+  full_name?: string;
 }

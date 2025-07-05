@@ -20,7 +20,7 @@ export function CompanyCard({ company }: CompanyCardProps) {
   const handleAddToConsideration = () => {
     if (!isAdded) {
       addToConsideration(company);
-      toast.success(t('company.companyAdded'));
+      toast.success(t('company.companyAdded'), { duration: 3000 });
     }
   };
 

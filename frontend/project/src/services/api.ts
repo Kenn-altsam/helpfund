@@ -196,7 +196,7 @@ export const historyApi = {
         id: item.id,
         userPrompt: item.user_input,
         aiResponse: item.companies_data.map(transformCompanyData),
-        createdAt: item.created_at
+        created_at: item.created_at
       }));
     } catch (error) {
       console.error('Failed to get chat history:', error);
@@ -209,7 +209,7 @@ export const historyApi = {
       await api.post('/funds/chat/history', {
         user_input: item.userPrompt,
         companies_data: item.aiResponse,
-        created_at: item.createdAt
+        created_at: item.created_at
       });
     } catch (error) {
       console.error('Failed to save chat history:', error);
@@ -250,8 +250,10 @@ export const authApi = {
         user: {
           id: response.data.user.id,
           email: response.data.user.email,
-          name: (response.data.user as any).full_name || response.data.user.name || '',
-          createdAt: (response.data.user as any).created_at || (response.data.user as any).createdAt || '',
+          full_name: (response.data.user as any).full_name || response.data.user.full_name || '',
+          created_at: (response.data.user as any).created_at || (response.data.user as any).created_at || '',
+          is_verified: (response.data.user as any).is_verified || (response.data.user as any).is_verified || false,
+          is_active: (response.data.user as any).is_active || (response.data.user as any).is_active || false,
         },
       };
 
@@ -264,28 +266,25 @@ export const authApi = {
   },
 
   register: async (credentials: AuthCredentials): Promise<AuthResponse> => {
-    if (!credentials.email || !credentials.password || !credentials.name) {
-      throw new Error('Email, password, and name are required for registration');
+    if (!credentials.email || !credentials.password || !credentials.full_name) {
+      throw new Error('Email, password, and full_name are required for registration');
     }
 
     try {
-      const response = await api.post<AuthResponse>('/auth/register', {
+      // First, create the user account (backend expects snake_case full_name)
+      await api.post('/auth/register', {
         email: credentials.email,
         password: credentials.password,
-        full_name: credentials.name
+        full_name: credentials.full_name,
       });
 
-      // Normalize user fields to match frontend interface
-      const normalizedResponse: AuthResponse = {
-        ...response.data,
-        user: {
-          id: response.data.user.id,
-          email: response.data.user.email,
-          name: (response.data.user as any).full_name || response.data.user.name || '',
-          createdAt: (response.data.user as any).created_at || (response.data.user as any).createdAt || '',
-        },
-      };
-      return normalizedResponse;
+      // Immediately log the user in to obtain an access token
+      const loginResponse = await authApi.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      return loginResponse;
     } catch (error) {
       localStorage.removeItem('access_token');
       throw error;

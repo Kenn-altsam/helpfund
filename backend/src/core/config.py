@@ -9,7 +9,7 @@ environment (optionally from a .env file).
 from functools import lru_cache
 from typing import List
 
-from pydantic import PostgresDsn, field_validator
+from pydantic import PostgresDsn, Field, field_validator, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # JWT / Auth
     # ------------------------------------------------------------------
-    SECRET_KEY: str
+    # Try SECRET_KEY first for backwards-compatibility, fall back to JWT_SECRET_KEY
+    SECRET_KEY: str = Field(..., validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY"))
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 

@@ -127,19 +127,19 @@ export function FinderPage() {
         id: generateId(),
         userPrompt: input.trim(),
         aiResponse: response.companies || [],
-        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       };
 
       await historyApi.saveHistory(historyItem);
       dispatch({ type: 'ADD_HISTORY', payload: historyItem });
 
       if (response.companies?.length) {
-        toast.success(t('finder.companiesFound', { count: response.companies.length }));
+        toast.success(t('finder.companiesFound', { count: response.companies.length }), { duration: 3000 });
       }
     } catch (error) {
       console.error('Failed to send message:', error);
       setMessages(prev => prev.filter(msg => msg.type !== 'loading'));
-      toast.error(t('finder.searchError'), { duration: 5000 });
+      toast.error(t('finder.searchError'), { duration: 3000 });
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
@@ -175,10 +175,10 @@ export function FinderPage() {
     try {
       await historyApi.deleteHistory(id);
       dispatch({ type: 'DELETE_HISTORY', payload: id });
-      toast.success(t('finder.historyDeleted'));
+      toast.success(t('finder.historyDeleted'), { duration: 3000 });
     } catch (error) {
       console.error('Failed to delete history:', error);
-      toast.error(t('finder.historyDeleteError'));
+      toast.error(t('finder.historyDeleteError'), { duration: 3000 });
     }
   };
 
@@ -192,7 +192,7 @@ export function FinderPage() {
       inputRef.current?.focus();
     } catch (error) {
       console.error('Failed to reset chat:', error);
-      toast.error(t('finder.resetError'));
+      toast.error(t('finder.resetError'), { duration: 3000 });
     }
   };
 
@@ -256,8 +256,21 @@ export function FinderPage() {
             </Link>
           </div>
 
-          {/* Center: profile button */}
+          {/* Center section: brand */}
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
+            <Link to="/" className="flex items-center space-x-2">
+              <Heart className="h-6 w-6 text-primary" />
+              <span className="text-xl font-bold">helpfund.pro</span>
+            </Link>
+          </div>
+
+          {/* Right section: Consideration & Profile */}
+          <div className="flex items-center space-x-2">
+            <Link to="/consideration">
+              <Button variant="ghost" size="sm">
+                {t('header.consideration')}
+              </Button>
+            </Link>
             <Link to="/profile">
               <Button variant="ghost" size="sm" className="flex items-center space-x-1">
                 <User className="h-4 w-4" />
@@ -265,12 +278,6 @@ export function FinderPage() {
               </Button>
             </Link>
           </div>
-
-          {/* Right section: brand */}
-          <Link to="/" className="flex items-center space-x-2">
-            <Heart className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">helpfund.pro</span>
-          </Link>
         </div>
 
         {/* Messages */}

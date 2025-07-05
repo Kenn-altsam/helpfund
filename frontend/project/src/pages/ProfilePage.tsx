@@ -49,13 +49,20 @@ export function ProfilePage() {
     try {
       setIsLoggingOut(true);
       await authApi.logout();
+
+      localStorage.removeItem('access_token'); 
+
+      localStorage.removeItem('helpfund-consideration');
+      
       dispatch({ type: 'CLEAR_STATE' });
-      localStorage.removeItem('helpfund-user-logged-in');
-      toast.success(t('profile.success.loggedOut'));
+      toast.success(t('profile.success.loggedOut'), { duration: 3000 });
       navigate('/');
     } catch (error) {
       console.error('Logout failed:', error);
-      toast.error(t('profile.errors.logoutError'));
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('helpfund-consideration');
+      dispatch({ type: 'CLEAR_STATE' });
+      toast.error(t('profile.errors.logoutError'), { duration: 3000 });
     } finally {
       setIsLoggingOut(false);
     }
@@ -67,11 +74,11 @@ export function ProfilePage() {
       await authApi.deleteAccount();
       dispatch({ type: 'CLEAR_STATE' });
       localStorage.clear();
-      toast.success(t('profile.success.accountDeleted'));
+      toast.success(t('profile.success.accountDeleted'), { duration: 3000 });
       navigate('/');
     } catch (error) {
       console.error('Account deletion failed:', error);
-      toast.error(t('profile.errors.deleteError'));
+      toast.error(t('profile.errors.deleteError'), { duration: 3000 });
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -110,7 +117,7 @@ export function ProfilePage() {
                 <User className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">{t('profile.userInfo.name')}</p>
-                  <p className="text-sm text-muted-foreground">{user.name}</p>
+                  <p className="text-sm text-muted-foreground">{user.full_name}</p>
                 </div>
               </div>
               
@@ -119,7 +126,7 @@ export function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium">{t('profile.userInfo.registrationDate')}</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(user.createdAt)}
+                    {formatDate(user.created_at)}
                   </p>
                 </div>
               </div>

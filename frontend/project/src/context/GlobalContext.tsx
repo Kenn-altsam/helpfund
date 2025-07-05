@@ -6,7 +6,7 @@ const initialState: GlobalState = {
   history: [],
   considerationList: [],
   user: null,
-  isLoading: false,
+  isLoading: true,
 };
 
 function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
@@ -55,6 +55,7 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
     case 'CLEAR_STATE':
       return {
         ...initialState,
+        isLoading: false, 
       };
     default:
       return state;
@@ -100,8 +101,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error: any) {
         if (isMounted) {
-          // Only clear token if it's an authentication error (401)
-          if (error?.response?.status === 401) {
+          // ИЗМЕНЕНИЕ: Разлогиниваем пользователя при любой ошибке авторизации (401, 403)
+          // или если сервер не может найти пользователя (404).
+          const status = error?.response?.status;
+          if (status === 401 || status === 403 || status === 404) {
+            console.error(`Auth error status ${status}, logging out.`);
             localStorage.removeItem('access_token');
             dispatch({ type: 'SET_USER', payload: null });
           } else if (loadRetryCount.current < maxRetries) {
