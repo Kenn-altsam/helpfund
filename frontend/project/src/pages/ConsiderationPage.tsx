@@ -1,5 +1,6 @@
 import { BookmarkCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { CompanyCard } from '@/components/CompanyCard';
 import { useGlobalContext } from '@/context/GlobalContext';
@@ -25,12 +26,12 @@ export function ConsiderationPage() {
             <p className="text-muted-foreground mb-6">
               {t('consideration.empty.description')}
             </p>
-            <a 
-              href="/finder"
+            <Link 
+              to="/finder"
               className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
               {t('consideration.empty.findSponsors')}
-            </a>
+            </Link>
           </div>
         </div>
       </div>
