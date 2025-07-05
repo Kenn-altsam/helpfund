@@ -218,12 +218,12 @@ class CharityFundAssistant:
                                 for company_dict in companies:
                                     formatted_company = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("Company"),
-                                        "bin": company_dict.get("BIN"),
-                                        "activity": company_dict.get("Activity"),
-                                        "location": company_dict.get("Locality"),
-                                        "oked": company_dict.get("OKED"),
-                                        "size": company_dict.get("Size")
+                                        "name": company_dict.get("name"),
+                                        "bin": company_dict.get("bin"),
+                                        "activity": company_dict.get("activity"),
+                                        "location": company_dict.get("locality"),
+                                        "oked": company_dict.get("oked"),
+                                        "size": company_dict.get("size")
                                     }
                                     companies_data.append(formatted_company)
                                     companies_found.append(formatted_company)  # Track for context
@@ -264,14 +264,14 @@ class CharityFundAssistant:
                                 if company_dict:
                                     company_details = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("Company"),
-                                        "bin": company_dict.get("BIN"),
-                                        "activity": company_dict.get("Activity"),
-                                        "location": company_dict.get("Locality"),
-                                        "oked": company_dict.get("OKED"),
-                                        "kato": company_dict.get("KATO"),
-                                        "krp": company_dict.get("KRP"),
-                                        "size": company_dict.get("Size"),
+                                        "name": company_dict.get("name"),
+                                        "bin": company_dict.get("bin"),
+                                        "activity": company_dict.get("activity"),
+                                        "location": company_dict.get("locality"),
+                                        "oked": company_dict.get("oked"),
+                                        "kato": company_dict.get("kato"),
+                                        "krp": company_dict.get("krp"),
+                                        "size": company_dict.get("size"),
                                         "context": "Detailed company information retrieved"
                                     }
                                     
@@ -316,7 +316,7 @@ class CharityFundAssistant:
             return {
                 "status": run.status,
                 "message": assistant_response,
-                "companies_data": companies_found,  # Include companies data
+                "companies": companies_found,  # Include companies data
                 "run_id": run.id,
                 "companies_found": len(companies_found)
             }
@@ -329,7 +329,7 @@ class CharityFundAssistant:
             return {
                 "status": "error",
                 "message": f"Извините, произошла ошибка при обработке запроса: {str(e)}",
-                "companies_data": companies_found,  # Preserve any companies found before error
+                "companies": companies_found,  # Preserve any companies found before error
                 "run_id": None,
                 "companies_found": len(companies_found)
             }
@@ -597,7 +597,7 @@ async def handle_conversation_with_context(
         return {
             "message": response["message"],
             "updated_history": updated_history,
-            "companies_data": companies_data,
+            "companies": companies_data,
             "intent": "find_companies" if "companies" in response["message"].lower() else "general_question",
             "assistant_id": assistant_id,
             "thread_id": thread_id,
@@ -622,7 +622,7 @@ async def handle_conversation_with_context(
         return {
             "message": "Извините, произошла техническая ошибка. Ваш контекст разговора сохранен, попробуйте переформулировать вопрос.",
             "updated_history": error_history,
-            "companies_data": [],
+            "companies": [],
             "intent": "error",
             "assistant_id": assistant_id,
             "thread_id": thread_id,

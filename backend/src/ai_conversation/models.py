@@ -130,12 +130,12 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="List of company data found"
     )
-    assistant_id: str = Field(
-        ...,
+    assistant_id: Optional[str] = Field(
+        None,
         description="OpenAI Assistant ID used for this response"
     )
-    thread_id: str = Field(
-        ...,
+    thread_id: Optional[str] = Field(
+        None,
         description="OpenAI Thread ID used for this response"
     )
     
@@ -156,6 +156,7 @@ class ChatResponse(BaseModel):
         return v
     
     class Config:
+        extra = "allow"
         json_schema_extra = {
             "example": {
                 "message": "Great! I found 5 companies in Almaty that might be interested in tech sponsorship...",
@@ -187,6 +188,7 @@ class CompanyData(BaseModel):
     contacts: Optional[Dict[str, str]] = Field(None, description="Contact information")
 
     class Config:
+        extra = "allow"
         json_schema_extra = {
             "example": {
                 "bin": "123456789012",

@@ -22,6 +22,13 @@ from sqlalchemy.orm import Session
 from ..core.config import get_settings
 from ..companies.service import CompanyService
 
+# Language detection helper (use langdetect if installed)
+try:
+    from langdetect import detect as _detect_lang
+except ImportError:  # Fallback – default to Russian
+    def _detect_lang(text: str) -> str:  # type: ignore
+        return "ru"
+
 
 class OpenAIService:
     """Service for handling OpenAI API interactions with database integration"""
@@ -364,74 +371,116 @@ class OpenAIService:
             # Return original companies if enrichment fails
             return companies
 
+    @staticmethod
+    def _get_message_language(history: List[Dict[str, str]]) -> str:
+        """Detect the language of the last user message (returns 'en', 'ru', 'kk')."""
+        for msg in reversed(history):
+            if msg.get("role") == "user":
+                try:
+                    lang = _detect_lang(msg.get("content", ""))
+                    return lang.lower()  # langdetect returns e.g., 'en', 'ru', 'kk'
+                except Exception:
+                    return "ru"
+        return "ru"
+
     async def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
-        """
-        Generates a final, natural language response in Russian with structured formatting.
-        """
+        """Craft a summary response in the same language the user spoke."""
+
+        user_lang = self._get_message_language(history)
+
+        # Helper text selection
+        def t(ru: str, en: str, kk: str) -> str:
+            if user_lang.startswith("en"):
+                return en
+            if user_lang.startswith("kk"):
+                return kk
+            return ru  # default Russian
+
         if not companies_data:
-            return "К сожалению, по вашему запросу не найдено подходящих компаний. Попробуйте изменить критерии поиска."
-        
-        # Generate structured response manually for consistent formatting
-        response_parts = []
-        
-        # Add opening message
+            return t(
+                ru="К сожалению, по вашему запросу не найдено подходящих компаний. Попробуйте изменить критерии поиска.",
+                en="Unfortunately, no matching companies were found for your request. Please try different criteria.",
+                kk="Өкінішке орай, сіздің сұранысыңыз бойынша сәйкес компаниялар табылмады. Басқа сүзгілерді қолданып көріңіз."
+            )
+
+        parts: list[str] = []
+
         count = len(companies_data)
-        if count == 1:
-            response_parts.append(f"Отличные новости! Я нашел информацию о {count} компании:")
-        elif 2 <= count <= 4:
-            response_parts.append(f"Отличные новости! Я нашел информацию о {count} компаниях:")
-        else:
-            response_parts.append(f"Отличные новости! Я нашел информацию о {count} компаниях:")
-        
-        response_parts.append("")  # Empty line
-        
-        # Add companies in structured format
-        for company in companies_data:
-            company_name = company.get('name', 'Неизвестная компания')
-            bin_number = company.get('bin', 'Не указан')
-            activity = company.get('activity', 'Деятельность не указана')
-            
-            # Determine company size
-            size_description = "Размер не указан"
-            if company.get('size'):
-                size_description = company['size']
-            elif company.get('employee_count'):
-                emp_count = company['employee_count']
-                if emp_count >= 1001:
-                    size_description = "Крупное предприятие (от 1001 чел.)"
-                elif emp_count >= 251:
-                    size_description = "Большое предприятие (251-1000 чел.)"
-                elif emp_count >= 51:
-                    size_description = "Среднее предприятие (51-250 чел.)"
-                elif emp_count >= 16:
-                    size_description = "Малое предприятие (16-50 чел.)"
-                else:
-                    size_description = "Микропредприятие (до 15 чел.)"
-            
-            # Format company entry with bullet point
-            company_entry = f"• **{company_name}**\n"
-            company_entry += f"  - БИН: {bin_number}\n"
-            company_entry += f"  - Деятельность: {activity}\n"
-            company_entry += f"  - Размер: {size_description}"
-            
-            # Add location if available
-            locality = company.get('locality') or company.get('city')
+        # Opening sentence
+        if user_lang.startswith("en"):
+            opening = f"Great news! I found information on {count} compan{'y' if count==1 else 'ies'}:"
+        elif user_lang.startswith("kk"):
+            opening = f"Тамаша жаңалық! Мен {count} компания туралы ақпарат таптым:"
+        else:  # Russian
+            if count == 1:
+                opening = f"Отличные новости! Я нашел информацию о {count} компании:"
+            elif 2 <= count <= 4:
+                opening = f"Отличные новости! Я нашел информацию о {count} компаниях:"
+            else:
+                opening = f"Отличные новости! Я нашел информацию о {count} компаниях:"
+
+        parts.append(opening)
+        parts.append("")
+
+        # Loop companies
+        for comp in companies_data:
+            name = comp.get("name", "Unknown company")
+            bin_num = comp.get("bin", "N/A")
+            activity = comp.get("activity", t("Деятельность не указана", "Activity not specified", "Қызметі көрсетілмеген"))
+            size = comp.get("size") or t("Размер не указан", "Size not specified", "Өлшемі көрсетілмеген")
+
+            if user_lang.startswith("en"):
+                entry = (
+                    f"• **{name}**\n"
+                    f"  - BIN: {bin_num}\n"
+                    f"  - Activity: {activity}\n"
+                    f"  - Size: {size}"
+                )
+            elif user_lang.startswith("kk"):
+                entry = (
+                    f"• **{name}**\n"
+                    f"  - БСН: {bin_num}\n"
+                    f"  - Қызметі: {activity}\n"
+                    f"  - Өлшемі: {size}"
+                )
+            else:  # Russian
+                entry = (
+                    f"• **{name}**\n"
+                    f"  - БИН: {bin_num}\n"
+                    f"  - Деятельность: {activity}\n"
+                    f"  - Размер: {size}"
+                )
+
+            locality = comp.get("locality") or comp.get("city")
             if locality:
-                company_entry += f"\n  - Местоположение: {locality}"
-            
-            # Add annual tax paid if available
-            annual_tax = company.get('annual_tax_paid')
+                if user_lang.startswith("en"):
+                    entry += f"\n  - Location: {locality}"
+                elif user_lang.startswith("kk"):
+                    entry += f"\n  - Орналасқан жері: {locality}"
+                else:
+                    entry += f"\n  - Местоположение: {locality}"
+
+            annual_tax = comp.get("annual_tax_paid")
             if annual_tax is not None:
-                company_entry += f"\n  - Уплачено налогов (последний год): {annual_tax:,.0f} ₸"
-            
-            response_parts.append(company_entry)
-        
-        response_parts.append("")  # Empty line before closing
-        
-        # Add encouraging closing message
-        response_parts.append("Потрясающая работа! У вас есть большой выбор для потенциального сотрудничества. Если есть что-то еще, чем я могу помочь, дайте знать!")
-        
-        return "\n".join(response_parts)
+                if user_lang.startswith("en"):
+                    entry += f"\n  - Taxes paid (last year): {annual_tax:,.0f} ₸"
+                elif user_lang.startswith("kk"):
+                    entry += f"\n  - Төленген салық (соңғы жыл): {annual_tax:,.0f} ₸"
+                else:
+                    entry += f"\n  - Уплачено налогов (последний год): {annual_tax:,.0f} ₸"
+
+            parts.append(entry)
+
+        parts.append("")
+
+        closing = t(
+            ru="Потрясающая работа! У вас есть большой выбор для потенциального сотрудничества. Если есть что-то еще, чем я могу помочь, дайте знать!",
+            en="Excellent! You now have a great list of potential partners. Let me know if there's anything else I can help with!",
+            kk="Тамаша! Ықтимал серіктестердің жақсы тізімі бар. Тағы көмек керек болса, айтыңыз!"
+        )
+        parts.append(closing)
+
+        return "\n".join(parts)
 
 
     async def handle_conversation_turn(
@@ -596,7 +645,7 @@ class OpenAIService:
         
         response_data = {
             'message': final_message,
-            'companies_data': companies_data,
+            'companies': companies_data,
             'updated_history': conversation_history,
             'intent': intent,
             'location_detected': location,
@@ -672,7 +721,7 @@ class OpenAIService:
                 
                 return {
                     'message': "Извините, произошла техническая ошибка в обеих системах. Ваша история разговора сохранена. Попробуйте переформулировать запрос.",
-                    'companies_data': [],
+                    'companies': [],
                     'updated_history': error_history,
                     'intent': "error",
                     'location_detected': None,

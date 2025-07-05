@@ -62,11 +62,14 @@ async def handle_chat_with_assistant(request: ChatRequest, db: Session = Depends
             raise ValueError("Invalid response format from assistant")
         
         # Ensure required fields exist
-        required_fields = ['message', 'companies_data', 'updated_history', 'assistant_id', 'thread_id']
+        required_fields = ['message', 'companies', 'updated_history', 'assistant_id', 'thread_id']
         for field in required_fields:
             if field not in response_data:
                 print(f"❌ [ASSISTANT-ROUTER] Missing required field: {field}")
-                response_data[field] = [] if field.endswith('_data') or field.endswith('_history') else ""
+                if field in ('companies', 'companies_data') or field.endswith('_data') or field.endswith('_history'):
+                    response_data[field] = []
+                else:
+                    response_data[field] = ""
         
         # Log response for debugging
         returned_history_length = len(response_data.get('updated_history', []))
@@ -75,7 +78,7 @@ async def handle_chat_with_assistant(request: ChatRequest, db: Session = Depends
         
         return ChatResponse(
             message=response_data['message'],
-            companies=response_data.get('companies_data', []),
+            companies=response_data.get('companies', []),
             assistant_id=response_data['assistant_id'],
             thread_id=response_data['thread_id']
         )
@@ -130,11 +133,14 @@ async def handle_chat_hybrid(request: ChatRequest, db: Session = Depends(get_db)
             raise ValueError("Invalid response format from hybrid service")
         
         # Ensure required fields exist
-        required_fields = ['message', 'companies_data', 'updated_history']
+        required_fields = ['message', 'companies', 'updated_history']
         for field in required_fields:
             if field not in response_data:
                 print(f"❌ [HYBRID-ROUTER] Missing required field: {field}")
-                response_data[field] = [] if field.endswith('_data') or field.endswith('_history') else ""
+                if field in ('companies', 'companies_data') or field.endswith('_data') or field.endswith('_history'):
+                    response_data[field] = []
+                else:
+                    response_data[field] = ""
         
         # Log response for debugging
         returned_history_length = len(response_data.get('updated_history', []))
@@ -162,7 +168,7 @@ async def handle_chat_hybrid(request: ChatRequest, db: Session = Depends(get_db)
         
         fallback_response = ChatResponse(
             message="Извините, произошла критическая ошибка в системе. Ваша история разговора сохранена. Попробуйте позже.",
-            companies_data=[],
+            companies=[],
             updated_history=fallback_history,
             intent="error",
             companies_found=0,
