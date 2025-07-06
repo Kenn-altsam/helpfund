@@ -58,6 +58,7 @@ export type GlobalAction =
   | { type: 'ADD_HISTORY'; payload: ChatHistoryItem }
   | { type: 'LOAD_HISTORY'; payload: ChatHistoryItem[] }
   | { type: 'DELETE_HISTORY'; payload: string }
+  | { type: 'UPDATE_HISTORY'; payload: ChatHistoryItem }
   | { type: 'ADD_CONSIDERATION'; payload: Company }
   | { type: 'REMOVE_CONSIDERATION'; payload: string }
   | { type: 'SET_USER'; payload: User | null }

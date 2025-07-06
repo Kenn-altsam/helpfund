@@ -26,6 +26,14 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
         ...state,
         history: state.history.filter((item) => item.id !== action.payload),
       };
+    case 'UPDATE_HISTORY':
+      return {
+        ...state,
+        history: [
+          action.payload,
+          ...state.history.filter((item) => item.id !== action.payload.id),
+        ],
+      };
     case 'ADD_CONSIDERATION':
       const isAlreadyAdded = state.considerationList.some(
         (company) => company.bin === action.payload.bin

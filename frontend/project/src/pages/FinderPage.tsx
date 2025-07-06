@@ -145,18 +145,46 @@ export function FinderPage() {
         ];
       });
 
-      // Save to history
-      const historyItem: ChatHistoryItem = {
-        id: generateId(),
-        userPrompt: input.trim(),
-        aiResponse: response.companies || [],
-        created_at: new Date().toISOString(),
-        threadId: response.thread_id || threadId,
-        assistantId: response.assistant_id || assistantId,
-      };
+      /**
+       * HISTORY MANAGEMENT
+       * ------------------
+       * We now treat a Thread ID as a single conversation. If we already have a
+       * history item with the same threadId, we UPDATE it instead of adding a
+       * brand-new chat entry. This way, all questions within one conversation
+       * stay grouped together in the sidebar.
+       */
 
-      await historyApi.saveHistory(historyItem);
-      dispatch({ type: 'ADD_HISTORY', payload: historyItem });
+      const effectiveThreadId = response.thread_id || threadId || null;
+
+      if (effectiveThreadId) {
+        // Check if we already have a chat with this thread
+        const existingChat = state.history.find((h) => h.threadId === effectiveThreadId);
+
+        if (existingChat) {
+          // Update existing history item (e.g., replace companies and timestamp)
+          const updatedChat: ChatHistoryItem = {
+            ...existingChat,
+            aiResponse: response.companies || [],
+            created_at: new Date().toISOString(),
+          };
+
+          await historyApi.saveHistory({ ...updatedChat, userPrompt: input.trim() }); // Persist new turn, backend will append
+          dispatch({ type: 'UPDATE_HISTORY', payload: updatedChat });
+        } else {
+          // No chat found (should only happen on very first message)
+          const newHistoryItem: ChatHistoryItem = {
+            id: generateId(),
+            userPrompt: input.trim(),
+            aiResponse: response.companies || [],
+            created_at: new Date().toISOString(),
+            threadId: effectiveThreadId,
+            assistantId: response.assistant_id || assistantId,
+          };
+
+          await historyApi.saveHistory(newHistoryItem);
+          dispatch({ type: 'ADD_HISTORY', payload: newHistoryItem });
+        }
+      }
 
       if (response.companies?.length) {
         toast.success(t('finder.companiesFound', { count: response.companies.length }), { duration: 3000 });
