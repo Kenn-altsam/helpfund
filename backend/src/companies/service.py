@@ -66,13 +66,13 @@ class CompanyService:
             # Translate location to Russian if needed
             translated_location = CityTranslationService.translate_city_name(location)
             # Use ilike for case-insensitive search
-            location_filter = Company.Locality.ilike(f"%{translated_location}%")
+            location_filter = Company.locality.ilike(f"%{translated_location}%")
             filters.append(location_filter)
             print(f"🔍 [DB_SERVICE] Added location filter: Locality ILIKE '%{translated_location}%' (original input: '{location}')")
 
         # 2. Add company name filter if provided
         if company_name:
-            name_filter = Company.Company.ilike(f"%{company_name}%")
+            name_filter = Company.company_name.ilike(f"%{company_name}%")
             filters.append(name_filter)
             print(f"🔍 [DB_SERVICE] Added name filter: Company ILIKE '%{company_name}%'")
 
@@ -81,7 +81,7 @@ class CompanyService:
             activity_filters = []
             for keyword in activity_keywords:
                 # Search for each keyword in the activity description
-                activity_filters.append(Company.Activity.ilike(f"%{keyword}%"))
+                activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
             # Combine keyword filters with OR (e.g., "строительство" OR "ремонт")
             filters.append(or_(*activity_filters))
             print(f"🔍 [DB_SERVICE] Added activity filters for keywords: {activity_keywords}")
@@ -97,7 +97,7 @@ class CompanyService:
         # A consistent order is REQUIRED for pagination (OFFSET) to work reliably.
         # We order by company name to ensure the same query always returns results
         # in the same sequence. Your model uses 'Company' for the name column.
-        query = query.order_by(Company.Company)
+        query = query.order_by(Company.company_name)
         print(f"🔄 [DB_SERVICE] Applied ORDER BY Company (company name)")
 
         # Apply the offset to skip previous pages' results, then apply the limit.
@@ -109,7 +109,7 @@ class CompanyService:
         if results:
             print(f"🏢 [DB_SERVICE] First few results:")
             for i, result in enumerate(results[:3]):
-                print(f"   {i+1}. {result.Company} (BIN: {result.BIN})")
+                print(f"   {i+1}. {result.company_name} (BIN: {result.bin_number})")
             if len(results) > 3:
                 print(f"   ... and {len(results) - 3} more")
         else:
@@ -146,7 +146,7 @@ class CompanyService:
         # Translate location input to Russian if needed
         translated_location = CityTranslationService.translate_city_name(location)
         query = self.db.query(Company).filter(
-            Company.Locality.ilike(f'%{translated_location}%')
+            Company.locality.ilike(f'%{translated_location}%')
         )
         
         companies = query.limit(limit).all()
@@ -192,15 +192,15 @@ class CompanyService:
         from sqlalchemy import func
         
         result = self.db.query(
-            Company.Locality,
+            Company.locality,
             func.count(Company.id).label('company_count')
-        ).group_by(Company.Locality).order_by(
+        ).group_by(Company.locality).order_by(
             func.count(Company.id).desc()
         ).all()
         
         return [
             {
-                'location': row.Locality,
+                'location': row.locality,
                 'company_count': row.company_count
             }
             for row in result
@@ -234,7 +234,7 @@ class CompanyService:
         # Build OR conditions for each keyword
         conditions = []
         for keyword in keywords:
-            conditions.append(Company.Locality.ilike(f'%{keyword}%'))
+            conditions.append(Company.locality.ilike(f'%{keyword}%'))
         
         if conditions:
             query = query.filter(or_(*conditions))
@@ -248,14 +248,14 @@ class CompanyService:
         # (e.g., company.BIN) and map them to lowercase snake_case keys for the API.
         return {
             "id": str(company.id),
-            "bin": company.BIN,
-            "name": company.Company,
-            "oked": company.OKED,
-            "activity": company.Activity,
-            "kato": company.KATO,
-            "locality": company.Locality,
-            "krp": company.KRP,
-            "size": company.Size,
+            "bin": company.bin_number,
+            "name": company.company_name,
+            "oked": company.oked_code,
+            "activity": company.activity,
+            "kato": company.kato_code,
+            "locality": company.locality,
+            "krp": company.krp_code,
+            "size": company.company_size,
 
             # Tax information (may be missing if the DB wasn't migrated yet)
             "annual_tax_paid": getattr(company, "annual_tax_paid", None),

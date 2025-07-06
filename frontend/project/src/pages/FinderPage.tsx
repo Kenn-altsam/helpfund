@@ -94,11 +94,34 @@ export function FinderPage() {
     setIsLoading(true);
 
     try {
-      const response = await chatApi.sendMessage({ 
-        prompt: input.trim(),
+      // Получаем историю в формате, который ожидает бэкенд
+      const previousMessages = messages
+        .filter(m => m.type === 'user' || m.type === 'assistant')
+        .map(m => ({
+          role: m.type as 'user' | 'assistant',
+          content: m.content || '',
+        }));
+
+      const currentHistory = [
+        ...previousMessages,
+        {
+          role: 'user' as const,
+          content: input.trim(),
+        },
+      ] as { role: 'user' | 'assistant'; content: string }[];
+
+      // --- >>> ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ОТЛАДКИ <<< ---
+      const requestPayload = {
+        user_input: input.trim(),
+        history: currentHistory,
         assistant_id: assistantId || undefined,
-        thread_id: threadId || undefined
-      });
+        thread_id: threadId || undefined,
+      };
+
+      console.log("SENDING REQUEST PAYLOAD:", JSON.stringify(requestPayload, null, 2));
+      // --- >>> КОНЕЦ БЛОКА ОТЛАДКИ <<< ---
+
+      const response = await chatApi.sendMessage(requestPayload);
       
       // Store the assistant and thread IDs if they're returned
       if (response.assistant_id) {
@@ -128,6 +151,8 @@ export function FinderPage() {
         userPrompt: input.trim(),
         aiResponse: response.companies || [],
         created_at: new Date().toISOString(),
+        threadId: response.thread_id || threadId,
+        assistantId: response.assistant_id || assistantId,
       };
 
       await historyApi.saveHistory(historyItem);
@@ -167,7 +192,13 @@ export function FinderPage() {
       companies: item.aiResponse,
     };
 
+    // Отображаем выбранный фрагмент диалога
     setMessages([userMessage, assistantMessage]);
+
+    // Восстанавливаем контекст для продолжения диалога
+    setThreadId(item.threadId);
+    setAssistantId(item.assistantId);
+
     setSidebarOpen(false);
   };
 

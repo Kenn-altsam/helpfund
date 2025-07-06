@@ -21,17 +21,17 @@ class Company(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # Company information based on provided columns
-    BIN = Column(String(12), index=True)  # Business Identification Number
-    Company = Column(String(255), nullable=False, index=True)  # Company name
-    OKED = Column(String(50), index=True)  # OKED classification code
-    Activity = Column(String(255), index=True)  # Activity description
-    KATO = Column(String(50), index=True)  # KATO territorial code
-    Locality = Column(String(100), index=True)  # Locality/Region
-    KRP = Column(String(50))  # KRP code
-    Size = Column(String(50), index=True)  # Company size
+    bin_number = Column("BIN", String(12), index=True)
+    company_name = Column("Company", String(255), nullable=False, index=True)
+    oked_code = Column("OKED", String(50), index=True)
+    activity = Column("Activity", String(255), index=True)
+    kato_code = Column("KATO", String(50), index=True)
+    locality = Column("Locality", String(100), index=True)
+    krp_code = Column("KRP", String(50))
+    company_size = Column("Size", String(50), index=True)
     
     # --- Tax information columns (currently omitted because they are not present in the live DB) ---
     # If / when the database is migrated to include налоговые поля, these columns can be re-enabled.
     
     def __repr__(self):
-        return f"<Company(id={self.id}, Company='{self.Company}', BIN='{self.BIN}')>" 
+        return f"<Company(id={self.id}, company_name='{self.company_name}', bin_number='{self.bin_number}')>" 

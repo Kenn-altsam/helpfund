@@ -11,7 +11,6 @@ from sqlalchemy import text
 import sys
 from pathlib import Path
 
-from .models import Company
 from .service import CompanyService
 from ..core.database import get_db
 from ..core.translation_service import CityTranslationService
@@ -42,8 +41,19 @@ router = APIRouter(
     description="Search companies by location, name, or other criteria. Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user."
 )
 async def search_companies(
-    location: Optional[str] = Query(None, description="Location to search (city, region, or area). English names like 'Almaty' are automatically translated to Russian 'Алматы'"),
+    location: Optional[str] = Query(
+        None,
+        description="Location to search (city, region, or area). English names like 'Almaty' are automatically translated to Russian 'Алматы'"
+    ),
     company_name: Optional[str] = Query(None, description="Company name to search"),
+    activity_keywords: Optional[List[str]] = Query(
+        None,
+        description=(
+            "List of keywords to search in the company's activity/description field. "
+            "Pass multiple values as repeated query parameters, e.g. `?activity_keywords=oil&activity_keywords=gas`, "
+            "or as a comma-separated string `?activity_keywords=oil,gas`."
+        )
+    ),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results"),
     db: Session = Depends(get_db)
 ):
@@ -53,6 +63,7 @@ async def search_companies(
     Args:
         location: Location filter (searches in Locality field).Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user."
         company_name: Company name filter
+        activity_keywords: List of keywords to search in the company's activity/description field
         limit: Maximum number of results
         db: Database session
         
@@ -64,6 +75,7 @@ async def search_companies(
         companies = await company_service.search_companies(
             location=location,
             company_name=company_name,
+            activity_keywords=activity_keywords,
             limit=limit
         )
         

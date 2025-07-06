@@ -6,7 +6,8 @@ Provides endpoints for charity fund profile management.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
 
 from .models import FundProfile
 from .schemas import FundProfileCreate, FundProfileResponse
@@ -101,6 +102,32 @@ async def handle_chat(
         print(f"✨ Created new fund profile with conversation state")
     
     return ChatResponse(**response_data)
+
+
+@router.get("/chat/history", response_model=List[Dict[str, Any]])
+async def get_chat_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve the chat history for the authenticated user.
+    """
+    try:
+        fund_profile = db.query(FundProfile).filter(
+            FundProfile.user_id == current_user.id
+        ).first()
+
+        if fund_profile and fund_profile.conversation_state:
+            # Extract history from JSON field
+            history = fund_profile.conversation_state.get('history', [])
+            return history
+        
+        # If no profile or history, return an empty list
+        return []
+    except Exception as e:
+        print(f"Error fetching chat history for user {current_user.id}: {e}")
+        # In case of error, return empty list to avoid breaking frontend
+        return []
 
 
 @router.post("/chat/reset")
@@ -209,4 +236,74 @@ async def delete_fund_profile(
     db.delete(profile)
     db.commit()
     
-    return {"message": "Fund profile deleted successfully"} 
+    return {"message": "Fund profile deleted successfully"}
+
+
+# -------------------------------
+# 📌 New endpoint: Save chat history
+# -------------------------------
+
+
+class ChatHistoryItem(BaseModel):
+    """Schema for incoming chat history items from the frontend"""
+    user_input: str
+    companies_data: List[Dict[str, Any]]
+    created_at: Optional[str] = None
+
+
+# DEPRECATED: old save chat history route removed
+
+
+# Pydantic model for incoming chat history save requests
+class ChatHistorySaveRequest(BaseModel):
+    user_input: str
+    companies_data: List[Dict[str, Any]]
+    created_at: str
+
+
+@router.post("/chat/history/save")
+async def save_chat_history_item(
+    request: ChatHistorySaveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Save a single chat history item for the authenticated user."""
+    try:
+        fund_profile = db.query(FundProfile).filter(FundProfile.user_id == current_user.id).first()
+
+        # If profile doesn't exist, create a minimal one
+        if not fund_profile:
+            fund_profile = FundProfile(
+                user_id=current_user.id,
+                fund_name=f"{current_user.full_name}'s Fund",
+                conversation_state={'history': []}
+            )
+            db.add(fund_profile)
+            db.flush()  # Retrieve ID before commit
+
+        # Ensure conversation_state is initialized
+        if not fund_profile.conversation_state:
+            fund_profile.conversation_state = {'history': []}
+
+        history = fund_profile.conversation_state.get('history', [])
+
+        # Construct user and assistant turns
+        user_turn = {"role": "user", "content": request.user_input}
+        assistant_turn = {
+            "role": "assistant",
+            "content": f"Found {len(request.companies_data)} companies."
+        }
+
+        # Append the new turns to history
+        history.extend([user_turn, assistant_turn])
+
+        # Persist updated history
+        fund_profile.conversation_state = {'history': history}
+        db.commit()
+
+        return {"status": "success", "message": "History item saved."}
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving chat history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save chat history.") 

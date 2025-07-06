@@ -196,7 +196,9 @@ export const historyApi = {
         id: item.id,
         userPrompt: item.user_input,
         aiResponse: item.companies_data.map(transformCompanyData),
-        created_at: item.created_at
+        created_at: item.created_at,
+        threadId: item.thread_id || null,
+        assistantId: item.assistant_id || null,
       }));
     } catch (error) {
       console.error('Failed to get chat history:', error);
@@ -206,10 +208,12 @@ export const historyApi = {
 
   saveHistory: async (item: ChatHistoryItem): Promise<void> => {
     try {
-      await api.post('/funds/chat/history', {
+      await api.post('/funds/chat/history/save', {
         user_input: item.userPrompt,
         companies_data: item.aiResponse,
-        created_at: item.created_at
+        created_at: item.created_at,
+        thread_id: item.threadId,
+        assistant_id: item.assistantId,
       });
     } catch (error) {
       console.error('Failed to save chat history:', error);

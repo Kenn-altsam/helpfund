@@ -103,7 +103,7 @@ class OpenAIService:
         - "intent": "find_companies", "general_question", "unclear".
         - "location": Город НА РУССКОМ. Если в текущем запросе его нет, **ОБЯЗАТЕЛЬНО БЕРИ ИЗ ИСТОРИИ**. Если в истории нет — null.
         - "activity_keywords": Ключевые слова. Если в текущем запросе их нет, **ОБЯЗАТЕЛЬНО БЕРИ ИЗ ИСТОРИИ**. Если в истории нет — null.
-        - "quantity": Количество. Если не указано, используй 10. Если это продолжение, используй количество из предыдущего запроса, если не указано новое.
+        - "quantity": Число компаний. Это КРИТИЧЕСКИ ВАЖНОЕ поле. Ты ОБЯЗАН извлечь точное число из запроса пользователя (например, из "найди 30 компаний" извлеки 30). Если число не указано ЯВНО, используй 10. Не придумывай число, если его нет.
         - "page_number": Номер страницы. Увеличивай на 1 для запросов-продолжений.
         - "reasoning": Твое пошаговое объяснение логики.
         - "preliminary_response": Ответ-заглушка для пользователя.
@@ -535,26 +535,50 @@ class OpenAIService:
             print(f"🎯 Intent parsed: {intent}, location: {location}, keywords: {activity_keywords}")
             
             # Calculate search parameters
-            raw_quantity = intent_data.get("quantity") 
+            raw_quantity_from_ai = intent_data.get("quantity")
             default_limit = 10
             max_limit = 200
-            search_limit = default_limit
 
-            try:
-                parsed_quantity = int(raw_quantity) if raw_quantity else default_limit
-                if parsed_quantity > 0:
-                    search_limit = min(parsed_quantity, max_limit)
-            except (ValueError, TypeError):
-                print(f"⚠️ Could not parse quantity '{raw_quantity}'. Using default limit of {default_limit}.")
-                search_limit = default_limit
+            # --- >>> START OF IMPROVED QUANTITY BLOCK <<< ---
+            final_quantity = None
+
+            # 1) Try to use the value provided by the model
+            if raw_quantity_from_ai is not None:
+                try:
+                    final_quantity = int(raw_quantity_from_ai)
+                except (ValueError, TypeError):
+                    pass  # We'll try other heuristics below
+
+            # 2) If the model didn't give us a useful number (None or default 10),
+            #    attempt to extract a number directly from the user's last message.
+            if final_quantity is None or final_quantity == default_limit:
+                print("🤔 AI returned default/no quantity. Checking user_input for a number...")
+                user_text = conversation_history[-1].get("content", "")
+                match = re.search(r'\b(\d{1,3})\b', user_text)  # look for 1-3 digit number
+                if match:
+                    try:
+                        num_from_text = int(match.group(1))
+                        if num_from_text > 0:
+                            print(f"✅ Found quantity '{num_from_text}' directly in user text. Using it.")
+                            final_quantity = num_from_text
+                    except (ValueError, TypeError):
+                        pass
+
+            # 3) Fallback to default if still unresolved
+            if final_quantity is None:
+                final_quantity = default_limit
+
+            # Apply global limits
+            search_limit = min(final_quantity, max_limit)
+            # --- >>> END OF IMPROVED QUANTITY BLOCK <<< ---
 
             offset = (page - 1) * search_limit
-            print(f"📊 Search params: limit={search_limit}, offset={offset}, page={page}")
-            
+            print(f"📊 Final search params: limit={search_limit}, offset={offset}, page={page}")
+
             # --- DEBUG: Add detailed pagination debugging ---
-            print(f"🔢 [PAGINATION] Detailed calculation:")
-            print(f"   Raw quantity from OpenAI: {raw_quantity}")
-            print(f"   Parsed search_limit: {search_limit}")  
+            print("🔢 [PAGINATION] Detailed calculation:")
+            print(f"   Raw quantity from OpenAI: {raw_quantity_from_ai}")
+            print(f"   Final quantity selected: {final_quantity}")
             print(f"   Page number from OpenAI: {page}")
             print(f"   Calculated offset: {offset} = ({page} - 1) * {search_limit}")
             print(f"   Final query will be: LIMIT {search_limit} OFFSET {offset}")

@@ -43,6 +43,8 @@ export interface ChatHistoryItem {
   userPrompt: string;
   aiResponse: Company[];
   created_at: string;
+  threadId: string | null;
+  assistantId: string | null;
 }
 
 export interface GlobalState {
@@ -69,7 +71,8 @@ export interface ApiResponse<T> {
 }
 
 export interface ChatRequest {
-  prompt: string;
+  user_input: string;
+  history: Array<{ role: 'user' | 'assistant'; content: string }>;
   location?: string;
   assistant_id?: string;
   thread_id?: string;
