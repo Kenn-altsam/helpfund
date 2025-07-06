@@ -184,7 +184,24 @@ export const chatApi = {
       console.error('Failed to reset chat:', error);
       throw error;
     }
-  }
+  },
+
+  /**
+   * Retrieve full message history for a given assistant/thread.
+   * The backend returns an array of { role: 'user' | 'assistant', content: string }
+   */
+  getConversationHistory: async (
+    assistantId: string,
+    threadId: string
+  ): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> => {
+    try {
+      const response = await api.get(`/ai/assistant/${assistantId}/history/${threadId}`);
+      return response.data?.data?.history ?? [];
+    } catch (error) {
+      console.error('Failed to load conversation history:', error);
+      throw error;
+    }
+  },
 };
 
 // History API

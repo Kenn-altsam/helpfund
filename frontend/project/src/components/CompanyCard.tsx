@@ -1,4 +1,3 @@
-import React from 'react';
 import { ExternalLink, Phone, Mail, Plus, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card';

@@ -206,28 +206,70 @@ export function FinderPage() {
     }
   };
 
-  const handleSelectHistory = (item: ChatHistoryItem) => {
-    const userMessage: Message = {
-      id: generateId(),
-      type: 'user',
-      content: item.userPrompt,
-    };
+  const handleSelectHistory = async (item: ChatHistoryItem) => {
+    if (!item.threadId || !item.assistantId) {
+      // Если нет threadId – показываем только последний запрос/ответ
+      const fallback: Message[] = [
+        {
+          id: generateId(),
+          type: 'user',
+          content: item.userPrompt,
+        },
+        {
+          id: generateId(),
+          type: 'assistant',
+          content: t('finder.response', { count: item.aiResponse.length }),
+          companies: item.aiResponse,
+        },
+      ];
+      setMessages(fallback);
+      setThreadId(null);
+      setAssistantId(null);
+      setSidebarOpen(false);
+      return;
+    }
 
-    const assistantMessage: Message = {
-      id: generateId(),
-      type: 'assistant',
-      content: t('finder.response', { count: item.aiResponse.length }),
-      companies: item.aiResponse,
-    };
+    try {
+      // Показать временно "загрузка" в интерфейсе
+      setMessages([{
+        id: generateId(),
+        type: 'loading',
+      }]);
 
-    // Отображаем выбранный фрагмент диалога
-    setMessages([userMessage, assistantMessage]);
+      const history = await chatApi.getConversationHistory(item.assistantId, item.threadId);
 
-    // Восстанавливаем контекст для продолжения диалога
-    setThreadId(item.threadId);
-    setAssistantId(item.assistantId);
+      // Преобразуем в формат сообщений UI
+      const loadedMessages: Message[] = history.map((h) => ({
+        id: generateId(),
+        type: h.role,
+        content: h.content,
+      })) as Message[];
 
-    setSidebarOpen(false);
+      setMessages(loadedMessages);
+
+      // Восстанавливаем контекст для продолжения диалога
+      setThreadId(item.threadId);
+      setAssistantId(item.assistantId);
+    } catch (error) {
+      console.error('Failed to load conversation history:', error);
+      // Фолбэк – показываем короткую версию
+      const fallback: Message[] = [
+        {
+          id: generateId(),
+          type: 'user',
+          content: item.userPrompt,
+        },
+        {
+          id: generateId(),
+          type: 'assistant',
+          content: t('finder.response', { count: item.aiResponse.length }),
+          companies: item.aiResponse,
+        },
+      ];
+      setMessages(fallback);
+    } finally {
+      setSidebarOpen(false);
+    }
   };
 
   const handleDeleteHistory = async (id: string) => {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 
