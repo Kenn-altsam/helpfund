@@ -79,6 +79,7 @@ async def handle_chat_with_assistant(request: ChatRequest, db: Session = Depends
         return ChatResponse(
             message=response_data['message'],
             companies=response_data.get('companies', []),
+            updated_history=response_data.get('updated_history', []),
             assistant_id=response_data['assistant_id'],
             thread_id=response_data['thread_id']
         )

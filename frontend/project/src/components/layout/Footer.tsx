@@ -93,8 +93,29 @@ export function Footer() {
           </div>
         </div>
         
-        <div className="mt-12 pt-8 border-t text-sm text-center text-muted-foreground">
+        <div className="mt-12 pt-8 border-t text-sm text-center text-muted-foreground space-y-2">
           <p>{t('footer.copyright')}</p>
+          <p className="flex items-center justify-center">
+            <a
+              href="https://www.instagram.com/kenn_altsam/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors flex items-center space-x-2"
+            >
+              <span>Made by Kenzhe</span>
+              <Instagram className="h-4 w-4" />
+            </a>
+          </p>
+          <p className="flex items-center justify-center">
+            <a
+              href="https://www.nfactorial.school"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors flex items-center space-x-2"
+            >
+              <span>Supported by nFactorial</span>
+            </a>
+          </p>
         </div>
       </div>
     </footer>

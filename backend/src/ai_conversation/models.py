@@ -119,6 +119,46 @@ class ConversationResponse(BaseModel):
         }
 
 
+class MessageDTO(BaseModel):
+    """DTO for a single message in conversation history, including optional metadata"""
+
+    role: str = Field(..., description="Sender role: user, assistant, system, etc.")
+    content: str = Field(..., description="Message content")
+    companies: Optional[List['CompanyData']] = Field(
+        None,
+        description="List of companies associated with this message (if any)"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Arbitrary metadata associated with the message"
+    )
+
+    class Config:
+        extra = "allow"
+        json_schema_extra = {
+            "example": {
+                "role": "assistant",
+                "content": "Отлично, я нашёл 3 компании по вашему запросу.",
+                "companies": [
+                    {
+                        "bin": "123456789012",
+                        "name": "Tech Solutions LLP",
+                        "activity": "Software development",
+                        "address": "Almaty, Kazakhstan"
+                    }
+                ],
+                "metadata": {
+                    "companies": [
+                        {
+                            "id": "123",
+                            "name": "Tech Solutions LLP"
+                        }
+                    ]
+                }
+            }
+        }
+
+
 class ChatResponse(BaseModel):
     """Response model for chat conversation with history"""
     
@@ -129,6 +169,10 @@ class ChatResponse(BaseModel):
     companies: List['CompanyData'] = Field(
         default_factory=list,
         description="List of company data found"
+    )
+    updated_history: List[MessageDTO] = Field(
+        default_factory=list,
+        description="Full updated conversation history after this turn"
     )
     assistant_id: Optional[str] = Field(
         None,
@@ -167,6 +211,28 @@ class ChatResponse(BaseModel):
                         "activity": "Software development",
                         "locality": "Almaty",
                         "size": "Medium"
+                    }
+                ],
+                "updated_history": [
+                    {
+                        "role": "assistant",
+                        "content": "Отлично, я нашёл 3 компании по вашему запросу.",
+                        "companies": [
+                            {
+                                "bin": "123456789012",
+                                "name": "Tech Solutions LLP",
+                                "activity": "Software development",
+                                "address": "Almaty, Kazakhstan"
+                            }
+                        ],
+                        "metadata": {
+                            "companies": [
+                                {
+                                    "id": "123",
+                                    "name": "Tech Solutions LLP"
+                                }
+                            ]
+                        }
                     }
                 ],
                 "assistant_id": "asst_abc123",
@@ -234,9 +300,17 @@ class APIResponse(BaseModel):
                 "data": {
                     "message": "I found some great companies for you!",
                     "companies": [],
+                    "updated_history": [],
                     "assistant_id": "asst_abc123",
                     "thread_id": "thread_xyz789"
                 },
                 "message": "Request processed successfully"
             }
-        } 
+        }
+
+
+# ---------------------------------------------------------------------------
+# Resolve forward references
+# ---------------------------------------------------------------------------
+MessageDTO.update_forward_refs()
+ChatResponse.update_forward_refs() 
