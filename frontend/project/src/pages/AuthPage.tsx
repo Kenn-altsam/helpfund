@@ -35,12 +35,12 @@ export function AuthPage() {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
-      toast.error(t('auth.validation.fillRequired'), { duration: 3000 });
+      toast.error(t('auth.validation.fillRequired'), { duration: 2000 });
       return;
     }
 
     if (!isLogin && !formData.full_name) {
-      toast.error(t('auth.validation.enterName'), { duration: 3000 });
+      toast.error(t('auth.validation.enterName'), { duration: 2000 });
       return;
     }
 
@@ -65,7 +65,7 @@ export function AuthPage() {
       dispatch({ type: 'SET_LOADING', payload: false });
       
       toast.success(isLogin ? t('auth.success.welcome') : t('auth.success.accountCreated'), {
-        duration: 3000
+        duration: 2000
       });
       const redirectPath = (location.state as any)?.from?.pathname || '/finder';
       navigate(redirectPath, { replace: true });
@@ -77,18 +77,18 @@ export function AuthPage() {
       if (error.response?.status === 400) {
         const errorMessage = error.response.data?.detail;
         if (errorMessage === 'Email already registered') {
-          toast.error(t('auth.errors.emailExists'), { duration: 3000 });
+          toast.error(t('auth.errors.emailExists'), { duration: 2000 });
         } else {
-          toast.error(t('auth.errors.invalidData'), { duration: 3000 });
+          toast.error(t('auth.errors.invalidData'), { duration: 2000 });
         }
       } else if (error.response?.status === 404) {
-        toast.error(t('auth.errors.loginError'), { duration: 3000 });
+        toast.error(t('auth.errors.loginError'), { duration: 2000 });
       } else if (error.response?.status === 401) {
-        toast.error(t('auth.errors.wrongPassword'), { duration: 3000 });
+        toast.error(t('auth.errors.wrongPassword'), { duration: 2000 });
       } else if (error.response?.status === 500) {
-        toast.error(t('auth.errors.serverError'), { duration: 3000 });
+        toast.error(t('auth.errors.serverError'), { duration: 2000 });
       } else {
-        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'), { duration: 3000 });
+        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'), { duration: 2000 });
       }
     } finally {
       setIsLoading(false);

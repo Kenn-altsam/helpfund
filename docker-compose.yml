@@ -19,6 +19,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ayala-net
 
   # Сервис бэкенда (FastAPI)
   backend:
@@ -40,6 +42,8 @@ services:
       PORT: 8000
     ports:
       - "8000:8000"
+    networks:
+      - ayala-net
 
   # Сервис фронтенда (React/Vite + Nginx)
   frontend:
@@ -58,6 +62,12 @@ services:
       # --- ВАЖНО ---
       # Открываем порт 5173 на твоем компьютере и связываем его с портом 80 внутри контейнера, где работает Nginx
       - "5173:80"
+    networks:
+      - ayala-net
 
 volumes:
   postgres_data:
+
+networks:
+  ayala-net:
+    name: ayala-network

@@ -75,15 +75,24 @@ const transformCompanyData = (company: any): Company => {
 
   return {
     ...company,
-    // Map backend fields to frontend display fields
-    region: company.locality,
-    industry: company.activity,
+    // Prefer existing fields if already present; otherwise map from backend-specific names
+    region: company.region || company.locality,
+    industry: company.industry || company.activity,
     taxes: taxYears || 'Нет данных о налогах',
     // These fields might be added by the AI service or other sources
     contacts: company.contacts || null,
     website: company.website || null
   };
 };
+
+// Extend ChatResponse to include raw, unprocessed company data for advanced use cases
+interface RawChatResponse extends ChatResponse {
+  /**
+   * Original companies array returned by the backend before any client-side transformation.
+   * Can be useful for debugging or exporting untouched data.
+   */
+  rawCompanies?: any[];
+}
 
 // Companies API
 export const companiesApi = {
@@ -164,15 +173,23 @@ export const companiesApi = {
 
 // Chat API
 export const chatApi = {
-  sendMessage: async (request: ChatRequest): Promise<ChatResponse> => {
+  sendMessage: async (request: ChatRequest): Promise<RawChatResponse> => {
     try {
       const response = await api.post('/ai/chat-assistant', request);
-      if (response.data.companies) {
-        response.data.companies = response.data.companies.map(transformCompanyData);
+
+      // Work with a strongly-typed copy of the response payload
+      const rawData = response.data as RawChatResponse;
+
+      if (rawData.companies) {
+        // Preserve the unmodified companies array
+        rawData.rawCompanies = [...rawData.companies];
+        // Transform companies for UI consumption
+        rawData.companies = rawData.companies.map(transformCompanyData);
       }
-      return response.data;
+
+      return rawData;
     } catch (error) {
-      console.error('Failed to search companies:', error);
+      console.error('Failed to send message:', error);
       throw error;
     }
   },
@@ -191,12 +208,15 @@ export const chatApi = {
    * The backend returns an array of { role: 'user' | 'assistant', content: string }
    */
   getConversationHistory: async (
-    assistantId: string,
+    _assistantId: string, // currently unused but kept for potential future auth handling
     threadId: string
-  ): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> => {
+  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>> => { // added optional companies field
     try {
-      const response = await api.get(`/ai/assistant/${assistantId}/history/${threadId}`);
-      return response.data?.data?.history ?? [];
+      // Unified chat history endpoint for both AI and funds chat
+      const response = await api.get(`/funds/chat/thread/${threadId}/history`);
+
+      // Backend returns the history array directly; no additional nesting expected
+      return response.data ?? [];
     } catch (error) {
       console.error('Failed to load conversation history:', error);
       throw error;
@@ -223,11 +243,11 @@ export const historyApi = {
     }
   },
 
-  saveHistory: async (item: ChatHistoryItem): Promise<void> => {
+  saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
     try {
       await api.post('/funds/chat/history/save', {
         user_input: item.userPrompt,
-        companies_data: item.aiResponse,
+        companies_data: item.rawAiResponse,
         created_at: item.created_at,
         thread_id: item.threadId,
         assistant_id: item.assistantId,

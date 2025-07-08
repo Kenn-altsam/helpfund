@@ -63,7 +63,9 @@ export type GlobalAction =
   | { type: 'REMOVE_CONSIDERATION'; payload: string }
   | { type: 'SET_USER'; payload: User | null }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'CLEAR_STATE' };
+  | { type: 'CLEAR_STATE' }
+  | { type: 'CLEAR_STATE_PRESERVE_LIST' }
+  | { type: 'SET_CONSIDERATION_LIST'; payload: Company[] };
 
 export interface ApiResponse<T> {
   data: T;

@@ -13,7 +13,7 @@ export function ConsiderationPage() {
 
   const handleRemoveCompany = (bin: string) => {
     removeFromConsideration(bin);
-    toast.success(t('consideration.companyRemoved'), { duration: 3000 });
+    toast.success(t('consideration.companyRemoved'), { duration: 2000 });
   };
 
   if (considerationList.length === 0) {
@@ -57,7 +57,7 @@ export function ConsiderationPage() {
               variant="outline"
               onClick={() => {
                 considerationList.forEach(company => removeFromConsideration(company.bin));
-                toast.success(t('consideration.cleared'), { duration: 3000 });
+                toast.success(t('consideration.cleared'), { duration: 2000 });
               }}
             >
               <Trash2 className="h-4 w-4 mr-2" />

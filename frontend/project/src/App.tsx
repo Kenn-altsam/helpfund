@@ -49,7 +49,7 @@ function AppContent() {
         </Routes>
       </main>
       {showFooter && <Footer />}
-      <Toaster position="top-right" richColors duration={3000} />
+      <Toaster position="top-right" richColors duration={2000} />
     </div>
   );
 }

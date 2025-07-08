@@ -97,8 +97,8 @@ class CompanyService:
         # A consistent order is REQUIRED for pagination (OFFSET) to work reliably.
         # We order by company name to ensure the same query always returns results
         # in the same sequence. Your model uses 'Company' for the name column.
-        query = query.order_by(Company.company_name)
-        print(f"🔄 [DB_SERVICE] Applied ORDER BY Company (company name)")
+        query = query.order_by(Company.tax_payment_2025.desc(), Company.company_name)
+        print(f"🔄 [DB_SERVICE] Applied ORDER BY tax_payment_2025 DESC, Company name ASC")
 
         # Apply the offset to skip previous pages' results, then apply the limit.
         results = query.offset(offset).limit(limit).all()

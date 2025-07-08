@@ -44,6 +44,7 @@ class CharityFundAssistant:
         - Provide actionable insights about potential sponsorship opportunities
         - Remember previous requests in the conversation to provide consistent help
         - When providing company lists, include relevant details like location, industry, and contact availability
+        - Always present company lists sorted by their tax_payment_2025 in descending order (highest taxpayers first) for the specified location
         - Suggest next steps for charity funds to approach potential sponsors
 
         You have access to a comprehensive database of companies in Kazakhstan with information about:
@@ -312,7 +313,23 @@ class CharityFundAssistant:
             
             print(f"🤖 Assistant completed with status: {run.status}")
             print(f"📊 Companies processed in this turn: {len(companies_found)}")
-            
+
+            # Provide a concise user-facing message when company results are available
+            if companies_found:
+                assistant_response = f"Отлично, я нашел {len(companies_found)} компаний по вашему запросу. Они показаны ниже."
+                
+                # 💾 Persist assistant response with rich metadata for downstream consumers
+                try:
+                    await self.client.beta.threads.messages.create(
+                        thread_id=thread_id,
+                        role="assistant",
+                        content=assistant_response,
+                        metadata={"companies": companies_found}
+                    )
+                except Exception as meta_err:
+                    # Non-critical: log and continue if metadata persistence fails
+                    print(f"⚠️  Failed to create assistant message with metadata: {meta_err}")
+
             return {
                 "status": run.status,
                 "message": assistant_response,
@@ -486,9 +503,18 @@ async def continue_conversation(
         # Sync with external history if provided
         if external_history:
             await charity_assistant.sync_history_with_thread(thread_id, external_history)
-        
-        # Add user message to thread
-        await charity_assistant.add_message_to_thread(thread_id, message)
+
+            # Check if last external message is the same as current message to avoid duplication
+            if external_history and external_history[-1].get('content') == message and external_history[-1].get('role') == 'user':
+                message_already_added = True
+            else:
+                message_already_added = False
+        else:
+            message_already_added = False
+
+        # Add user message to thread only if it wasn't just synced
+        if not message_already_added:
+            await charity_assistant.add_message_to_thread(thread_id, message)
         
         # Run assistant
         response = await charity_assistant.run_assistant_with_tools(
@@ -527,98 +553,84 @@ async def continue_conversation(
 
 async def handle_conversation_with_context(
     user_input: str,
-    conversation_history: List[Dict[str, str]],
+    conversation_history: List[Dict[str, str]],  # Этот параметр больше не нужен для синхронизации, но оставим для создания нового треда
     db: Session,
     assistant_id: Optional[str] = None,
     thread_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Handle a conversation turn with full context preservation.
-    This is the main entry point for context-aware conversations.
-    
-    Args:
-        user_input: The user's message
-        conversation_history: Previous conversation history
-        db: Database session
-        assistant_id: Optional existing assistant ID
-        thread_id: Optional existing thread ID
-    
-    Returns:
-        Complete conversation response with preserved context
+    This version is simplified and more robust.
     """
     try:
-        print(f"🎯 Starting context-aware conversation with {len(conversation_history)} history items")
-        
-        # Create assistant if not provided
+        print(f"🎯 Starting context-aware conversation. User input: {user_input[:50]}...")
+
+        # 1. Получить или создать Assistant ID
         if not assistant_id:
             print("📝 Creating new assistant...")
             assistant_id = await charity_assistant.create_assistant()
-        
-        # Create or use existing thread
+
+        # 2. Получить или создать Thread ID
         if not thread_id:
             print("🧵 Creating new conversation thread...")
             thread_id = await charity_assistant.create_conversation_thread()
-            
-            # Add all history to the new thread
+
+            # При создании НОВОГО треда, мы можем заполнить его историей, если она есть
             if conversation_history:
-                print(f"📚 Adding {len(conversation_history)} history items to thread...")
+                print(f"📚 Populating new thread with {len(conversation_history)} history items...")
                 for msg in conversation_history:
                     role = msg.get("role", "user")
                     content = msg.get("content", "")
                     if role and content:
+                        # Убедимся, что не добавляем последнее сообщение пользователя, т.к. добавим его ниже
+                        if content == user_input and role == "user":
+                            continue
                         await charity_assistant.add_message_to_thread(thread_id, content, role)
-        else:
-            # Sync existing thread with provided history
-            print(f"🔄 Syncing existing thread with {len(conversation_history)} history items...")
-            await charity_assistant.sync_history_with_thread(thread_id, conversation_history)
-        
-        # Add new user message and run assistant
-        print("💬 Processing new user message...")
+
+        # 3. Добавить НОВОЕ сообщение пользователя в тред
+        print(f"💬 Adding new user message to thread {thread_id}...")
         await charity_assistant.add_message_to_thread(thread_id, user_input, "user")
-        
+
+        # 4. Запустить ассистента
         response = await charity_assistant.run_assistant_with_tools(
             assistant_id=assistant_id,
             thread_id=thread_id,
-            db=db,
-            instructions=f"Previous conversation context: {len(conversation_history)} messages. Continue the conversation naturally."
+            db=db
         )
-        
-        # Get complete updated history
+
+        # 5. Получить полную обновленную историю из треда
         updated_history = await charity_assistant.get_conversation_history(thread_id)
-        
-        # Extract companies data from the response if any
-        companies_data = []
-        if "companies" in response.get("message", "").lower():
-            # This could be enhanced to parse actual company data from function calls
-            pass
-        
+
+        # 6. Извлечь данные из ответа
+        companies_data = response.get("companies", [])
+
         print(f"✅ Context-aware conversation completed with {len(updated_history)} total history items")
-        
+
         return {
             "message": response["message"],
             "updated_history": updated_history,
-            "companies": companies_data,
-            "intent": "find_companies" if "companies" in response["message"].lower() else "general_question",
+            "companies": companies_data,  # Передаем данные из run_assistant_with_tools
+            "intent": "find_companies" if companies_data else "general_question",
             "assistant_id": assistant_id,
             "thread_id": thread_id,
             "status": response["status"],
             "companies_found": len(companies_data),
             "has_more_companies": False
         }
-        
+
     except Exception as e:
         print(f"❌ Error in context-aware conversation: {str(e)}")
         import traceback
         traceback.print_exc()
-        
-        # Preserve context even on error
+
+        # Логика обработки ошибок
         error_history = conversation_history.copy()
         error_history.append({"role": "user", "content": user_input})
         error_history.append({
             "role": "assistant", 
             "content": "Извините, произошла техническая ошибка. Ваш контекст разговора сохранен, попробуйте переформулировать вопрос."
         })
-        
+
         return {
             "message": "Извините, произошла техническая ошибка. Ваш контекст разговора сохранен, попробуйте переформулировать вопрос.",
             "updated_history": error_history,

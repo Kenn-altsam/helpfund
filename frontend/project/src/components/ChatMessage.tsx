@@ -10,6 +10,10 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({ type, content, companies }: ChatMessageProps) {
+  const isAssistant = type === 'assistant';
+  const isUser = type === 'user';
+  const hasCompanies = companies && companies.length > 0;
+
   if (type === 'loading') {
     return (
       <div className="flex items-start space-x-3 mb-6">
@@ -29,30 +33,34 @@ export function ChatMessage({ type, content, companies }: ChatMessageProps) {
 
   return (
     <div className="flex items-start space-x-3 mb-6">
-      {type === 'assistant' && (
+      {isAssistant && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary">
           <Bot className="h-4 w-4 text-primary-foreground" />
         </div>
       )}
-      
-      <div className="flex-1">
-        {content && (
-          <div className={`rounded-lg p-3 mb-3 ${
-            type === 'user' 
-              ? 'bg-secondary text-secondary-foreground ml-auto max-w-xs' 
-              : 'bg-muted text-muted-foreground'
-          }`}>
-            <p className="text-sm">{content}</p>
-          </div>
-        )}
-        
-        {companies && companies.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {companies.map((company) => (
-              <CompanyCard key={company.bin} company={company} />
-            ))}
-          </div>
-        )}
+
+      <div className={`flex-1 ${isUser ? 'flex justify-end' : ''}`}>
+        <div className={isUser ? 'max-w-xl' : 'w-full'}>
+          {isAssistant && hasCompanies && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {companies.map((company) => (
+                <CompanyCard key={company.bin} company={company} />
+              ))}
+            </div>
+          )}
+
+          {(!hasCompanies || isUser) && content && (
+            <div
+              className={`rounded-lg p-3 ${
+                isUser
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <p className="text-sm whitespace-pre-wrap">{content}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

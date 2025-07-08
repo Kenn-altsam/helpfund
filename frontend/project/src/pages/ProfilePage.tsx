@@ -52,17 +52,14 @@ export function ProfilePage() {
 
       localStorage.removeItem('access_token'); 
 
-      localStorage.removeItem('helpfund-consideration');
-      
-      dispatch({ type: 'CLEAR_STATE' });
-      toast.success(t('profile.success.loggedOut'), { duration: 3000 });
+      dispatch({ type: 'CLEAR_STATE_PRESERVE_LIST' });
+      toast.success(t('profile.success.loggedOut'), { duration: 2000 });
       navigate('/');
     } catch (error) {
       console.error('Logout failed:', error);
       localStorage.removeItem('access_token');
-      localStorage.removeItem('helpfund-consideration');
-      dispatch({ type: 'CLEAR_STATE' });
-      toast.error(t('profile.errors.logoutError'), { duration: 3000 });
+      dispatch({ type: 'CLEAR_STATE_PRESERVE_LIST' });
+      toast.error(t('profile.errors.logoutError'), { duration: 2000 });
     } finally {
       setIsLoggingOut(false);
     }
@@ -74,11 +71,11 @@ export function ProfilePage() {
       await authApi.deleteAccount();
       dispatch({ type: 'CLEAR_STATE' });
       localStorage.clear();
-      toast.success(t('profile.success.accountDeleted'), { duration: 3000 });
+      toast.success(t('profile.success.accountDeleted'), { duration: 2000 });
       navigate('/');
     } catch (error) {
       console.error('Account deletion failed:', error);
-      toast.error(t('profile.errors.deleteError'), { duration: 3000 });
+      toast.error(t('profile.errors.deleteError'), { duration: 2000 });
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);

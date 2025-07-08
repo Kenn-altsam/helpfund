@@ -7,7 +7,8 @@ Provides endpoints for charity fund profile management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from uuid import uuid4
 
 from .models import FundProfile
 from .schemas import FundProfileCreate, FundProfileResponse
@@ -17,6 +18,8 @@ from ..auth.router import get_current_user
 from ..auth.models import User
 from ..core.database import get_db
 from src.ai_conversation.service import ai_service
+# --- 💡 NEW: Import charity_assistant for thread interactions ---
+from ..ai_conversation.assistant_creator import charity_assistant
 
 
 # Create router
@@ -118,9 +121,9 @@ async def get_chat_history(
         ).first()
 
         if fund_profile and fund_profile.conversation_state:
-            # Extract history from JSON field
-            history = fund_profile.conversation_state.get('history', [])
-            return history
+            # Extract chat summaries (sidebar items)
+            summaries = fund_profile.conversation_state.get('chat_summaries', [])
+            return summaries
         
         # If no profile or history, return an empty list
         return []
@@ -141,7 +144,13 @@ async def reset_conversation(
     ).first()
     
     if fund_profile:
-        fund_profile.conversation_state = {'history': []}
+        state = fund_profile.conversation_state or {}
+        state['history'] = []  # clear only detailed log
+        # Preserve existing chat_summaries if any
+        if 'chat_summaries' not in state:
+            state['chat_summaries'] = []
+
+        fund_profile.conversation_state = state
         db.commit()
         print(f"🔄 Reset conversation history for user: {current_user.email}")
         return {"message": "Conversation history reset successfully"}
@@ -244,21 +253,42 @@ async def delete_fund_profile(
 # -------------------------------
 
 
+# -----------------------------
+# 🗂 Chat summary data models  
+# -----------------------------
+
+
 class ChatHistoryItem(BaseModel):
-    """Schema for incoming chat history items from the frontend"""
+    """Persistent chat summary for sidebar history"""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
     user_input: str
     companies_data: List[Dict[str, Any]]
-    created_at: Optional[str] = None
+    created_at: str  # ISO timestamp
+    thread_id: Optional[str] = None
+    assistant_id: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 
-# DEPRECATED: old save chat history route removed
+# -----------------------------
+# 🚚 Incoming save request model
+# -----------------------------
 
 
-# Pydantic model for incoming chat history save requests
 class ChatHistorySaveRequest(BaseModel):
+    """Incoming payload from the frontend when a new turn is made."""
+
     user_input: str
-    companies_data: List[Dict[str, Any]]
+    companies_data: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: str
+    thread_id: Optional[str] = None
+    assistant_id: Optional[str] = None
+    id: Optional[str] = None  # Frontend-generated ID, if provided
+
+    class Config:
+        extra = "allow"
 
 
 @router.post("/chat/history/save")
@@ -276,29 +306,57 @@ async def save_chat_history_item(
             fund_profile = FundProfile(
                 user_id=current_user.id,
                 fund_name=f"{current_user.full_name}'s Fund",
-                conversation_state={'history': []}
+                conversation_state={'history': [], 'chat_summaries': []}
             )
             db.add(fund_profile)
             db.flush()  # Retrieve ID before commit
 
         # Ensure conversation_state is initialized
         if not fund_profile.conversation_state:
-            fund_profile.conversation_state = {'history': []}
+            fund_profile.conversation_state = {'history': [], 'chat_summaries': []}
 
-        history = fund_profile.conversation_state.get('history', [])
+        state = fund_profile.conversation_state or {}
 
-        # Construct user and assistant turns
-        user_turn = {"role": "user", "content": request.user_input}
-        assistant_turn = {
-            "role": "assistant",
-            "content": f"Found {len(request.companies_data)} companies."
+        # ---------------------------------
+        # 1️⃣  Update sidebar chat summaries
+        # ---------------------------------
+        # NOTE: We do NOT modify the detailed 'history' log here.
+        #       That log is managed exclusively by /chat.
+        summaries: List[Dict[str, Any]] = state.get('chat_summaries', [])
+
+        # Try to find existing summary by thread_id
+        summary = None
+        if request.thread_id:
+            for s in summaries:
+                if s.get('thread_id') == request.thread_id:
+                    summary = s
+                    break
+
+        if summary:
+            # Update in place
+            summary['user_input'] = request.user_input
+            summary['companies_data'] = request.companies_data
+            summary['created_at'] = request.created_at
+        else:
+            # Create new summary
+            new_summary = ChatHistoryItem(
+                user_input=request.user_input,
+                companies_data=request.companies_data,
+                created_at=request.created_at,
+                thread_id=request.thread_id,
+                assistant_id=request.assistant_id
+            ).dict()
+
+            # If frontend supplied its own ID, preserve it
+            if request.id:
+                new_summary['id'] = request.id
+            summaries.insert(0, new_summary)  # newest first
+
+        # Persist updated state WITHOUT touching 'history'
+        fund_profile.conversation_state = {
+            **state,
+            'chat_summaries': summaries
         }
-
-        # Append the new turns to history
-        history.extend([user_turn, assistant_turn])
-
-        # Persist updated history
-        fund_profile.conversation_state = {'history': history}
         db.commit()
 
         return {"status": "success", "message": "History item saved."}
@@ -306,4 +364,60 @@ async def save_chat_history_item(
     except Exception as e:
         db.rollback()
         print(f"Error saving chat history: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save chat history.") 
+        raise HTTPException(status_code=500, detail="Failed to save chat history.")
+
+
+# -------------------------------
+# 🗑️  Delete chat history item
+# -------------------------------
+
+
+@router.delete("/chat/history/{history_id}")
+async def delete_chat_history_item(
+    history_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a single chat summary by its id for the authenticated user."""
+    try:
+        fund_profile = db.query(FundProfile).filter(FundProfile.user_id == current_user.id).first()
+
+        if not fund_profile or not fund_profile.conversation_state:
+            raise HTTPException(status_code=404, detail="No conversation history found")
+
+        state = fund_profile.conversation_state
+        summaries: List[Dict[str, Any]] = state.get('chat_summaries', [])
+
+        # Filter out the summary with the specified id
+        new_summaries = [s for s in summaries if str(s.get('id')) != history_id]
+
+        if len(new_summaries) == len(summaries):
+            raise HTTPException(status_code=404, detail="History item not found")
+
+        # Persist updated state
+        state['chat_summaries'] = new_summaries
+        fund_profile.conversation_state = state
+        db.commit()
+
+        return {"status": "success", "message": "History item deleted."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting chat history item: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete chat history item.")
+
+
+# --- 💡 NEW ENDPOINT: Retrieve full OpenAI thread history ---
+@router.get("/chat/thread/{thread_id}/history", response_model=List[Dict[str, Any]])
+async def get_thread_history(
+    thread_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve the full conversation history from an OpenAI thread."""
+    try:
+        history = await charity_assistant.get_conversation_history(thread_id)
+        return history
+    except Exception as e:
+        print(f"Error fetching thread history for user {current_user.id}: {e}")
+        raise HTTPException(status_code=404, detail="Thread history not found or an error occurred.") 

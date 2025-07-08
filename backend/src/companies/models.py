@@ -30,6 +30,22 @@ class Company(Base):
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
     
+    # Newly-added extended columns matching the latest database schema / CSV imports
+    location = Column("location", String(255), index=True)
+
+    # Tax payment data for recent years
+    tax_payment_2021 = Column(Float)
+    tax_payment_2022 = Column(Float)
+    tax_payment_2023 = Column(Float)
+    tax_payment_2024 = Column(Float)
+    tax_payment_2025 = Column(Float)
+
+    # Additional metadata pulled from CSV
+    degreeofrisk = Column(String(100))
+    executive = Column(String(255))
+    phone = Column(String(100))
+    email = Column(String(255))
+    
     # --- Tax information columns (currently omitted because they are not present in the live DB) ---
     # If / when the database is migrated to include налоговые поля, these columns can be re-enabled.
     

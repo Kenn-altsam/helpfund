@@ -50,7 +50,20 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
           (company) => company.bin !== action.payload
         ),
       };
+    case 'SET_CONSIDERATION_LIST':
+      return {
+        ...state,
+        considerationList: action.payload,
+      };
     case 'SET_USER':
+      if (action.payload === null) {
+        return {
+          ...state,
+          user: null,
+          history: [],
+          considerationList: [],
+        };
+      }
       return {
         ...state,
         user: action.payload,
@@ -63,7 +76,14 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
     case 'CLEAR_STATE':
       return {
         ...initialState,
-        isLoading: false, 
+        isLoading: false,
+      };
+    case 'CLEAR_STATE_PRESERVE_LIST':
+      return {
+        ...state,
+        history: [],
+        user: null,
+        isLoading: false,
       };
     default:
       return state;
@@ -142,31 +162,38 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Load consideration list from localStorage only once on mount
+  // Load consideration list when user changes
   useEffect(() => {
-    const saved = localStorage.getItem('helpfund-consideration');
+    if (!state.user) return;
+
+    const key = `helpfund-consideration-${state.user.id}`;
+    const saved = localStorage.getItem(key);
+    let companies: Company[] = [];
     if (saved) {
       try {
-        const companies = JSON.parse(saved);
-        companies.forEach((company: Company) => {
-          dispatch({ type: 'ADD_CONSIDERATION', payload: company });
-        });
+        companies = JSON.parse(saved);
       } catch (error) {
-        console.error('Failed to load consideration list:', error);
+        console.error('Failed to parse consideration list:', error);
       }
     }
-  }, []);
 
-  // Save consideration list to localStorage only when it changes
+    dispatch({ type: 'SET_CONSIDERATION_LIST', payload: companies });
+    prevConsiderationList.current = companies;
+  }, [state.user]);
+
+  // Save consideration list to localStorage only when it changes and user is present
   useEffect(() => {
+    if (!state.user) return;
+
     const currentList = JSON.stringify(state.considerationList);
     const previousList = JSON.stringify(prevConsiderationList.current);
-    
+
     if (currentList !== previousList) {
-      localStorage.setItem('helpfund-consideration', currentList);
+      const key = `helpfund-consideration-${state.user.id}`;
+      localStorage.setItem(key, currentList);
       prevConsiderationList.current = state.considerationList;
     }
-  }, [state.considerationList]);
+  }, [state.considerationList, state.user]);
 
   const addToConsideration = (company: Company) => {
     dispatch({ type: 'ADD_CONSIDERATION', payload: company });
