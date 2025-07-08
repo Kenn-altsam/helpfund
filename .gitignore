@@ -131,3 +131,5 @@ DS_Store
 migration_data.sql
 
 specific_migration.sql
+
+id_ed25519.pub
