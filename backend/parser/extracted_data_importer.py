@@ -120,8 +120,8 @@ def load_csv(filepath: Path) -> List[Dict[str, Optional[str]]]:
 def ensure_table_exists():
     """Create destination table if it is not already present."""
     inspector = inspect(engine)
-    if "extracted_company_data" not in inspector.get_table_names():
-        Base.metadata.create_all(engine)
+    # if "extracted_company_data" not in inspector.get_table_names():
+        # Base.metadata.create_all(engine)
 
 
 # ---------------------------------------------------------------------------
