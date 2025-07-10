@@ -11,6 +11,7 @@ from sqlalchemy.pool import NullPool
 from typing import Generator
 import logging
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import HTTPException
 
@@ -69,15 +70,38 @@ def init_database():
     Creates all tables defined in models.
     """
     try:
-        # Import all models to register them with Base
-        from ..companies.models import Company
-        from ..auth.models import User
-        from ..funds.models import FundProfile
-        
-        # Create all tables
-        Base.metadata.create_all(bind=engine)
-        logging.info("Database tables initialized successfully")
-        
+        # Import all models so that Alembic's autogeneration has access
+        from ..companies import models as _  # noqa: F401
+        from ..auth import models as _  # noqa: F401
+        from ..funds import models as _  # noqa: F401
+
+        # ------------------------------------------------------------------
+        # Run Alembic migrations programmatically to ensure the database
+        # schema is up-to-date without having to run the CLI separately.
+        # This will create all missing tables / schemas defined in the
+        # migration history ("alembic upgrade head").
+        # ------------------------------------------------------------------
+        try:
+            from alembic import command
+            from alembic.config import Config
+
+            # Build absolute path to alembic.ini (located at project root /backend)
+            base_dir = Path(__file__).resolve().parents[2]  # .../backend
+            alembic_ini_path = base_dir / "alembic.ini"
+
+            alembic_cfg = Config(str(alembic_ini_path))
+            # Prevent configparser issues with % in passwords via env var in env.py
+            command.upgrade(alembic_cfg, "head")
+            logging.info("Alembic migrations applied successfully → database is up-to-date")
+        except Exception as migrate_err:
+            logging.error(
+                "Alembic migration failed – falling back to SQLAlchemy create_all. Error: %s",
+                migrate_err,
+            )
+            # Fallback: direct table creation (useful in dev / first-time setups)
+            Base.metadata.create_all(bind=engine)
+            logging.info("Database tables created directly via SQLAlchemy as a fallback")
+
     except Exception as e:
         logging.error(f"Failed to initialize database: {e}")
         raise

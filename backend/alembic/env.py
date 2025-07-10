@@ -32,9 +32,11 @@ import src.auth.models  # noqa: F401
 import src.companies.models  # noqa: F401
 import src.funds.models  # noqa: F401
 
+# Ensure any percent signs are escaped for ConfigParser interpolation safety
 settings = get_settings()
-# Override the SQLAlchemy URL in Alembic configuration
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Override the SQLAlchemy URL in Alembic configuration (escape "%" -> "%%")
+escaped_db_url = settings.database_url.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", escaped_db_url)
 
 # Set target metadata for 'autogenerate'
 target_metadata = Base.metadata
