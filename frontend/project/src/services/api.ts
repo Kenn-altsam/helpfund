@@ -313,7 +313,7 @@ export const authApi = {
 
     try {
       // First, create the user account (backend expects snake_case full_name)
-      await api.post('/auth/register', {
+      await api.post('/api/v1/register', {
         email: credentials.email,
         password: credentials.password,
         full_name: credentials.full_name,
