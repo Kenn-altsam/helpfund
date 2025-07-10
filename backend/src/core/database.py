@@ -99,7 +99,7 @@ def init_database():
                 migrate_err,
             )
             # Fallback: direct table creation (useful in dev / first-time setups)
-            Base.metadata.create_all(bind=engine)
+            # Base.metadata.create_all(bind=engine)
             logging.info("Database tables created directly via SQLAlchemy as a fallback")
 
     except Exception as e:
