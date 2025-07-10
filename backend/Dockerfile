@@ -19,8 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ ./src/
-COPY parser/ ./parser/
+COPY . .
 
 # Copy environment example (you'll need to provide actual values)
 # COPY env.example .env
