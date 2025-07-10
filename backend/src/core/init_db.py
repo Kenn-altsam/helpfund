@@ -28,7 +28,7 @@ def create_tables():
         from .database import Base
         
         logger.info("Creating database tables...")
-        Base.metadata.create_all(bind=engine)
+        # Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
         
     except Exception as e:
