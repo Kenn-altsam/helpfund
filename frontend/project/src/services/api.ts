@@ -312,20 +312,21 @@ export const authApi = {
     }
 
     try {
-      // First, create the user account (backend expects snake_case full_name)
-      await api.post('/api/v1/register', {
+      // Register user ‒ backend returns AuthResponse with access_token
+      const response = await api.post<AuthResponse>('/auth/register', {
         email: credentials.email,
         password: credentials.password,
         full_name: credentials.full_name,
       });
 
-      // Immediately log the user in to obtain an access token
-      const loginResponse = await authApi.login({
-        email: credentials.email,
-        password: credentials.password,
-      });
+      if (!response.data?.access_token) {
+        throw new Error('Invalid response from server: missing access token');
+      }
 
-      return loginResponse;
+      // Persist access token the same way as login
+      localStorage.setItem('access_token', response.data.access_token);
+
+      return response.data;
     } catch (error) {
       localStorage.removeItem('access_token');
       throw error;
