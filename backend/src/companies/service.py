@@ -157,7 +157,7 @@ class CompanyService:
         Get company by ID
         
         Args:
-            company_id: Company UUID
+            company_id: Company BIN
             
         Returns:
             Company dictionary or None
@@ -168,7 +168,7 @@ class CompanyService:
         """Get company by ID synchronously"""
         try:
             company = self.db.query(Company).filter(
-                Company.id == company_id
+                Company.bin_number == company_id
             ).first()
             
             if company:
@@ -193,9 +193,9 @@ class CompanyService:
         
         result = self.db.query(
             Company.locality,
-            func.count(Company.id).label('company_count')
+            func.count(Company.bin_number).label('company_count')
         ).group_by(Company.locality).order_by(
-            func.count(Company.id).desc()
+            func.count(Company.bin_number).desc()
         ).all()
         
         return [
@@ -247,7 +247,7 @@ class CompanyService:
         # FIX: Use the correct capitalized attribute names from the SQLAlchemy model
         # (e.g., company.BIN) and map them to lowercase snake_case keys for the API.
         return {
-            "id": str(company.id),
+            "id": company.bin_number,
             "bin": company.bin_number,
             "name": company.company_name,
             "oked": company.oked_code,

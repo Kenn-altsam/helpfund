@@ -17,11 +17,9 @@ class Company(Base):
     
     __tablename__ = "companies"
     
-    # Primary key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Company information based on provided columns
-    bin_number = Column("BIN", String(12), index=True)
+    # Tell SQLAlchemy that "BIN" IS the primary key.
+    # It will now use this column for identification and stop looking for 'id'.
+    bin_number = Column("BIN", String(12), primary_key=True, index=True)
     company_name = Column("Company", String(255), nullable=False, index=True)
     oked_code = Column("OKED", String(50), index=True)
     activity = Column("Activity", String(255), index=True)
@@ -50,4 +48,4 @@ class Company(Base):
     # If / when the database is migrated to include налоговые поля, these columns can be re-enabled.
     
     def __repr__(self):
-        return f"<Company(id={self.id}, company_name='{self.company_name}', bin_number='{self.bin_number}')>" 
+        return f"<Company(company_name='{self.company_name}', bin_number='{self.bin_number}')>" 
