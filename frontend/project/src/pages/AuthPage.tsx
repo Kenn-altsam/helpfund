@@ -82,7 +82,7 @@ export function AuthPage() {
           toast.error(t('auth.errors.invalidData'), { duration: 2000 });
         }
       } else if (error.response?.status === 404) {
-        toast.error(t('auth.errors.loginError'), { duration: 2000 });
+        toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'), { duration: 2000 });
       } else if (error.response?.status === 401) {
         toast.error(t('auth.errors.wrongPassword'), { duration: 2000 });
       } else if (error.response?.status === 500) {
