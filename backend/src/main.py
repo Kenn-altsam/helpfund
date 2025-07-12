@@ -17,6 +17,7 @@ from .ai_conversation.router import router as ai_conversation_router
 from .companies.router import router as companies_router
 from .auth.router import router as auth_router
 from .funds.router import router as funds_router
+from .chats.router import router as chats_router
 from .core.config import get_settings
 from .core.database import init_database
 
@@ -67,6 +68,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(funds_router, prefix="/api/v1")
 app.include_router(ai_conversation_router, prefix="/api/v1")
 app.include_router(companies_router, prefix="/api/v1")
+app.include_router(chats_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

@@ -19,6 +19,7 @@ from ..core.database import get_db
 from ..core.config import get_settings
 from .models import User
 from ..funds.models import FundProfile
+from .dependencies import get_current_active_user, get_current_user, oauth2_scheme
 
 # Initialize settings
 settings = get_settings()
@@ -26,8 +27,8 @@ settings = get_settings()
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/token")
+# OAuth2 scheme is now in dependencies.py
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/token")
 
 # Router
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -68,8 +69,9 @@ class AuthResponse(BaseModel):
     user: UserResponse
 
 
-class TokenData(BaseModel):
-    email: Optional[str] = None
+# TokenData is now in dependencies.py
+# class TokenData(BaseModel):
+#    email: Optional[str] = None
 
 
 class PasswordResetRequest(BaseModel):
@@ -120,34 +122,36 @@ def authenticate_user(db: Session, email: str, password: str):
     return user
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """Get current authenticated user"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+# This function has been moved to dependencies.py
+# async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+#     """Get current authenticated user"""
+#     credentials_exception = HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Could not validate credentials",
+#         headers={"WWW-Authenticate": "Bearer"},
+#     )
     
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email)
-    except JWTError:
-        raise credentials_exception
+#     try:
+#         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+#         email: str = payload.get("sub")
+#         if email is None:
+#             raise credentials_exception
+#         token_data = TokenData(email=email)
+#     except JWTError:
+#         raise credentials_exception
     
-    user = db.query(User).filter(User.email == token_data.email).first()
-    if user is None:
-        raise credentials_exception
-    return user
+#     user = db.query(User).filter(User.email == token_data.email).first()
+#     if user is None:
+#         raise credentials_exception
+#     return user
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)):
-    """Get current active user"""
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
+# This function has been moved to dependencies.py
+# async def get_current_active_user(current_user: User = Depends(get_current_user)):
+#     """Get current active user"""
+#     if not current_user.is_active:
+#         raise HTTPException(status_code=400, detail="Inactive user")
+#     return current_user
 
 
 # Routes

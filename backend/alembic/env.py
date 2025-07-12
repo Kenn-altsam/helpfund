@@ -31,6 +31,7 @@ from src.core.database import Base
 import src.auth.models  # noqa: F401
 import src.companies.models  # noqa: F401
 import src.funds.models  # noqa: F401
+import src.chats.models # noqa: F401
 
 # Ensure any percent signs are escaped for ConfigParser interpolation safety
 settings = get_settings()

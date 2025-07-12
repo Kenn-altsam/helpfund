@@ -38,6 +38,7 @@ class User(Base):
     
     # Relationships
     fund_profile = relationship("FundProfile", back_populates="user", uselist=False)
+    chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', full_name='{self.full_name}')>" 
