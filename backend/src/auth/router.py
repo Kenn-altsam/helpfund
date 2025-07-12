@@ -251,7 +251,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     try:
         normalized_email = user_data.email.lower()
