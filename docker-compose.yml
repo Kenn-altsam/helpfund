@@ -1,66 +1,70 @@
-# Используем версию 3.8 или выше
-# version: "3.8"
+# Use version 3.8 or higher to ensure healthcheck features are fully supported
+version: "3.8"
 
 services:
-  # Сервис базы данных (PostgreSQL)
   db:
     image: postgres:15
     container_name: ayala_db
     restart: unless-stopped
-    # Загружает переменные из файла .env в корне проекта
-    env_file: .env
     environment:
-      # Эти переменные нужны для инициализации контейнера postgres
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      # Пробрасываем порт для удобства подключения к БД с твоего компьютера
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - ayala-net
+    # --- ADDED HEALTHCHECK ---
+    # This check will run inside the container to see if Postgres is ready.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Сервис бэкенда (FastAPI)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ayala_backend
     restart: unless-stopped
+    # --- MODIFIED depends_on ---
+    # Now, it waits for the 'db' service to be 'service_healthy'
     depends_on:
-      - db
-    env_file: .env # Также загружает переменные из корневого .env
+      db:
+        condition: service_healthy
+    # --- CLEANED UP ENVIRONMENT ---
+    # We pass only the variables the application actually needs.
+    # This is much cleaner than using env_file here.
     environment:
-      # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
-      # Собираем строку подключения к БД, используя имя сервиса 'db' вместо 'localhost'
-      DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
-      # Разрешаем запросы с нашего фронтенда
-      # ALLOWED_ORIGINS: "http://localhost:5173"
-      # Указываем порт, на котором работает бэкенд
-      PORT: 8000
+      # The connection string is the single source of truth for the DB connection.
+      # The hostname is 'db', which is the service name. Docker's internal DNS handles this.
+      DATABASE_URL: "postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}" # Using asyncpg for FastAPI
+      # Pass other necessary variables explicitly
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DEBUG: ${DEBUG}
     ports:
       - "8000:8000"
     networks:
       - ayala-net
 
-  # Сервис фронтенда (React/Vite + Nginx)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Передаем URL бэкенда в процесс сборки фронтенда
       args:
-        # Use a relative URL so that the Nginx reverse-proxy handles routing
-        VITE_API_BASE_URL: /api/v1
+        VITE_API_BASE_URL: /api
     container_name: ayala_frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      # --- ВАЖНО ---
-      # Открываем порт 5173 на твоем компьютере и связываем его с портом 80 внутри контейнера, где работает Nginx
       - "5173:80"
     networks:
       - ayala-net
