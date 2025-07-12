@@ -15,6 +15,10 @@ from sqlalchemy.orm import Session
 from ..core.config import get_settings
 from ..companies.service import CompanyService
 from .models import ChatResponse, CompanyData
+from ..auth.models import User
+from ..chats import models
+from ..chats import service as chat_service
+import uuid
 
 
 class CharityFundAssistant:
@@ -142,14 +146,25 @@ class CharityFundAssistant:
     async def add_message_to_thread(self, thread_id: str, message: str, role: str = "user", metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Add a message to an existing conversation thread, with optional metadata.
-        Returns the message ID.
+        This version automatically converts non-string metadata values to JSON strings.
         """
+        processed_metadata = {}
+        if metadata:
+            for key, value in metadata.items():
+                if not isinstance(value, str):
+                    # If value is a list, dict, or number, convert it to a JSON string
+                    print(f"🔄 Converting metadata key '{key}' to JSON string.")
+                    processed_metadata[key] = json.dumps(value, ensure_ascii=False)
+                else:
+                    processed_metadata[key] = value
+
         try:
             message_obj = await self.client.beta.threads.messages.create(
                 thread_id=thread_id,
                 role=role,
                 content=message,
-                metadata=metadata
+                # Use the processed metadata. Pass None if it's empty.
+                metadata=processed_metadata if processed_metadata else None
             )
             return message_obj.id
         except Exception as e:
@@ -543,43 +558,59 @@ async def continue_conversation(
 
 async def handle_conversation_with_context(
     user_input: str,
-    conversation_history: List[Dict[str, Any]],  # Now can include 'companies' metadata
     db: Session,
-    assistant_id: Optional[str] = None,
-    thread_id: Optional[str] = None
+    user: User, # Changed from user_id to user object
+    chat_id: Optional[uuid.UUID] = None,
+    assistant_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Handle a conversation turn with full context preservation.
-    This version is simplified and more robust, acting as the main orchestrator.
+    This is the main orchestrator that bridges the database and OpenAI.
+    
+    Args:
+        user_input (str): The new message from the user.
+        db (Session): The database session.
+        user (User): The authenticated user object.
+        chat_id (Optional[uuid.UUID]): The ID of the chat in our database.
+        assistant_id (Optional[str]): The OpenAI assistant ID.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the response and state.
     """
     try:
-        print(f"🎯 Starting context-aware conversation. User input: {user_input[:50]}...")
+        print(f"🎯 Starting context-aware conversation for user {user.id}. Chat ID: {chat_id}")
 
         # 1. Get or Create Assistant ID
         if not assistant_id:
-            print("📝 Creating new assistant...")
+            print("📝 Assistant ID not provided, creating a new one...")
             assistant_id = await charity_assistant.create_assistant()
 
-        # 2. Get or Create Thread ID
+        # 2. Get or Create Chat and OpenAI Thread ID
+        thread_id: Optional[str] = None
+        chat: Optional[models.Chat] = None
+        conversation_history = []
+
+        if chat_id:
+            chat = chat_service.get_chat_history(db, chat_id=chat_id, user=user)
+            if not chat:
+                 raise ValueError("Chat not found or permission denied.")
+            thread_id = chat.openai_thread_id
+            conversation_history = [{"role": msg.role, "content": msg.content, "metadata": {}} for msg in chat.messages]
+            print(f"✅ Found existing chat {chat.id} with thread {thread_id}")
+
+        # If no thread ID, create a new one and sync history if any
         if not thread_id:
-            print("🧵 Creating new conversation thread...")
+            print("🧵 Creating new OpenAI conversation thread...")
             thread_id = await charity_assistant.create_conversation_thread()
-            # If a new thread is created, populate it with existing history
-            if conversation_history:
-                print(f"📚 Populating new thread with {len(conversation_history)} history items...")
-                for msg in conversation_history:
-                    if msg.get("content") == user_input and msg.get("role") == "user":
-                        continue
-                    await charity_assistant.add_message_to_thread(
-                        thread_id,
-                        msg.get("content", ""),
-                        msg.get("role", "user"),
-                        msg.get("metadata", {})
-                    )
-        else:
-            if conversation_history:
-                print(f"🔄 Syncing existing thread {thread_id} with {len(conversation_history)} external history items...")
-                await charity_assistant.sync_history_with_thread(thread_id, conversation_history)
+            if chat:
+                chat.openai_thread_id = thread_id
+                db.commit()
+                print(f"🔗 Linked new thread {thread_id} to existing chat {chat.id}")
+                # Sync existing messages to the new thread
+                if conversation_history:
+                    print(f"📚 Populating new thread with {len(conversation_history)} history items...")
+                    await charity_assistant.sync_history_with_thread(thread_id, conversation_history)
+
 
         # 3. Add the NEW user message to the thread
         print(f"💬 Adding new user message to thread {thread_id}...")
@@ -592,24 +623,20 @@ async def handle_conversation_with_context(
             db=db
         )
 
-        # 5. Get the complete updated history from the thread
-        updated_history = await charity_assistant.get_conversation_history(thread_id)
+        # 5. Get the complete updated history from the thread (for potential future use, though we rely on db)
+        updated_history_from_openai = await charity_assistant.get_conversation_history(thread_id)
 
-        # 6. Extract data from the run response
-        companies_data = response_from_run.get("companies", [])
-        has_more_companies = False  # Implement pagination check here if applicable
-
-        print(f"✅ Context-aware conversation completed with {len(updated_history)} total history items")
+        # The saving logic will be handled in the router after this function returns.
+        
+        print(f"✅ Context-aware conversation turn completed.")
         return {
             "message": response_from_run["message"],
-            "updated_history": updated_history,
-            "companies": companies_data,
-            "intent": "find_companies" if companies_data else "general_question",
+            "companies": response_from_run.get("companies", []),
             "assistant_id": assistant_id,
-            "thread_id": thread_id,
+            "thread_id": thread_id, # This is the OpenAI thread_id
+            "chat_id": chat.id if chat else None, # This is our DB chat_id
             "status": response_from_run["status"],
-            "companies_found": len(companies_data),
-            "has_more_companies": has_more_companies
+            "companies_found": response_from_run.get("companies_found", 0)
         }
 
     except Exception as e:
@@ -617,21 +644,13 @@ async def handle_conversation_with_context(
         import traceback
         traceback.print_exc()
 
-        error_history = conversation_history.copy() if conversation_history else []
-        error_history.append({"role": "user", "content": user_input})
-        error_history.append({
-            "role": "assistant",
-            "content": "Извините, произошла техническая ошибка. Ваш контекст разговора сохранен, попробуйте переформулировать вопрос."
-        })
-
+        # We don't create history here, just report the error
         return {
             "message": "Извините, произошла техническая ошибка. Ваш контекст разговора сохранен, попробуйте переформулировать вопрос.",
-            "updated_history": error_history,
             "companies": [],
-            "intent": "error",
             "assistant_id": assistant_id,
-            "thread_id": thread_id,
+            "thread_id": None,
+            "chat_id": chat_id,
             "status": "error",
             "companies_found": 0,
-            "has_more_companies": False
         }
