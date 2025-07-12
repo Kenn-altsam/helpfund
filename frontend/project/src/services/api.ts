@@ -276,7 +276,7 @@ export const authApi = {
     }
 
     try {
-      const response = await api.post<AuthResponse>('auth/login', {
+      const response = await api.post<AuthResponse>('/auth/login', {
         email: credentials.email,
         password: credentials.password
       });
@@ -313,7 +313,7 @@ export const authApi = {
 
     try {
       // Register user ‒ backend returns AuthResponse with access_token
-      const response = await api.post<AuthResponse>('auth/register', {
+      const response = await api.post<AuthResponse>('/auth/register', {
         email: credentials.email,
         password: credentials.password,
         full_name: credentials.full_name,
