@@ -63,7 +63,8 @@ async def handle_chat_with_assistant(
             user=current_user,
             user_message_content=request.user_input,
             ai_message_content=ai_response_message,
-            chat_id=persistent_chat_id
+            chat_id=persistent_chat_id,
+            ai_message_metadata={"companies": response_data.get("companies", [])}
         )
 
         # 3. PREPARE THE RESPONSE

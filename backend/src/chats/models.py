@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, Text, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from ..core.database import Base # Assuming your Base is in core.database
 
 class Chat(Base):
@@ -33,6 +33,10 @@ class Message(Base):
     # 'user' or 'assistant'
     role = Column(String(16), nullable=False) 
     content = Column(Text, nullable=False)
+    
+    # This will store structured data, like the list of companies for this message.
+    # It has no size limit like OpenAI's metadata.
+    metadata = Column(JSONB, nullable=True) 
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     

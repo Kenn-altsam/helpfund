@@ -1,13 +1,14 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional, Any
 
 # Schema for a single message in a chat history
 class MessageSchema(BaseModel):
     role: str
     content: str
     created_at: datetime
+    metadata: Optional[Any] = None
 
     class Config:
         from_attributes = True

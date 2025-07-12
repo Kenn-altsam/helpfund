@@ -2,7 +2,7 @@
 
 import uuid
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from . import models
 from ..auth.models import User # Your User model
@@ -23,7 +23,8 @@ def save_conversation_turn(
     user: User,
     user_message_content: str,
     ai_message_content: str,
-    chat_id: Optional[uuid.UUID] = None
+    chat_id: Optional[uuid.UUID] = None,
+    ai_message_metadata: Optional[Dict[str, Any]] = None
 ) -> models.Chat:
     """
     Saves a user message and an AI response to the database.
@@ -53,7 +54,8 @@ def save_conversation_turn(
     ai_message = models.Message(
         chat_id=chat.id,
         role="assistant",
-        content=ai_message_content
+        content=ai_message_content,
+        metadata=ai_message_metadata
     )
     
     db.add_all([user_message, ai_message])
