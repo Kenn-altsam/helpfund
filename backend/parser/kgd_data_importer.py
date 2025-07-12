@@ -49,7 +49,8 @@ TAX_DATA_CSV = KGD_DATA_DIR / "company_tax_data.csv"
 # Database configuration
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://user:password@localhost:5432/Ayala_database"
+    # "postgresql://user:password@localhost:5432/Ayala_database",
+    "postgresql://postgres:supersecret@20.238.19.190:5432/Ayala_database"
 )
 
 # Logging configuration
