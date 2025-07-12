@@ -138,6 +138,6 @@ fundhelp_key.pem
 
 
 
-docker-compose.yml
+# docker-compose.yml
 
 ayala_db_backup.dump
