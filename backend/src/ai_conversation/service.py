@@ -1,7 +1,7 @@
 """
 OpenAI service for AI conversation functionality
 
-Handles communication with OpenAI API for charity sponsorship matching.
+Handles communication with Azure OpenAI API for charity sponsorship matching.
 """
 
 import asyncio
@@ -31,16 +31,22 @@ except ImportError:  # Fallback – default to Russian
 
 
 class OpenAIService:
-    """Service for handling OpenAI API interactions with database integration"""
+    """Service for handling Azure OpenAI API interactions with database integration"""
     
     def __init__(self):
+        """Initializes the service and sets up the Azure OpenAI client."""
         self.settings = get_settings()
-        openai.api_key = self.settings.openai_api_key
-        self.client = openai.AsyncOpenAI(api_key=self.settings.openai_api_key)
+        
+        # +++ UPDATED CLIENT INITIALIZATION FOR AZURE +++
+        self.client = openai.AsyncAzureOpenAI(
+            api_key=self.settings.azure_openai_key,
+            azure_endpoint=self.settings.azure_openai_endpoint,
+            api_version=self.settings.azure_openai_api_version,
+        )
 
     async def _parse_user_intent_with_history(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
-        Uses OpenAI to parse the latest user message in Russian, using the full conversation history for context.
+        Uses Azure OpenAI to parse the latest user message in Russian, using the full conversation history for context.
         """
         
         # --- DEBUG: Add extensive logging for pagination troubleshooting ---
@@ -146,18 +152,20 @@ class OpenAIService:
         messages_with_context = [{"role": "system", "content": system_prompt}] + history
 
         try:
-            print(f"🤖 [INTENT_PARSER] Calling OpenAI with {len(messages_with_context)} messages...")
+            print(f"🤖 [INTENT_PARSER] Calling Azure OpenAI with {len(messages_with_context)} messages...")
+            
+            # +++ UPDATED API CALL FOR AZURE +++
             response = await self.client.chat.completions.create(
-                model="gpt-4o",
+                model=self.settings.azure_openai_deployment_name, # Use the DEPLOYMENT NAME from settings
                 messages=messages_with_context,
                 response_format={"type": "json_object"},
-                temperature=0.0 # Устанавливаем 0 для максимальной предсказуемости
+                temperature=0.0
             )
             
             result = json.loads(response.choices[0].message.content)
             
             # --- DEBUG: Log the parsed result ---
-            print(f"✅ [INTENT_PARSER] OpenAI response:")
+            print(f"✅ [INTENT_PARSER] Azure OpenAI response:")
             print(f"   Intent: {result.get('intent')}")
             print(f"   Location: {result.get('location')}")
             print(f"   Activity Keywords: {result.get('activity_keywords')}")
@@ -169,7 +177,7 @@ class OpenAIService:
             
         except Exception as e:
             # Enhanced error logging
-            print(f"❌ Error during OpenAI intent parsing: {e}")
+            print(f"❌ Error during Azure OpenAI intent parsing: {e}")
             print(f"🔍 History length: {len(history)}")
             print(f"🔍 Last user message: {history[-1].get('content', 'N/A') if history else 'No history'}")
             traceback.print_exc()
