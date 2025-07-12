@@ -12,7 +12,6 @@ import asyncio
 
 from .models import Company
 from ..core.translation_service import CityTranslationService
-from ..core.linguistics import normalize_russian_word
 
 
 class CompanyService:
@@ -64,15 +63,12 @@ class CompanyService:
 
         # 1. Add location filter if provided
         if location:
-            # First, normalize the Russian location name if applicable
-            normalized_location = normalize_russian_word(location)
-            
             # Translate location to Russian if needed
-            translated_location = CityTranslationService.translate_city_name(normalized_location)
+            translated_location = CityTranslationService.translate_city_name(location)
             # Use ilike for case-insensitive search
             location_filter = Company.locality.ilike(f"%{translated_location}%")
             filters.append(location_filter)
-            print(f"🔍 [DB_SERVICE] Added location filter: Locality ILIKE '%{translated_location}%' (original input: '{location}', normalized: '{normalized_location}')")
+            print(f"🔍 [DB_SERVICE] Added location filter: Locality ILIKE '%{translated_location}%' (original input: '{location}')")
 
         # 2. Add company name filter if provided
         if company_name:
@@ -147,9 +143,8 @@ class CompanyService:
 
     def _execute_location_query(self, location: str, limit: int) -> List[Dict[str, Any]]:
         """Execute location-based query synchronously"""
-        # Normalize and then translate location input
-        normalized_location = normalize_russian_word(location)
-        translated_location = CityTranslationService.translate_city_name(normalized_location)
+        # Translate location input to Russian if needed
+        translated_location = CityTranslationService.translate_city_name(location)
         query = self.db.query(Company).filter(
             Company.locality.ilike(f'%{translated_location}%')
         )

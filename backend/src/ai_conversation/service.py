@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..companies.service import CompanyService
+from .location_service import get_canonical_location_from_text
 
 # Language detection helper (use langdetect if installed)
 try:
@@ -499,51 +500,41 @@ class OpenAIService:
         conversation_id: Optional[str] = None # Added for persistence
     ) -> Dict[str, Any]:
         """
-        The main logic loop for a single turn of conversation with persistence.
-        CRITICAL FIX: Robust error handling to ensure conversation history is ALWAYS maintained.
+        Main logic for handling a single turn in a conversation.
+        - Parses intent
+        - Searches database
+        - Formulates a response
         """
-        
-        print(f"🚀 Starting conversation turn with history length: {len(history) if history else 0}")
-        print(f"💬 User input: {user_input[:100]}...")
-        
-        # CRITICAL: Initialize conversation history properly
-        if not isinstance(history, list):
-            print("⚠️ Warning: History is not a list, initializing empty")
-            history = []
-        
-        conversation_history = history.copy()
-
-        # CRITICAL: Always add user message to history first
-        conversation_history.append({"role": "user", "content": user_input})
-        print(f"📝 Added user message, history now has {len(conversation_history)} items")
+        print(f"🔄 [SERVICE] Handling conversation turn for user input: {user_input[:100]}...")
 
         # Initialize default response values
-        intent = "unclear"
-        location = None
-        activity_keywords = None
-        quantity = None
-        preliminary_response = "Обрабатываю ваш запрос..."
-        page = 1
-        final_message = preliminary_response
         companies_data = []
+        final_message = "Обрабатываю ваш запрос..."
 
         try:
-            # 2. Parse the user's intent
-            print("🔍 Parsing user intent...")
-            intent_data = await self._parse_user_intent_with_history(conversation_history)
+            # 1. Get canonical location
+            canonical_location = await get_canonical_location_from_text(user_input)
+
+            # 2. Append user message to history *before* parsing intent
+            history.append({"role": "user", "content": user_input})
+
+            # 3. Parse intent from the full history
+            parsed_intent = await self._parse_user_intent_with_history(history)
             
-            # Extract intent data safely
-            intent = intent_data.get("intent", "unclear")
-            location = intent_data.get("location")
-            activity_keywords = intent_data.get("activity_keywords")
-            quantity = intent_data.get("quantity")
-            preliminary_response = intent_data.get("preliminary_response", "Обрабатываю ваш запрос...")
-            page = intent_data.get("page_number", 1)
+            # 4. Override location if canonical version was found
+            if canonical_location:
+                print(f"📍 [SERVICE] Overriding intent location with canonical name: '{canonical_location}'")
+                parsed_intent['location'] = canonical_location
+            
+            intent = parsed_intent.get("intent")
+            location = parsed_intent.get("location")
+            activity_keywords = parsed_intent.get("activity_keywords")
+            page = parsed_intent.get("page_number", 1)
             
             print(f"🎯 Intent parsed: {intent}, location: {location}, keywords: {activity_keywords}")
             
             # Calculate search parameters
-            raw_quantity_from_ai = intent_data.get("quantity")
+            raw_quantity_from_ai = parsed_intent.get("quantity")
             default_limit = 10
             max_limit = 200
 
@@ -561,7 +552,7 @@ class OpenAIService:
             #    attempt to extract a number directly from the user's last message.
             if final_quantity is None or final_quantity == default_limit:
                 print("🤔 AI returned default/no quantity. Checking user_input for a number...")
-                user_text = conversation_history[-1].get("content", "")
+                user_text = history[-1].get("content", "")
                 match = re.search(r'\b(\d{1,3})\b', user_text)  # look for 1-3 digit number
                 if match:
                     try:
@@ -591,7 +582,7 @@ class OpenAIService:
             print(f"   Calculated offset: {offset} = ({page} - 1) * {search_limit}")
             print(f"   Final query will be: LIMIT {search_limit} OFFSET {offset}")
             
-            final_message = preliminary_response
+            final_message = parsed_intent.get("preliminary_response", "Обрабатываю ваш запрос...")
 
             # 3. If intent is to find companies, fetch data from DB
             if intent == "find_companies" and location:
@@ -602,57 +593,45 @@ class OpenAIService:
                 print(f"   limit: {search_limit}")
                 print(f"   offset: {offset}")
                 
-                try:
-                    company_service = CompanyService(db)
-                    db_companies = await company_service.search_companies(
-                        location=location,
-                        activity_keywords=activity_keywords,
-                        limit=search_limit,
-                        offset=offset
-                    )
+                company_service = CompanyService(db)
+                db_companies = await company_service.search_companies(
+                    location=location,
+                    activity_keywords=activity_keywords,
+                    limit=search_limit,
+                    offset=offset
+                )
+                
+                print(f"📈 Found {len(db_companies) if db_companies else 0} companies in database")
+                print(f"🔍 [DATABASE] Query returned {len(db_companies) if db_companies else 0} results")
+                
+                # --- DEBUG: Log first few company names for verification ---
+                if db_companies:
+                    print(f"🏢 [DATABASE] First few companies returned:")
+                    for i, company in enumerate(db_companies[:3]):
+                        print(f"   {i+1}. {company.get('name', 'N/A')} (ID: {company.get('id', 'N/A')[:8]}...)")
+                    if len(db_companies) > 3:
+                        print(f"   ... and {len(db_companies) - 3} more companies")
+                else:
+                    print(f"⚠️ [DATABASE] No companies returned - this might indicate:")
+                    print(f"   - End of results reached (no more companies match criteria)")
+                    print(f"   - Query parameters don't match any records")
+                    print(f"   - Database connectivity issue")
+                
+                if db_companies:
+                    # 4. Enrich DB data with web search results
+                    print("🌐 Enriching companies with web search...")
+                    enriched_companies = await self._enrich_companies_with_web_search(db_companies)
+                    companies_data = enriched_companies
                     
-                    print(f"📈 Found {len(db_companies) if db_companies else 0} companies in database")
-                    print(f"🔍 [DATABASE] Query returned {len(db_companies) if db_companies else 0} results")
-                    
-                    # --- DEBUG: Log first few company names for verification ---
-                    if db_companies:
-                        print(f"🏢 [DATABASE] First few companies returned:")
-                        for i, company in enumerate(db_companies[:3]):
-                            print(f"   {i+1}. {company.get('name', 'N/A')} (ID: {company.get('id', 'N/A')[:8]}...)")
-                        if len(db_companies) > 3:
-                            print(f"   ... and {len(db_companies) - 3} more companies")
-                    else:
-                        print(f"⚠️ [DATABASE] No companies returned - this might indicate:")
-                        print(f"   - End of results reached (no more companies match criteria)")
-                        print(f"   - Query parameters don't match any records")
-                        print(f"   - Database connectivity issue")
-                    
-                    if db_companies:
-                        # 4. Enrich DB data with web search results
-                        print("🌐 Enriching companies with web search...")
-                        enriched_companies = await self._enrich_companies_with_web_search(db_companies)
-                        companies_data = enriched_companies
-                        
-                        # 5. Generate a final summary response with all data
-                        print("✍️ Generating summary response...")
-                        final_message = await self._generate_summary_response(conversation_history, companies_data)
-                    else:
-                        final_message = f"Я искал компании в {location}, но не смог найти больше результатов, соответствующих вашему запросу. Может, попробуем другой город или изменим ключевые слова?"
-                        
-                except Exception as e:
-                    print(f"❌ Error during company search: {e}")
-                    # Roll back the current database transaction so the session can continue
-                    try:
-                        if db:
-                            db.rollback()
-                    except Exception as rollback_error:
-                        print(f"⚠️ Could not rollback session after error: {rollback_error}")
-                    traceback.print_exc()
-                    final_message = f"Произошла ошибка при поиске компаний. Пожалуйста, попробуйте еще раз."
+                    # 5. Generate a final summary response with all data
+                    print("✍️ Generating summary response...")
+                    final_message = await self._generate_summary_response(history, companies_data)
+                else:
+                    final_message = f"Я искал компании в {location}, но не смог найти больше результатов, соответствующих вашему запросу. Может, попробуем другой город или изменим ключевые слова?"
             
             elif intent == "find_companies" and not location:
                 final_message = "Чтобы найти компании, мне нужно знать, в каком городе или регионе вы хотите искать. Пожалуйста, укажите местоположение."
-                
+
         except Exception as e:
             print(f"❌ Critical error during conversation processing: {e}")
             # Roll back in case the session is in a failed state so that outer callers can continue safely
@@ -665,8 +644,8 @@ class OpenAIService:
             final_message = "Извините, произошла техническая ошибка. Попробуйте переформулировать ваш вопрос."
 
         # CRITICAL: Always append the final AI response to history
-        conversation_history.append({"role": "assistant", "content": final_message})
-        print(f"✅ Added AI response, final history length: {len(conversation_history)}")
+        history.append({"role": "assistant", "content": final_message})
+        print(f"✅ Added AI response, final history length: {len(history)}")
 
         # 7. Save updated history to the database (if implementation exists)
         # if conversation_id and db: ...
@@ -675,22 +654,20 @@ class OpenAIService:
         companies_found_count = len(companies_data)
         has_more = companies_found_count >= search_limit
         
-        response_data = {
+        return {
             'message': final_message,
             'companies': companies_data,
-            'updated_history': conversation_history,
-            'intent': intent,
-            'location_detected': location,
-            'activity_keywords': activity_keywords,
-            'quantity_requested': search_limit,
+            'updated_history': history,
+            'intent': parsed_intent.get("intent") if 'parsed_intent' in locals() else 'unclear',
+            'location_detected': parsed_intent.get("location") if 'parsed_intent' in locals() else None,
+            'activity_keywords_detected': parsed_intent.get("activity_keywords") if 'parsed_intent' in locals() else None,
+            'quantity_detected': parsed_intent.get("quantity") if 'parsed_intent' in locals() else None,
+            'page_number': parsed_intent.get("page_number", 1) if 'parsed_intent' in locals() else 1,
             'companies_found': companies_found_count,
             'has_more_companies': has_more,
-            'reasoning': intent_data.get('reasoning') if 'intent_data' in locals() else None,
+            'reasoning': parsed_intent.get('reasoning') if 'parsed_intent' in locals() else None,
             # 'conversation_id': conversation_id
         }
-        
-        print(f"📤 Returning response with {len(response_data['updated_history'])} history items")
-        return response_data
 
     async def handle_conversation_with_assistant_fallback(
         self,
