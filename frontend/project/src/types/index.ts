@@ -16,26 +16,13 @@ export interface AuthResponse {
 export interface Company {
   id: string;
   bin: string;
-  name: string;
+  name?: string;
   oked: string;
   activity: string;
   kato: string;
   locality: string;
   krp: string;
   size: string;
-  annual_tax_paid?: number;
-  tax_2020?: number;
-  tax_2021?: number;
-  tax_2022?: number;
-  tax_2023?: number;
-  tax_2024?: number;
-  tax_2025?: number;
-  last_tax_update?: string;
-  contacts?: string;
-  region?: string;
-  industry?: string;
-  taxes?: string;
-  website?: string;
 }
 
 export interface ChatHistoryItem {
@@ -43,8 +30,8 @@ export interface ChatHistoryItem {
   userPrompt: string;
   aiResponse: Company[];
   created_at: string;
-  threadId: string | null;
-  assistantId: string | null;
+  threadId: string;
+  assistantId: string;
 }
 
 export interface GlobalState {

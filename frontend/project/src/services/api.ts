@@ -245,25 +245,28 @@ export const historyApi = {
     try {
       const response = await api.get('/chats/');
       
-      // Keep your debug logs for now, they are helpful!
       console.log('Raw response from /chats/ endpoint:', response);
       console.log('Data from /chats/ endpoint (BEFORE MAPPING):', response.data);
 
-      // FIX 1: Ensure rawChatItems is always an array directly from response.data
       const rawChatItems = Array.isArray(response.data) ? response.data : [];
 
-      return rawChatItems.map((item: any) => ({
-        id: item.id || item.thread_id || generateId(), // Ensure a unique 'id' for React keys
-        userPrompt: item.user_prompt || item.title || 'Untitled Chat', // Map user_prompt or title
-        // FIX 2: Crucially, ensure aiResponse is always an array.
-        // Adapt `item.companies_found` or `item.raw_companies_data` to whatever field
-        // your backend provides for companies in the history summary.
-        // If your backend doesn't send this for the history list, default to an empty array.
-        aiResponse: (item.companies_found || item.raw_companies_data || item.ai_response || []),
-        created_at: item.created_at ? new Date(item.created_at).toISOString() : new Date().toISOString(),
-        threadId: item.thread_id,
-        assistantId: item.assistant_id,
-      }));
+      return rawChatItems.map((item: any) => {
+        // --- CRITICAL FIX START ---
+        // Ensure threadId and assistantId are always non-empty strings.
+        // If backend sends null or undefined, default to an empty string.
+        const threadId = item.thread_id || ''; 
+        const assistantId = item.assistant_id || '';
+        // --- CRITICAL FIX END ---
+
+        return {
+          id: item.id || item.thread_id || generateId(), // Ensure a unique 'id' for React keys
+          userPrompt: item.user_prompt || item.title || 'Untitled Chat', // Map user_prompt or title
+          aiResponse: (item.companies_found || item.raw_companies_data || item.ai_response || []),
+          created_at: item.created_at ? new Date(item.created_at).toISOString() : new Date().toISOString(),
+          threadId: threadId,         // Use the defensively handled value
+          assistantId: assistantId,   // Use the defensively handled value
+        };
+      });
     } catch (error) {
       console.error('Failed to load chat history:', error);
       if (axios.isAxiosError(error)) {

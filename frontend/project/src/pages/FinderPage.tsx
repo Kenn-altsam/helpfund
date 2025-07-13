@@ -211,7 +211,7 @@ export function FinderPage() {
           rawAiResponse: response.rawCompanies || [],
           created_at: new Date().toISOString(),
           threadId: effectiveThreadId,
-          assistantId: response.assistant_id || assistantId,
+          assistantId: response.assistant_id || assistantId || '',
         });
 
         const updatedHistoryItem: ChatHistoryItem = {
@@ -220,7 +220,7 @@ export function FinderPage() {
           aiResponse: response.companies || [],
           created_at: new Date().toISOString(),
           threadId: effectiveThreadId,
-          assistantId: response.assistant_id || assistantId,
+          assistantId: response.assistant_id || assistantId || '',
         };
 
         if (existingChat) {
