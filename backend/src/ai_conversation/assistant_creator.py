@@ -31,7 +31,7 @@ class CharityFundAssistant:
         self.settings = get_settings()
         self.client = AzureOpenAI(
             api_key=self.settings.AZURE_OPENAI_KEY,
-            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT,
+            base_url=f"{self.settings.AZURE_OPENAI_ENDPOINT}/openai/assistants",
             api_version=self.settings.AZURE_OPENAI_API_VERSION,
         )
         
