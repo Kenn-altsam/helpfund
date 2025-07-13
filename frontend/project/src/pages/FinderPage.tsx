@@ -75,7 +75,9 @@ export function FinderPage() {
     const loadInitialData = async () => {
       try {
         // 1. Сначала загружаем список всех чатов для боковой панели
+        console.log('FinderPage: Calling historyApi.getHistory()'); // DEBUG
         const historyList = await historyApi.getHistory();
+        console.log('FinderPage: Received history list:', historyList); // DEBUG
         dispatch({ type: 'LOAD_HISTORY', payload: historyList });
 
         // 2. Проверяем, есть ли активный чат в sessionStorage
@@ -139,7 +141,7 @@ export function FinderPage() {
           await handleSelectHistory(activeHistoryItem, true);
         }
       } catch (error) {
-        console.error('Failed to load initial history:', error);
+        console.error('FinderPage: Failed to load initial history:', error); // DEBUG
       }
     };
 

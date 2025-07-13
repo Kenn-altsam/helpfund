@@ -248,23 +248,35 @@ export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
       // ИСПРАВЛЕНИЕ 1: Изменен URL на правильный для получения списка чатов
-      // Если ваш роутер chats подключен как /api/v1/chats, используйте '/chats/'
-      // Если он подключен как /api/v1/ai/chats, используйте '/ai/chats/'
-      // Я предполагаю, что это `/chats/` исходя из вашего router.py
-      const response = await api.get('/chats/'); 
+      const response = await api.get('/chats/'); // Correct URL for getting the list of chats
+      
+      // --- DEBUGGING START ---
+      console.log('Raw response from /chats/ endpoint:', response);
+      console.log('Data from /chats/ endpoint:', response.data);
+      // --- DEBUGGING END ---
 
-      // ИСПРАВЛЕНИЕ 2: Сопоставление полей согласно ChatListItemSchema
-      // response.data будет массивом ChatListItemSchema
+      // The backend returns an array of chats directly, so no need for .data.data
+      // If the backend returns { "data": [...] }, this needs to be response.data.data
+      // Based on the backend router, it should be just response.data
       return response.data.map((item: any) => ({
-        id: item.id,
-        title: item.title, 
-        updated_at: item.updated_at,
-        // Добавьте эти поля, если они есть в ChatListItemSchema на бэкенде
-        openaiThreadId: item.openai_thread_id || null, 
-        openaiAssistantId: item.openai_assistant_id || null,
+        ...item,
+        id: item.id, // Ensure id is mapped
+        updated_at: new Date(item.updated_at), // Convert string to Date
       }));
     } catch (error) {
-      console.error('Failed to get chat history:', error);
+      // --- DEBUGGING START ---
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          headers: error.response?.headers,
+        });
+      } else {
+        console.error('Generic error in getHistory:', error);
+      }
+      // --- DEBUGGING END ---
+      console.error('Failed to load chat history:', error); // Original log
       throw error;
     }
   },
