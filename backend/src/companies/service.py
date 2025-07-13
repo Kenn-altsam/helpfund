@@ -204,7 +204,7 @@ class CompanyService:
         """Converts a Company SQLAlchemy object to a dictionary."""
         return {
             "id": company.bin_number,
-            "name": company.company_name,
+            "name": company.company_name or "",
             "bin": company.bin_number,
             "activity": company.activity,
             "locality": company.locality,
