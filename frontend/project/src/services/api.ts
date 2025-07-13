@@ -1,6 +1,16 @@
 /// <reference types="vite/client" />
 
 import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
+// Make sure ChatHistoryItem in '@/types' is flexible enough or add a new type for the sidebar list
+// For example, if ChatHistoryItem is currently only for full chat history, you might need:
+// interface ChatSidebarItem {
+//   id: string; // or uuid.UUID if you have a specific UUID type
+//   title: string;
+//   updated_at: Date;
+//   openaiThreadId?: string | null;
+//   openaiAssistantId?: string | null;
+// }
+// For now, I'll assume ChatHistoryItem can correctly represent this simplified structure.
 import { Company, ChatHistoryItem, User, ChatRequest, ChatResponse, AuthCredentials, AuthResponse } from '@/types';
 
 declare global {
@@ -213,10 +223,19 @@ export const chatApi = {
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>> => { // added optional companies field
     try {
       // Unified chat history endpoint for both AI and funds chat
-      const response = await api.get(`/funds/chat/thread/${threadId}/history`);
+      // This is for full message history of a specific chat_id (which might be referred to as threadId on client)
+      // Make sure this URL matches your backend's GET /chats/{chat_id} endpoint, which returns ChatHistoryResponseSchema
+      // If your main FastAPI app router has a prefix like /api/v1 for chats_router:
+      // Then the path here should be `/chats/${threadId}`
+      const response = await api.get(`/chats/${threadId}`); // CORRECTED: assuming /chats/{id} for full history
 
       // Backend returns the history array directly; no additional nesting expected
-      return response.data ?? [];
+      // This should now map to ChatHistoryResponseSchema, so we need to access response.data.messages
+      return (response.data.messages || []).map((msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+        companies: msg.data?.companies_found?.map(transformCompanyData) || [], // Assuming companies are nested under data.companies_found
+      }));
     } catch (error) {
       console.error('Failed to load conversation history:', error);
       throw error;
@@ -224,18 +243,25 @@ export const chatApi = {
   },
 };
 
-// History API
+// History API (для боковой панели)
 export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
-      const response = await api.get('/funds/chat/history');
+      // ИСПРАВЛЕНИЕ 1: Изменен URL на правильный для получения списка чатов
+      // Если ваш роутер chats подключен как /api/v1/chats, используйте '/chats/'
+      // Если он подключен как /api/v1/ai/chats, используйте '/ai/chats/'
+      // Я предполагаю, что это `/chats/` исходя из вашего router.py
+      const response = await api.get('/chats/'); 
+
+      // ИСПРАВЛЕНИЕ 2: Сопоставление полей согласно ChatListItemSchema
+      // response.data будет массивом ChatListItemSchema
       return response.data.map((item: any) => ({
         id: item.id,
-        userPrompt: item.user_input,
-        aiResponse: item.companies_data.map(transformCompanyData),
-        created_at: item.created_at,
-        threadId: item.thread_id || null,
-        assistantId: item.assistant_id || null,
+        title: item.title, 
+        updated_at: item.updated_at,
+        // Добавьте эти поля, если они есть в ChatListItemSchema на бэкенде
+        openaiThreadId: item.openai_thread_id || null, 
+        openaiAssistantId: item.openai_assistant_id || null,
       }));
     } catch (error) {
       console.error('Failed to get chat history:', error);
@@ -243,6 +269,8 @@ export const historyApi = {
     }
   },
 
+  // Эти функции относятся к устаревшей или другой части системы (funds),
+  // и, возможно, не используются AI-чатом для сохранения истории как списка
   saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
     try {
       await api.post('/funds/chat/history/save', {
