@@ -31,8 +31,11 @@ class CharityFundAssistant:
         self.settings = get_settings()
         self.client = AzureOpenAI(
             api_key=self.settings.AZURE_OPENAI_KEY,
-            base_url=f"{self.settings.AZURE_OPENAI_ENDPOINT}/openai/assistants",
+            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT, # <-- ИСПОЛЬЗУЙ azure_endpoint
             api_version=self.settings.AZURE_OPENAI_API_VERSION,
+            # Можно также добавить:
+            # azure_deployment=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+            # но для Assistants API model= в .create() все равно понадобится
         )
         
         # Assistant configuration for charity fund discovery
