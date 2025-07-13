@@ -415,7 +415,7 @@ def continue_conversation(
     }
 
 
-async def handle_conversation_with_context(
+def handle_conversation_with_context(
     user_input: str,
     db: Session,
     user: User, # Changed from user_id to user object

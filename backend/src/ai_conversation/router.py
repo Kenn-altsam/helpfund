@@ -49,40 +49,15 @@ def handle_chat_with_assistant(
             assistant_id=request.assistant_id,
         )
 
-        if response_data["status"] == "error":
-             raise HTTPException(status_code=500, detail=response_data["message"])
+        if "error" in response_data:
+             raise HTTPException(status_code=500, detail=response_data.get("details", "An unknown error occurred in the AI handler."))
 
-        # 2. SAVE THE NEW TURN TO THE DATABASE
-        ai_response_message = response_data.get('message', 'Error: No message content from AI.')
-        ai_message_data = response_data.get('companies', []) # Get the companies data
-        
-        # Use the chat_id returned by the context handler, as it might be new
-        persistent_chat_id = response_data.get("chat_id")
-        
-        updated_chat = chat_service.save_conversation_turn(
-            db=db,
-            user=current_user,
-            user_message_content=request.user_input,
-            ai_message_content=ai_response_message,
-            chat_id=persistent_chat_id,
-            ai_message_data={"companies": ai_message_data} # Pass it here
-        )
-
-        # 3. PREPARE THE RESPONSE
-        final_history = [{
-            "role": msg.role, 
-            "content": msg.content, 
-            "metadata": msg.data,
-            "companies": msg.data.get("companies") if msg.data else []
-        } for msg in updated_chat.messages]
-        
+        # 2. PREPARE THE RESPONSE
         return ChatResponse(
-            message=ai_response_message,
-            companies=ai_message_data,
-            updated_history=final_history,
+            message=response_data.get("response"),
+            companies=response_data.get("companies_found", []),
             assistant_id=response_data.get('assistant_id'),
-            # Return the persistent database chat ID so the frontend can continue.
-            thread_id=str(updated_chat.id) 
+            thread_id=response_data.get("thread_id")
         )
         
     except Exception as e:

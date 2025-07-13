@@ -686,7 +686,8 @@ class OpenAIService:
             print("🤖 [SERVICE] Attempting to use enhanced assistant...")
             from .assistant_creator import handle_conversation_with_context
             
-            response_data = await handle_conversation_with_context(
+            # TODO: This call has incorrect arguments. `handle_conversation_with_context` expects a `user` object.
+            response_data = handle_conversation_with_context(
                 user_input=user_input,
                 conversation_history=history,
                 db=db
