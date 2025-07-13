@@ -250,14 +250,14 @@ class ChatResponse(BaseModel):
 class CompanyData(BaseModel):
     """Model for company data in chat responses"""
     
-    bin: str = Field(..., description="Business Identification Number (BIN)")
-    name: str = Field(..., description="Company name")
-    oked: Optional[str] = Field(None, description="OKED code")
+    bin: str = Field(..., description="Business Identification Number")
+    name: Optional[str] = Field(None, description="Company name")
+    registration_date: Optional[str] = Field(None, description="Registration date")
+    address: Optional[str] = Field(None, description="Company address")
     activity: Optional[str] = Field(None, description="Business activity")
-    kato: Optional[str] = Field(None, description="KATO code")
-    locality: Optional[str] = Field(None, description="Locality or region")
-    krp: Optional[str] = Field(None, description="KRP code")
-    size: Optional[str] = Field(None, description="Company size category")
+    annual_tax: Optional[float] = Field(None, description="Annual tax payment")
+    website: Optional[str] = Field(None, description="Company website")
+    contacts: Optional[Dict[str, str]] = Field(None, description="Contact information")
 
     class Config:
         extra = "allow"
@@ -265,12 +265,15 @@ class CompanyData(BaseModel):
             "example": {
                 "bin": "123456789012",
                 "name": "Tech Solutions LLP",
-                "oked": "62011",
-                "activity": "Computer programming activities",
-                "kato": "751110000",
-                "locality": "Almaty",
-                "krp": "2",
-                "size": "Medium",
+                "registration_date": "2020-01-01",
+                "address": "Almaty, Kazakhstan",
+                "activity": "Software development",
+                "annual_tax": 1000000.0,
+                "website": "https://example.com",
+                "contacts": {
+                    "phone": "+7 777 123 4567",
+                    "email": "contact@example.com"
+                }
             }
         }
 
