@@ -7,8 +7,7 @@
 # """
 
 from functools import lru_cache
-from typing import List, Any, Optional # Import Optional
-
+from typing import List, Any, Optional
 from pydantic import PostgresDsn, Field, AliasChoices, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
@@ -49,7 +48,7 @@ class Settings(BaseSettings):
     # Try SECRET_KEY first for backwards-compatibility, fall back to JWT_SECRET_KEY
     SECRET_KEY: str = Field(..., validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY"))
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480 # This should be an int
 
     # ------------------------------------------------------------------
     # FastAPI / Server toggles
@@ -67,9 +66,8 @@ class Settings(BaseSettings):
 
     # ------------------------------------------------------------------
     # OpenAI - UPDATED FOR AZURE
-    # Add these lines to define the Azure OpenAI specific settings
     # ------------------------------------------------------------------
-    OPENAI_API_KEY: str = "" # This is for non-Azure OpenAI, if you're using it
+    OPENAI_API_KEY: str = ""
     OPENAI_MODEL_NAME: str = "gpt-4-turbo"  # Default model
 
     # Azure OpenAI specific settings
@@ -77,7 +75,6 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: Optional[str] = None
     AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
     AZURE_OPENAI_API_VERSION: str = "2024-02-15" # Specify your API version
-
 
     # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
@@ -91,11 +88,7 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         if self.DATABASE_URL:
-            # Just return the URL as is
             return str(self.DATABASE_URL)
-
-        # --- >>> THIS IS THE CRITICAL CHANGE <<< ---
-        # Assemble a standard synchronous URL
         return (
             f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
@@ -104,17 +97,13 @@ class Settings(BaseSettings):
     def model_post_init(self, __context: Any) -> None:
         """
         Validate and process settings after initialization.
+        Pydantic-settings handles loading from .env and environment variables directly.
+        This method is for post-validation logic or derived attributes, NOT for re-loading env vars.
         """
-        # Load environment variables from .env file
+        # load_dotenv() is typically called once at application startup,
+        # or Pydantic-settings might handle it internally based on config.
+        # It's okay to leave it here, but the loop below is the problem.
         load_dotenv()
-        
-        # Override settings from environment variables if they exist
-        for field_name in self.model_fields.keys(): # Iterate over field names
-            env_val = os.getenv(field_name.upper()) # Use .upper() to match env var names
-            if env_val is not None:
-                # Pydantic handles type conversion, so direct assignment is fine
-                setattr(self, field_name, env_val)
-
 
         # Basic validation
         if not self.DATABASE_URL:
