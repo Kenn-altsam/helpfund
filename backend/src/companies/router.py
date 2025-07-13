@@ -22,8 +22,6 @@ root_dir = Path(__file__).resolve().parents[2]
 if str(root_dir) not in sys.path:
     sys.path.append(str(root_dir))
 
-from parser import KGDTaxParser as KGDParser  # noqa: E402
-
 # Create router
 router = APIRouter(
     prefix="/companies",
@@ -294,31 +292,3 @@ async def translate_city_name(
         )
 
 
-@router.get(
-    "/tax/{bin_number}",
-    summary="Get Tax Payment Data",
-    description="Retrieve tax payment data for a company from the KGD (tax authority) website. If a 2captcha API key is configured in the environment (`CAPTCHA_API_KEY`), CAPTCHA solving is automatic; otherwise, the service will prompt for manual CAPTCHA entry in the browser window that appears."
-)
-async def get_tax_payment_data(
-    bin_number: str,
-):
-    """Fetches tax payment and VAT-refund data for the specified BIN by launching a Chromium browser via Playwright and scraping the KGD site."""
-    parser = KGDParser()  # auto mode – uses 2captcha if available
-    try:
-        result = await parser.search_company(bin_number)
-    finally:
-        # Ensure browser is closed even on error
-        await parser.close()
-
-    if result.get("status") == "success":
-        return APIResponse(
-            status="success",
-            data=result["tax_data"],
-            message="Tax data retrieved successfully"
-        )
-
-    # Something went wrong – propagate the error
-    raise HTTPException(
-        status_code=400,
-        detail=f"Failed to retrieve tax data: {result.get('error', 'Unknown error')}"
-    ) 
