@@ -58,6 +58,7 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
         # This will log only when the API is actually called (not a cache hit)
         print(f"🧠 Calling OpenAI API for location extraction: '{text[:50]}...'")
         
+        settings = get_settings()
         client = get_client()
         response = client.chat.completions.create(
             model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
