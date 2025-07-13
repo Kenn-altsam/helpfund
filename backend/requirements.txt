@@ -1,31 +1,41 @@
+# --- FastAPI Core ---
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-openai>=1.0.0
+
+# --- Configuration ---
 pydantic>=2.5.0
+pydantic-settings
 python-dotenv>=1.0.0
-playwright>=1.40.0
-pandas>=2.0.0
-# Database dependencies
+
+# --- Database (Synchronous Setup) ---
 sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
+psycopg2-binary>=2.9.0  # The synchronous driver for PostgreSQL
 alembic>=1.12.0
-# Authentication dependencies
+
+# --- Authentication ---
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+bcrypt==3.2.0           # <<< FIX: Pinned to a compatible version for passlib
 python-multipart>=0.0.6
-# Email validation for pydantic
-email-validator>=2.0.0
-# Testing dependencies
-aiohttp>=3.8.0
-# KGD Parser dependencies
-asyncpg>=0.29.0
+
+# --- OpenAI and AI Services ---
+openai>=1.0.0
+langdetect>=1.0.9
+
+# --- KGD Parser and its Dependencies ---
 requests>=2.31.0
 2captcha-python>=1.1.3
 pytesseract>=0.3.10
 pillow>=10.0.0
 
-# Language detection
-langdetect>=1.0.9
+# --- Pydantic Helpers ---
+email-validator>=2.0.0
 
-pydantic-settings
-python-dotenv 
+# --- REMOVED ASYNC DEPENDENCIES ---
+# asyncpg (conflicts with psycopg2-binary in a sync app)
+# aiohttp (async http client, not needed)
+
+# --- OPTIONAL HEAVY DEPENDENCIES ---
+# Consider if these are truly needed in the backend container
+# playwright>=1.40.0
+# pandas>=2.0.0

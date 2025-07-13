@@ -100,7 +100,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -182,7 +182,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     user.last_login = datetime.now(timezone.utc)
     db.commit()
     
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
@@ -233,7 +233,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
     user.last_login = datetime.now(timezone.utc)
     db.commit()
 
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
@@ -286,7 +286,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         db.refresh(db_user)
         
         # Generate access token
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": db_user.email},
             expires_delta=access_token_expires
