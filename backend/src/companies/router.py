@@ -100,6 +100,7 @@ async def search_companies(
 async def get_companies_by_location(
     location: str,
     limit: int = Query(50, ge=1, le=200, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
     db: Session = Depends(get_db)
 ):
     """
@@ -108,6 +109,7 @@ async def get_companies_by_location(
     Args:
         location: Location name (city, region, or area). English names are automatically translated to Russian.
         limit: Maximum number of results
+        offset: Number of results to skip
         db: Database session
         
     Returns:
@@ -115,7 +117,7 @@ async def get_companies_by_location(
     """
     try:
         company_service = CompanyService(db)
-        companies = await company_service.get_companies_by_location(location, limit)
+        companies = await company_service.get_companies_by_location(location, limit, offset)
         
         if not companies:
             raise HTTPException(

@@ -125,7 +125,8 @@ class CompanyService:
     async def get_companies_by_location(
         self, 
         location: str, 
-        limit: int = 50
+        limit: int = 50,
+        offset: int = 0
     ) -> List[Dict[str, Any]]:
         """
         Get companies by specific location
@@ -133,15 +134,16 @@ class CompanyService:
         Args:
             location: Location name
             limit: Maximum results
+            offset: Number of results to skip
             
         Returns:
             List of company dictionaries
         """
         return await asyncio.to_thread(
-            self._execute_location_query, location, limit
+            self._execute_location_query, location, limit, offset
         )
 
-    def _execute_location_query(self, location: str, limit: int) -> List[Dict[str, Any]]:
+    def _execute_location_query(self, location: str, limit: int, offset: int) -> List[Dict[str, Any]]:
         """Execute location-based query synchronously"""
         # Translate location input to Russian if needed
         translated_location = CityTranslationService.translate_city_name(location)
@@ -149,7 +151,7 @@ class CompanyService:
             Company.locality.ilike(f'%{translated_location}%')
         )
         
-        companies = query.limit(limit).all()
+        companies = query.order_by(Company.company_name.asc()).offset(offset).limit(limit).all()
         return [self._company_to_dict(company) for company in companies]
 
     async def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
@@ -244,8 +246,6 @@ class CompanyService:
 
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
         """Converts a Company SQLAlchemy object to a dictionary."""
-        # FIX: Use the correct capitalized attribute names from the SQLAlchemy model
-        # (e.g., company.BIN) and map them to lowercase snake_case keys for the API.
         return {
             "id": company.bin_number,
             "bin": company.bin_number,
@@ -256,14 +256,4 @@ class CompanyService:
             "locality": company.locality,
             "krp": company.krp_code,
             "size": company.company_size,
-
-            # Tax information (may be missing if the DB wasn't migrated yet)
-            "annual_tax_paid": getattr(company, "annual_tax_paid", None),
-            "tax_2020": getattr(company, "tax_2020", None),
-            "tax_2021": getattr(company, "tax_2021", None),
-            "tax_2022": getattr(company, "tax_2022", None),
-            "tax_2023": getattr(company, "tax_2023", None),
-            "tax_2024": getattr(company, "tax_2024", None),
-            "tax_2025": getattr(company, "tax_2025", None),
-            "last_tax_update": getattr(company, "last_tax_update", None).isoformat() if getattr(company, "last_tax_update", None) else None,
         } 

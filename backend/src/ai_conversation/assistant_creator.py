@@ -234,13 +234,12 @@ class CharityFundAssistant:
                                 for company_dict in companies:
                                     formatted_company = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("name"),
+                                        "name": company_dict.get("company_name"),
                                         "bin": company_dict.get("bin"),
                                         "activity": company_dict.get("activity"),
                                         "location": company_dict.get("locality"),
-                                        "oked": company_dict.get("oked"),
-                                        "size": company_dict.get("size"),
-                                        "tax_payment_2025": company_dict.get("tax_payment_2025")  # Ensure this is included for sorting
+                                        "oked": company_dict.get("oked_code"),
+                                        "size": company_dict.get("company_size"),
                                     }
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)  # Track for context
