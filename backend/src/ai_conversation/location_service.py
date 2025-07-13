@@ -1,66 +1,92 @@
-# backend/src/ai_conversation/location_service.py
-
-from openai import AsyncAzureOpenAI
 import json
-import os
+from functools import lru_cache
+from typing import Optional
+
+# Import the specific client and errors for robustness
+from openai import OpenAI, APIConnectionError, AuthenticationError, RateLimitError
 
 from ..core.config import get_settings
 
-# Get settings to configure the client
-settings = get_settings()
+# Use a global variable for a singleton client, initialized as None
+_client: Optional[OpenAI] = None
 
-# Make sure your OpenAI client is configured.
-# It automatically reads the OPENAI_API_KEY from your environment variables.
-client = AsyncAzureOpenAI(
-    api_key=settings.azure_openai_key,
-    azure_endpoint=settings.azure_openai_endpoint,
-    api_version=settings.azure_openai_api_version,
-)
+# A constant for the prompt makes it easier to manage
+LOCATION_EXTRACTION_PROMPT = """
+You are an expert in Kazakh geography. Your task is to extract ONE canonical city or region name from the user's text.
+- If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
+- If multiple cities are mentioned, return only the most prominent one.
+- If no recognizable city is found, return the word "null".
+- Respond with ONLY the city name or "null". Do not add any other text.
+Example 1: "Find me IT companies in Almaty" -> "Алматы"
+Example 2: "I'm looking for a sponsor" -> "null"
+Example 3: "Горнодобывающие компании Шымкента" -> "Шымкент"
+"""
 
-async def get_canonical_location_from_text(user_input: str) -> str | None:
+def get_client() -> OpenAI:
     """
-    Uses an AI model to extract a canonical city name from user text.
-
-    Args:
-        user_input: The raw text from the user (e.g., "найди мне 15 компаний в Алмате").
-
-    Returns:
-        The standardized city name (e.g., "Алматы") or None if no city is found.
+    Safely initializes and returns a singleton OpenAI client.
+    This "lazy initialization" prevents the app from crashing at startup if keys are missing.
     """
-    system_prompt = """
-    You are a highly specialized linguistic tool. Your single task is to analyze user text and extract the main city name mentioned.
-    You must return the city name in its canonical, nominative case (именительный падеж).
-    - If the user says "в Алмате", you return "Алматы".
-    - If the user says "из Астаны", you return "Астана".
-    - If the user says "компании Шымкента", you return "Шымкент".
-    - If no Kazakhstani city is found, you must return null.
-    Your response MUST be a valid JSON object with a single key: "city".
-    Example of a successful response: {"city": "Алматы"}
-    Example of a failed response: {"city": null}
+    global _client
+    if _client is None:
+        print("🔧 Initializing OpenAI client for location service...")
+        settings = get_settings()
+        
+        # Explicitly check for required settings
+        if not settings.AZURE_OPENAI_KEY or not settings.AZURE_OPENAI_ENDPOINT:
+            raise ValueError("Azure OpenAI credentials are not configured for the location service.")
+        
+        _client = OpenAI(
+            api_key=settings.AZURE_OPENAI_KEY,
+            base_url=f"{settings.AZURE_OPENAI_ENDPOINT}openai/deployments/{settings.AZURE_OPENAI_DEPLOYMENT_NAME}",
+            default_headers={"api-key": settings.AZURE_OPENAI_KEY},
+            api_version=settings.AZURE_OPENAI_API_VERSION,
+            timeout=15.0, # Add a timeout for network resilience
+        )
+    return _client
+
+@lru_cache(maxsize=256) # Increased cache size
+def get_canonical_location_from_text(text: str) -> Optional[str]:
     """
+    Uses Azure OpenAI to extract the canonical city name from a user's query.
+    Results are cached, and specific API errors are handled gracefully.
+    """
+    if not text.strip():
+        return None
 
     try:
-        response = await client.chat.completions.create(
-            model=settings.azure_openai_deployment_name,
+        # This will log only when the API is actually called (not a cache hit)
+        print(f"🧠 Calling OpenAI API for location extraction: '{text[:50]}...'")
+        
+        client = get_client()
+        response = client.chat.completions.create(
+            model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input},
+                {"role": "system", "content": LOCATION_EXTRACTION_PROMPT},
+                {"role": "user", "content": text}
             ],
-            temperature=0.0,  # We want deterministic, not creative, output
-            response_format={"type": "json_object"}  # Enforces JSON output
+            temperature=0.0,
+            max_tokens=20
         )
+        
+        location = response.choices[0].message.content.strip()
 
-        result_text = response.choices[0].message.content
-        result_json = json.loads(result_text)
-        city = result_json.get("city")
-
-        if city:
-            print(f"🤖 AI successfully identified city: '{city}'")
-            return city
-        else:
-            print(f"🤖 AI did not find a city in the user input.")
+        if location.lower() == "null" or not location:
             return None
+        
+        return location
 
+    except (APIConnectionError, RateLimitError) as e:
+        print(f"❌ OpenAI network/rate limit error in location service: {e}")
+        return None # Fail gracefully on temporary issues
+    except AuthenticationError as e:
+        print(f"❌ OpenAI authentication error in location service. Check API Key. Error: {e}")
+        # This is a critical configuration error, re-raising might be appropriate
+        # so developers see it immediately. For now, we fail gracefully.
+        return None
     except Exception as e:
-        print(f"❌ An error occurred while calling the AI for location extraction: {e}")
+        print(f"❌ An unexpected error occurred in location service: {e}")
+        # Optionally log the full traceback for debugging
+        # import traceback
+        # traceback.print_exc()
         return None 
