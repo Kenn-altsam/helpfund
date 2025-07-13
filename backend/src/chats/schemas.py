@@ -8,7 +8,7 @@ class MessageSchema(BaseModel):
     role: str
     content: str
     created_at: datetime
-    metadata: Optional[Any] = None
+    data: Optional[Any] = None
 
     class Config:
         from_attributes = True

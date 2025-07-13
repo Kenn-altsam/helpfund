@@ -54,6 +54,7 @@ async def handle_chat_with_assistant(
 
         # 2. SAVE THE NEW TURN TO THE DATABASE
         ai_response_message = response_data.get('message', 'Error: No message content from AI.')
+        ai_message_data = response_data.get('companies', []) # Get the companies data
         
         # Use the chat_id returned by the context handler, as it might be new
         persistent_chat_id = response_data.get("chat_id")
@@ -64,15 +65,20 @@ async def handle_chat_with_assistant(
             user_message_content=request.user_input,
             ai_message_content=ai_response_message,
             chat_id=persistent_chat_id,
-            ai_message_metadata={"companies": response_data.get("companies", [])}
+            ai_message_data={"companies": ai_message_data} # Pass it here
         )
 
         # 3. PREPARE THE RESPONSE
-        final_history = [{"role": msg.role, "content": msg.content} for msg in updated_chat.messages]
+        final_history = [{
+            "role": msg.role, 
+            "content": msg.content, 
+            "metadata": msg.data,
+            "companies": msg.data.get("companies") if msg.data else []
+        } for msg in updated_chat.messages]
         
         return ChatResponse(
             message=ai_response_message,
-            companies=response_data.get('companies', []),
+            companies=ai_message_data,
             updated_history=final_history,
             assistant_id=response_data.get('assistant_id'),
             # Return the persistent database chat ID so the frontend can continue.

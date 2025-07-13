@@ -36,7 +36,7 @@ class Message(Base):
     
     # This will store structured data, like the list of companies for this message.
     # It has no size limit like OpenAI's metadata.
-    metadata = Column(JSONB, nullable=True) 
+    data = Column(JSONB, nullable=True) 
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
