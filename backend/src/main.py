@@ -19,7 +19,6 @@ from .auth.router import router as auth_router
 from .funds.router import router as funds_router
 from .chats.router import router as chats_router
 from .core.config import get_settings
-from .core.database import init_database
 
 # Load environment variables
 load_dotenv()
