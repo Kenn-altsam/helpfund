@@ -480,7 +480,7 @@ def handle_conversation_with_context(
             content=assistant_message_content,
             role="assistant",
             # Store structured company data if available from the run
-            metadata={"companies_found": response.get("companies_found", [])}
+            metadata={"companies_found": response.get("companies", [])}
         )
 
         return {
@@ -488,7 +488,7 @@ def handle_conversation_with_context(
             "assistant_id": assistant_id,
             "thread_id": thread_id,
             "response": assistant_message_content,
-            "companies_found": response.get("companies_found", [])
+            "companies_found": response.get("companies", [])
         }
 
     except Exception as e:
