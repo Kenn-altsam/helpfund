@@ -30,9 +30,9 @@ class CharityFundAssistant:
     def __init__(self):
         self.settings = get_settings()
         self.client = AsyncAzureOpenAI(
-            api_key=self.settings.azure_openai_key,
-            azure_endpoint=self.settings.azure_openai_endpoint,
-            api_version=self.settings.azure_openai_api_version,
+            api_key=self.settings.AZURE_OPENAI_KEY,
+            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT,
+            api_version=self.settings.AZURE_OPENAI_API_VERSION,
         )
         
         # Assistant configuration for charity fund discovery
@@ -72,7 +72,7 @@ class CharityFundAssistant:
             assistant = await self.client.beta.assistants.create(
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions,
-                model=self.settings.azure_openai_deployment_name,
+                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
                 tools=[
                     {
                         "type": "function",

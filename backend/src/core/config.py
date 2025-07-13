@@ -1,6 +1,6 @@
 # """
 # Simplified configuration management for the Ayala Foundation Backend using Pydantic Settings (v2).
-
+#
 # Focus: make the settings class explicit and rely on Pydantic's built-in parsing for
 # comma-separated ALLOWED_ORIGINS. All other fields are loaded directly from the
 # environment (optionally from a .env file).
@@ -9,7 +9,7 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import PostgresDsn, Field, field_validator, AliasChoices
+from pydantic import PostgresDsn, Field, AliasChoices, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,19 +61,16 @@ class Settings(BaseSettings):
     # Example: "https://example.com,https://myapp.com"
     # The custom validator is removed to rely on default behavior.
     # ------------------------------------------------------------------
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_ORIGINS: List[str] = []
 
     # ------------------------------------------------------------------
     # OpenAI - UPDATED FOR AZURE
     # ------------------------------------------------------------------
-    # --- Legacy key (can be removed if not used elsewhere) ---
     OPENAI_API_KEY: str = ""
-    
-    # +++ NEW AZURE SETTINGS +++
-    AZURE_OPENAI_KEY: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_KEY", "AZURE_API_KEY"))
-    AZURE_OPENAI_ENDPOINT: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_ENDPOINT", "AZURE_API_BASE"))
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_DEPLOYMENT_NAME", "AZURE_DEPLOYMENT_ID"))
-    AZURE_OPENAI_API_VERSION: str = "2024-02-01" # A stable API version
+    AZURE_OPENAI_KEY: str = ""
+    AZURE_OPENAI_ENDPOINT: str = ""
+    AZURE_OPENAI_DEPLOYMENT_NAME: str = ""
+    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
 
     # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
@@ -84,65 +81,20 @@ class Settings(BaseSettings):
     ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     ALLOW_HEADERS: List[str] = ["*"]
 
-    # ------------------------------------------------------------------
-    # Computed aliases and properties
-    # ------------------------------------------------------------------
-    
-    # --- Azure Properties ---
-    @property
-    def azure_openai_key(self) -> str:
-        return self.AZURE_OPENAI_KEY
-
-    @property
-    def azure_openai_endpoint(self) -> str:
-        return self.AZURE_OPENAI_ENDPOINT
-
-    @property
-    def azure_openai_deployment_name(self) -> str:
-        return self.AZURE_OPENAI_DEPLOYMENT_NAME
-        
-    @property
-    def azure_openai_api_version(self) -> str:
-        return self.AZURE_OPENAI_API_VERSION
-
-    # --- Other Properties (kept for compatibility) ---
-    @property
-    def host(self) -> str: return self.HOST
-    @property
-    def port(self) -> int: return self.PORT
-    @property
-    def allowed_origins(self) -> List[str]: return self.ALLOWED_ORIGINS
-    @property
-    def allow_credentials(self) -> bool: return self.ALLOW_CREDENTIALS
-    @property
-    def allow_methods(self) -> List[str]: return self.ALLOW_METHODS
-    @property
-    def allow_headers(self) -> List[str]: return self.ALLOW_HEADERS
-    @property
-    def db_host(self) -> str: return self.DB_HOST
-    @property
-    def db_port(self) -> int: return self.DB_PORT
-    @property
-    def db_name(self) -> str: return self.DB_NAME
-    @property
-    def db_user(self) -> str: return self.DB_USER
-    @property
-    def db_password(self) -> str: return self.DB_PASSWORD
-    @property
-    def secret_key(self) -> str: return self.SECRET_KEY
-    @property
-    def algorithm(self) -> str: return self.ALGORITHM
-    @property
-    def access_token_expire_minutes(self) -> int: return self.ACCESS_TOKEN_EXPIRE_MINUTES
-    @property
-    def debug(self) -> bool: return self.DEBUG
-    @property
-    def openai_api_key(self) -> str: return self.OPENAI_API_KEY
-    @property
-    def database_url(self) -> str:
-        if self.DATABASE_URL is not None:
-            return str(self.DATABASE_URL)
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+    @model_validator(mode='before')
+    @classmethod
+    def assemble_db_connection(cls, values: dict) -> dict:
+        if not values.get('DATABASE_URL'):
+            # Build the URL from individual parts if it's not provided
+            values['DATABASE_URL'] = str(PostgresDsn.build(
+                scheme="postgresql",
+                username=values.get('DB_USER', 'postgres'),
+                password=values.get('DB_PASSWORD', ''),
+                host=values.get('DB_HOST', 'localhost'),
+                port=int(values.get('DB_PORT', 5432)),
+                path=f"/{values.get('DB_NAME', 'nFac_server')}"
+            ))
+        return values
 
     def model_post_init(self, __context):
         # Updated check for Azure keys

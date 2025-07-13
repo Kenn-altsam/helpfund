@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import HTTPException
+from json import dumps
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from .config import get_settings
 
@@ -24,11 +26,10 @@ load_dotenv()
 settings = get_settings()
 
 # Create database engine
-engine = create_engine(
-    settings.database_url,
-    poolclass=NullPool,
-    echo=settings.debug,  # Log SQL queries in debug mode
-    pool_pre_ping=True,   # Verify connections before use
+engine = create_async_engine(
+    str(settings.DATABASE_URL),
+    pool_pre_ping=True,
+    json_serializer=lambda obj: dumps(obj, default=str),
 )
 
 # Create session maker

@@ -36,7 +36,7 @@ import src.chats.models # noqa: F401
 # Ensure any percent signs are escaped for ConfigParser interpolation safety
 settings = get_settings()
 # Override the SQLAlchemy URL in Alembic configuration (escape "%" -> "%%")
-escaped_db_url = settings.database_url.replace("%", "%%")
+escaped_db_url = str(settings.DATABASE_URL).replace("%", "%%")
 config.set_main_option("sqlalchemy.url", escaped_db_url)
 
 # Set target metadata for 'autogenerate'
@@ -61,9 +61,10 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # url = config.get_main_option("sqlalchemy.url")
+    escaped_db_url = str(settings.DATABASE_URL).replace("%", "%%")
     context.configure(
-        url=url,
+        url=escaped_db_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -80,8 +81,10 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    configuration = config.get_section(config.config_ini_section)
+    configuration["sqlalchemy.url"] = str(settings.DATABASE_URL).replace("%", "%%")
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
