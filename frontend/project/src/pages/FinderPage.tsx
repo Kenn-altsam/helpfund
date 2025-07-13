@@ -265,57 +265,71 @@ export function FinderPage() {
     setMessages([]);
 
     try {
-      if (!item.threadId || !item.assistantId) {
-        throw new Error('Missing threadId / assistantId');
+      let historyToSet: Message[] = [];
+
+      // --- CRITICAL FIX START: Check for IDs and branch logic ---
+      if (item.threadId && item.assistantId) {
+        /** 1 ▶ fetch raw history (backend MUST include metadata.companies) */
+        const history = await chatApi.getConversationHistory(
+          item.assistantId,
+          item.threadId,
+        );
+
+        /** 2 ▶ normalise every record to your local Message type */
+        historyToSet = history.map((h: any) => ({
+          id: h.id ?? generateId(),
+          type: h.role as 'user' | 'assistant',
+          content: h.content,
+          companies: h.companies ?? h.metadata?.companies ?? [],
+          createdAt: h.created_at ?? Date.now(),
+        }));
+
+        /** 3 ▶ if backend forgot companies for the LAST assistant message, patch from summary row */
+        const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
+        if (
+          lastAssistant &&
+          (lastAssistant.companies?.length ?? 0) === 0 &&
+          item.aiResponse?.length
+        ) {
+          lastAssistant.companies = item.aiResponse;
+        }
+
+      } else {
+        // If threadId or assistantId are missing, we cannot fetch the full history.
+        // Proceed directly to the fallback without throwing an error here.
+        console.warn(`History item for thread ${item.threadId} or assistant ${item.assistantId} has missing IDs. Falling back to summary reconstruction.`);
+        
+        const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
+        historyToSet = [
+          { id: generateId(), type: 'user', content: item.userPrompt },
+          {
+            id: generateId(),
+            type: 'assistant',
+            content: t('finder.response', { count: companiesForFallback.length }),
+            companies: companiesForFallback,
+          },
+        ];
+        toast.error(t('finder.historyLoadError'), { duration: 2000 });
       }
-
-      /** 1 ▶ fetch raw history (backend MUST include metadata.companies) */
-      const history = await chatApi.getConversationHistory(
-        item.assistantId,
-        item.threadId,
-      );
-
-      /** 2 ▶ normalise every record to your local Message type */
-      const normalised: Message[] = history.map((h: any) => ({
-        id: h.id ?? generateId(),
-        type: h.role as 'user' | 'assistant',
-        content: h.content,
-        // 🟢 GUARANTEED: either came from backend or empty array (never undefined)
-        companies: h.companies ?? h.metadata?.companies ?? [],
-        createdAt: h.created_at ?? Date.now(),
-      }));
-
-      /** 3 ▶ if backend forgot companies for the LAST assistant message, patch from summary row */
-      const lastAssistant = [...normalised].reverse().find(m => m.type === 'assistant');
-      if (
-        lastAssistant &&
-        (lastAssistant.companies?.length ?? 0) === 0 &&
-        item.aiResponse?.length
-      ) {
-        lastAssistant.companies = item.aiResponse;
-      }
+      // --- CRITICAL FIX END ---
 
       /** 4 ▶ push to state */
       setThreadId(item.threadId);
       setAssistantId(item.assistantId);
-      setMessages(normalised);
+      setMessages(historyToSet);
+
     } catch (err) {
-      console.error('History load failed → fallback', err);
-      setThreadId(item.threadId ?? null);
-      setAssistantId(item.assistantId ?? null);
-
-      // FIX: Ensure companiesForFallback is always an array
+      // This catch block will now ONLY be hit if chatApi.getConversationHistory()
+      // itself fails (i.e., if threadId and assistantId *were* present, but the API call to fetch full history failed).
+      console.error('Failed to load full conversation history from API (API call failed):', err);
+      
       const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
-
-      // fallback: 2-message reconstruction
       setMessages([
         { id: generateId(), type: 'user', content: item.userPrompt },
         {
           id: generateId(),
           type: 'assistant',
-          // FIX: Use companiesForFallback.length here
           content: t('finder.response', { count: companiesForFallback.length }),
-          // FIX: Pass the guaranteed array here
           companies: companiesForFallback,
         },
       ]);
