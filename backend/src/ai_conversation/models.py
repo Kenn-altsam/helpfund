@@ -251,7 +251,7 @@ class CompanyData(BaseModel):
     """Model for company data in chat responses"""
     
     bin: str = Field(..., description="Business Identification Number (BIN)")
-    name: str = Field(..., description="Company name")
+    name: Optional[str] = Field(None, description="Company name")
     oked: Optional[str] = Field(None, description="OKED code")
     activity: Optional[str] = Field(None, description="Business activity")
     kato: Optional[str] = Field(None, description="KATO code")
