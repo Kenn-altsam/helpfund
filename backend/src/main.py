@@ -7,7 +7,6 @@ This service helps charity funds discover companies and sponsorship opportunitie
 
 import os
 from typing import List
-from contextlib import contextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,16 +25,6 @@ load_dotenv()
 # Get settings
 settings = get_settings()
 
-@contextmanager
-def lifespan(app: FastAPI):
-    """Application lifespan"""
-    print("✅ Ayala Foundation Backend API starting up")
-    # Initialize database tables
-    # init_database() - This is now handled by Alembic migrations
-    print("✅ Database migrations should be handled manually via Alembic")
-    yield
-    print("✅ Ayala Foundation Backend API shutting down")
-
 # Create FastAPI app
 app = FastAPI(
     title="Ayala Foundation Backend API",
@@ -43,8 +32,18 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
 )
+
+@app.on_event("startup")
+def on_startup():
+    """Synchronous startup event handler."""
+    print("✅ Ayala Foundation Backend API starting up")
+    print("✅ Database schema is managed by Alembic.")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    """Synchronous shutdown event handler."""
+    print("✅ Ayala Foundation Backend API shutting down")
 
 # Configure CORS for mobile development
 # Very permissive settings to ensure iPhone/Android apps can connect
