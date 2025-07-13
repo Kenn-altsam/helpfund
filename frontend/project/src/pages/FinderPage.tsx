@@ -267,15 +267,17 @@ export function FinderPage() {
     try {
       let historyToSet: Message[] = [];
 
-      // --- CRITICAL FIX START: Check for IDs and branch logic ---
+      // --- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ПРОВЕРКА ID И ВЕТВЛЕНИЕ ЛОГИКИ ---
+      // Теперь item.threadId и item.assistantId должны быть строками благодаря api.ts
+      // поэтому эта проверка должна проходить для корректных записей истории
       if (item.threadId && item.assistantId) {
-        /** 1 ▶ fetch raw history (backend MUST include metadata.companies) */
+        /** 1 ▶ получаем полную историю */
         const history = await chatApi.getConversationHistory(
           item.assistantId,
           item.threadId,
         );
 
-        /** 2 ▶ normalise every record to your local Message type */
+        /** 2 ▶ нормализуем каждую запись */
         historyToSet = history.map((h: any) => ({
           id: h.id ?? generateId(),
           type: h.role as 'user' | 'assistant',
@@ -284,7 +286,7 @@ export function FinderPage() {
           createdAt: h.created_at ?? Date.now(),
         }));
 
-        /** 3 ▶ if backend forgot companies for the LAST assistant message, patch from summary row */
+        /** 3 ▶ если бэкенд забыл компании для последнего сообщения, патчим */
         const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
         if (
           lastAssistant &&
@@ -295,8 +297,8 @@ export function FinderPage() {
         }
 
       } else {
-        // If threadId or assistantId are missing, we cannot fetch the full history.
-        // Proceed directly to the fallback without throwing an error here.
+        // Если threadId или assistantId отсутствуют (в теории, этого быть не должно после исправлений в api.ts)
+        // мы переходим непосредственно к запасной логике без генерации ошибки.
         console.warn(`History item for thread ${item.threadId} or assistant ${item.assistantId} has missing IDs. Falling back to summary reconstruction.`);
         
         const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
@@ -311,9 +313,9 @@ export function FinderPage() {
         ];
         toast.error(t('finder.historyLoadError'), { duration: 2000 });
       }
-      // --- CRITICAL FIX END ---
+      // --- КОНЕЦ КРИТИЧЕСКОГО ИСПРАВЛЕНИЯ ---
 
-      /** 4 ▶ push to state */
+      /** 4 ▶ обновляем состояние */
       setThreadId(item.threadId);
       setAssistantId(item.assistantId);
       setMessages(historyToSet);
