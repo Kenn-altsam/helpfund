@@ -304,14 +304,19 @@ export function FinderPage() {
       setThreadId(item.threadId ?? null);
       setAssistantId(item.assistantId ?? null);
 
+      // FIX: Ensure companiesForFallback is always an array
+      const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
+
       // fallback: 2-message reconstruction
       setMessages([
         { id: generateId(), type: 'user', content: item.userPrompt },
         {
           id: generateId(),
           type: 'assistant',
-          content: t('finder.response', { count: item.aiResponse.length }),
-          companies: item.aiResponse,
+          // FIX: Use companiesForFallback.length here
+          content: t('finder.response', { count: companiesForFallback.length }),
+          // FIX: Pass the guaranteed array here
+          companies: companiesForFallback,
         },
       ]);
       toast.error(t('finder.historyLoadError'), { duration: 2000 });

@@ -104,6 +104,9 @@ interface RawChatResponse extends ChatResponse {
   rawCompanies?: any[];
 }
 
+// Helper function to generate a temporary unique ID for React keys when real ID is missing
+const generateId = () => `temp-id-${Math.random().toString(36).substr(2, 9)}`;
+
 // Companies API
 export const companiesApi = {
   search: async (params: { location?: string; company_name?: string; limit?: number }) => {
@@ -218,23 +221,16 @@ export const chatApi = {
    * The backend returns an array of { role: 'user' | 'assistant', content: string }
    */
   getConversationHistory: async (
-    _assistantId: string, // currently unused but kept for potential future auth handling
+    _assistantId: string,
     threadId: string
-  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>> => { // added optional companies field
+  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>> => {
     try {
-      // Unified chat history endpoint for both AI and funds chat
-      // This is for full message history of a specific chat_id (which might be referred to as threadId on client)
-      // Make sure this URL matches your backend's GET /chats/{chat_id} endpoint, which returns ChatHistoryResponseSchema
-      // If your main FastAPI app router has a prefix like /api/v1 for chats_router:
-      // Then the path here should be `/chats/${threadId}`
-      const response = await api.get(`/chats/${threadId}`); // CORRECTED: assuming /chats/{id} for full history
-
-      // Backend returns the history array directly; no additional nesting expected
-      // This should now map to ChatHistoryResponseSchema, so we need to access response.data.messages
+      const response = await api.get(`/chats/${threadId}`);
       return (response.data.messages || []).map((msg: any) => ({
         role: msg.role,
         content: msg.content,
-        companies: msg.data?.companies_found?.map(transformCompanyData) || [], // Assuming companies are nested under data.companies_found
+        // Ensure companies are mapped and always an array from the full conversation history
+        companies: (msg.data?.companies_found || []).map(transformCompanyData),
       }));
     } catch (error) {
       console.error('Failed to load conversation history:', error);
@@ -247,37 +243,34 @@ export const chatApi = {
 export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
-      // ИСПРАВЛЕНИЕ 1: Изменен URL на правильный для получения списка чатов
-      const response = await api.get('/chats/'); // Correct URL for getting the list of chats
+      const response = await api.get('/chats/');
       
-      // --- DEBUGGING START ---
+      // Keep your debug logs for now, they are helpful!
       console.log('Raw response from /chats/ endpoint:', response);
-      console.log('Data from /chats/ endpoint:', response.data);
-      // --- DEBUGGING END ---
+      console.log('Data from /chats/ endpoint (BEFORE MAPPING):', response.data);
 
-      // The backend returns an array of chats directly, so no need for .data.data
-      // If the backend returns { "data": [...] }, this needs to be response.data.data
-      // Based on the backend router, it should be just response.data
-      return response.data.map((item: any) => ({
-        ...item,
-        id: item.id, // Ensure id is mapped
-        updated_at: new Date(item.updated_at), // Convert string to Date
+      // FIX 1: Ensure rawChatItems is always an array directly from response.data
+      const rawChatItems = Array.isArray(response.data) ? response.data : [];
+
+      return rawChatItems.map((item: any) => ({
+        id: item.id || item.thread_id || generateId(), // Ensure a unique 'id' for React keys
+        userPrompt: item.user_prompt || item.title || 'Untitled Chat', // Map user_prompt or title
+        // FIX 2: Crucially, ensure aiResponse is always an array.
+        // Adapt `item.companies_found` or `item.raw_companies_data` to whatever field
+        // your backend provides for companies in the history summary.
+        // If your backend doesn't send this for the history list, default to an empty array.
+        aiResponse: (item.companies_found || item.raw_companies_data || item.ai_response || []),
+        created_at: item.created_at ? new Date(item.created_at).toISOString() : new Date().toISOString(),
+        threadId: item.thread_id,
+        assistantId: item.assistant_id,
       }));
     } catch (error) {
-      // --- DEBUGGING START ---
+      console.error('Failed to load chat history:', error);
       if (axios.isAxiosError(error)) {
-        console.error('Axios error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          headers: error.response?.headers,
-        });
-      } else {
-        console.error('Generic error in getHistory:', error);
+        console.error('Axios error response data:', error.response?.data);
+        console.error('Axios error status:', error.response?.status);
       }
-      // --- DEBUGGING END ---
-      console.error('Failed to load chat history:', error); // Original log
-      throw error;
+      throw error; 
     }
   },
 
