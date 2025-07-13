@@ -72,7 +72,6 @@ class CharityFundAssistant:
             assistant = self.client.beta.assistants.create(
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions,
-                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
                 tools=[
                     {
                         "type": "function",
