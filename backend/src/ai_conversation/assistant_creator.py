@@ -415,7 +415,7 @@ def continue_conversation(
     }
 
 
-def handle_conversation_with_context(
+async def handle_conversation_with_context(
     user_input: str,
     db: Session,
     user: User, # Changed from user_id to user object
@@ -423,82 +423,82 @@ def handle_conversation_with_context(
     assistant_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Orchestrates the AI conversation, managing context between the database and OpenAI.
-    1.  Finds or creates the assistant.
-    2.  Finds or creates the chat session (and corresponding OpenAI thread).
-    3.  Runs the conversation turn.
-    4.  Returns all necessary data for the router to save and respond.
+    Handles a user's message, maintaining conversation context within a single chat session.
+    It creates a new assistant and thread if they don't exist, or uses existing ones.
+    This version returns company data directly instead of saving it to metadata.
     """
     assistant_manager = CharityFundAssistant()
-
-    # --- Step 1: Ensure we have an Assistant ---
-    # In a real app, you'd store and reuse this ID. For this project, we check the user's
-    # existing chats or create a new one.
-    if not assistant_id:
-        # Simplified: Check if user has ANY assistant_id from a previous chat
-        latest_chat_with_assistant = db.query(models.Chat).filter(
-            models.Chat.user_id == user.id,
-            models.Chat.openai_assistant_id.isnot(None)
-        ).order_by(models.Chat.updated_at.desc()).first()
-        
-        if latest_chat_with_assistant:
-            assistant_id = latest_chat_with_assistant.openai_assistant_id
-            print(f"🔍 Found existing assistant ID {assistant_id} for user {user.id}")
-        else:
-            print(f"✨ Creating new assistant for user {user.id}")
-            assistant_id = assistant_manager.create_assistant()
-
-    # --- Step 2: Ensure we have a Chat Session and Thread ---
-    thread_id = None
-    if chat_id:
-        # User is continuing an existing chat
-        chat_session = chat_service.get_chat_history(db, chat_id, user)
-        if not chat_session:
-            return {"status": "error", "message": "Chat not found or permission denied."}
-        
-        thread_id = chat_session.openai_thread_id
-        if not thread_id:
-             # This case might happen if there was an error in a previous step
-            print(f"⚠️ Chat {chat_id} is missing a thread_id. Creating a new one.")
-            thread_id = assistant_manager.create_conversation_thread()
-            chat_session.openai_thread_id = thread_id
-            db.commit()
-
-        # Sync history just in case there are discrepancies
-        # chat_history_for_sync = [{"role": msg.role, "content": msg.content, "metadata": msg.data} for msg in chat_session.messages]
-        # assistant_manager.sync_history_with_thread(thread_id, chat_history_for_sync)
-
-    else:
-        # This is a new chat, so we need a new thread
-        thread_id = assistant_manager.create_conversation_thread()
-        print(f"✨ Created new thread {thread_id} for new chat.")
-        # The chat will be created *after* this function returns, in the router.
-        # We pass back the thread_id.
-
-    # --- Step 3: Run the Conversation Turn ---
-    print(f"▶️ Running assistant {assistant_id} on thread {thread_id} with input: '{user_input[:50]}...'")
-    assistant_manager.add_message_to_thread(thread_id, user_input, role="user")
-
-    run_result = assistant_manager.run_assistant_with_tools(
-        assistant_id=assistant_id,
-        thread_id=thread_id,
-        db=db,
-    )
     
-    if run_result.get("status") == "error":
-        return run_result
+    current_chat = None
+    if chat_id:
+        current_chat = chat_service.get_chat_by_id(db, chat_id, user.id)
 
-    # --- Step 4: Prepare the Data to Return to the Router ---
-    # The router is responsible for saving the conversation turn to the DB.
-    # We just need to give it all the pieces.
-    return {
-        "status": "success",
-        "message": run_result.get("message", "Error: No message content from AI."),
-        "companies": run_result.get("companies", []),
-        "assistant_id": assistant_id,
-        "thread_id": thread_id,
-        # This is the DB chat ID. It can be None if this is a new chat.
-        "chat_id": chat_id
-    }
+    # If no chat_id is provided or the chat doesn't exist, create a new one
+    if not current_chat:
+        assistant_id = assistant_manager.create_assistant()
+        thread_id = assistant_manager.create_conversation_thread()
+        current_chat = chat_service.create_chat(
+            db=db,
+            user_id=user.id,
+            name=user_input[:50],  # Use the first part of the message as the chat name
+            openai_assistant_id=assistant_id,
+            openai_thread_id=thread_id
+        )
+    else:
+        # Use existing IDs from the chat
+        assistant_id = current_chat.openai_assistant_id
+        thread_id = current_chat.openai_thread_id
+
+        # Make sure the assistant and thread still exist on OpenAI's side
+        try:
+            assistant_manager.client.beta.assistants.retrieve(assistant_id)
+            assistant_manager.client.beta.threads.retrieve(thread_id)
+        except Exception:
+            # If they don't exist, create new ones and update the chat
+            assistant_id = assistant_manager.create_assistant()
+            thread_id = assistant_manager.create_conversation_thread()
+            chat_service.update_chat_openai_ids(db, current_chat.id, assistant_id, thread_id)
+            
+    try:
+        # Save the user's message to the database first
+        chat_service.create_message(db, chat_id=current_chat.id, content=user_input, role="user")
+
+        # Add the message to the OpenAI thread
+        assistant_manager.add_message_to_thread(thread_id, user_input)
+
+        # Run the assistant and get the response, including any tool outputs (company data)
+        response = assistant_manager.run_assistant_with_tools(assistant_id, thread_id, db)
+
+        # Retrieve the latest assistant message from the thread
+        messages = assistant_manager.client.beta.threads.messages.list(thread_id=thread_id, limit=1)
+        assistant_message_content = "No response from assistant."
+        if messages.data:
+            assistant_message_content = messages.data[0].content[0].text.value
+        
+        # Save the assistant's response to the database
+        chat_service.create_message(
+            db,
+            chat_id=current_chat.id,
+            content=assistant_message_content,
+            role="assistant",
+            # Store structured company data if available from the run
+            metadata={"companies_found": response.get("companies_found", [])}
+        )
+
+        return {
+            "chat_id": str(current_chat.id),
+            "assistant_id": assistant_id,
+            "thread_id": thread_id,
+            "response": assistant_message_content,
+            "companies_found": response.get("companies_found", [])
+        }
+
+    except Exception as e:
+        print(f"❌ Error in conversation handling: {str(e)}")
+        # This is a critical failure, so we return a structured error
+        return {
+            "error": "An unexpected error occurred while processing your request.",
+            "details": str(e)
+        }
 
 charity_assistant = CharityFundAssistant()
