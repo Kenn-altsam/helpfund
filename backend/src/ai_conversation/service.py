@@ -10,7 +10,7 @@ import re
 import traceback
 from typing import Optional, Dict, Any, List
 
-import openai
+from openai import AzureOpenAI
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -38,14 +38,14 @@ class OpenAIService:
         """Initializes the service and sets up the Azure OpenAI client."""
         self.settings = get_settings()
         
-        # +++ UPDATED CLIENT INITIALIZATION FOR AZURE +++
-        self.client = openai.AsyncAzureOpenAI(
-            api_key=self.settings.azure_openai_key,
-            azure_endpoint=self.settings.azure_openai_endpoint,
-            api_version=self.settings.azure_openai_api_version,
+        # --- Use the SYNCHRONOUS Azure client with UPPERCASE settings ---
+        self.client = AzureOpenAI(
+            api_key=self.settings.AZURE_OPENAI_KEY,
+            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT,
+            api_version=self.settings.AZURE_OPENAI_API_VERSION,
         )
 
-    async def _parse_user_intent_with_history(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
+    def _parse_user_intent_with_history(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
         Uses Azure OpenAI to parse the latest user message in Russian, using the full conversation history for context.
         """
@@ -155,9 +155,9 @@ class OpenAIService:
         try:
             print(f"🤖 [INTENT_PARSER] Calling Azure OpenAI with {len(messages_with_context)} messages...")
             
-            # +++ UPDATED API CALL FOR AZURE +++
-            response = await self.client.chat.completions.create(
-                model=self.settings.azure_openai_deployment_name, # Use the DEPLOYMENT NAME from settings
+            # --- REMOVE await from the API call ---
+            response = self.client.chat.completions.create(
+                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME, # Use the DEPLOYMENT NAME from settings
                 messages=messages_with_context,
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -519,7 +519,7 @@ class OpenAIService:
             history.append({"role": "user", "content": user_input})
 
             # 3. Parse intent from the full history
-            parsed_intent = await self._parse_user_intent_with_history(history)
+            parsed_intent = self._parse_user_intent_with_history(history)
             
             # 4. Override location if canonical version was found
             if canonical_location:
