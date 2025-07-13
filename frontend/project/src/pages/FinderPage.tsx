@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Menu, X, MessageSquare, User, Heart } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Send, Menu, X, MessageSquare, User} from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -11,6 +11,7 @@ import { chatApi, historyApi } from '@/services/api';
 import { ChatHistoryItem, Company } from '@/types';
 import { generateId } from '@/lib/utils';
 import { toast } from 'sonner';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface Message {
   id: string;
@@ -22,7 +23,6 @@ interface Message {
 
 export function FinderPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { state, dispatch } = useGlobalContext();
   const { user, history: globalHistory } = state;
 
@@ -250,218 +250,198 @@ export function FinderPage() {
     }
   };
 
+  // When a history item is selected from the sidebar
   const handleSelectHistory = async (
     item: ChatHistoryItem,
     keepSidebarOpen = false,
   ) => {
-    // fast-return if already selected
-    if (item.threadId === threadId && messages.length) {
-      if (!keepSidebarOpen) setSidebarOpen(false);
+    console.log('handleSelectHistory called with item:', item); // DEBUG
+    if (!item.assistantId || !item.threadId) {
+      toast.error('This chat is missing key information and cannot be loaded.');
       return;
     }
 
-    // optimistic UI while fetching
+    setSidebarOpen(keepSidebarOpen);
     setIsLoading(true);
-    setMessages([]);
+    setMessages([{ id: generateId(), type: 'loading' }]); // Show loading state
 
     try {
-      if (!item.threadId || !item.assistantId) {
-        throw new Error('Missing threadId / assistantId');
-      }
+      // Set the active IDs for the selected chat
+      setAssistantId(item.assistantId);
+      setThreadId(item.threadId);
+      console.log(`Set active IDs: asst=${item.assistantId}, thread=${item.threadId}`); // DEBUG
 
-      /** 1 ▶ fetch raw history (backend MUST include metadata.companies) */
-      const history = await chatApi.getConversationHistory(
+      const conversationHistory = await chatApi.getConversationHistory(
         item.assistantId,
         item.threadId,
       );
+      console.log('Received conversation history:', conversationHistory); // DEBUG
 
-      /** 2 ▶ normalise every record to your local Message type */
-      const normalised: Message[] = history.map((h: any) => ({
-        id: h.id ?? generateId(),
-        type: h.role as 'user' | 'assistant',
-        content: h.content,
-        // 🟢 GUARANTEED: either came from backend or empty array (never undefined)
-        companies: h.companies ?? h.metadata?.companies ?? [],
-        createdAt: h.created_at ?? Date.now(),
-      }));
+      // Transform the raw history into the Message format for the UI
+      const formattedMessages = conversationHistory
+        .map(
+          (msg: any): Message | null => {
+            // Skip system messages or messages without content
+            if (msg.role === 'system' || !msg.content) return null;
 
-      /** 3 ▶ if backend forgot companies for the LAST assistant message, patch from summary row */
-      const lastAssistant = [...normalised].reverse().find(m => m.type === 'assistant');
-      if (
-        lastAssistant &&
-        (lastAssistant.companies?.length ?? 0) === 0 &&
-        item.aiResponse?.length
-      ) {
-        lastAssistant.companies = item.aiResponse;
+            return {
+              id: msg.id || generateId(), // Fallback to generateId if needed
+              type: msg.role as 'user' | 'assistant',
+              content: msg.content,
+              companies: msg.companies || [], // Ensure companies are carried over
+              createdAt: msg.createdAt,
+            };
+          },
+        )
+        .filter((msg): msg is Message => msg !== null); // Filter out any null entries
+
+      setMessages(formattedMessages);
+
+      if (formattedMessages.length > 0) {
+        toast.success(t('finder.chatRestored'));
+      } else {
+        // Handle case where history is empty (e.g., new chat just created but no messages yet)
+        setMessages([]); // Clear any loading/stale messages
+        toast.info(t('finder.emptyChat'));
       }
-
-      /** 4 ▶ push to state */
-      setThreadId(item.threadId);
-      setAssistantId(item.assistantId);
-      setMessages(normalised);
-    } catch (err) {
-      console.error('History load failed → fallback', err);
-      setThreadId(item.threadId ?? null);
-      setAssistantId(item.assistantId ?? null);
-
-      // fallback: 2-message reconstruction
-      setMessages([
-        { id: generateId(), type: 'user', content: item.userPrompt },
-        {
-          id: generateId(),
-          type: 'assistant',
-          content: t('finder.response', { count: item.aiResponse.length }),
-          companies: item.aiResponse,
-        },
-      ]);
-      toast.error(t('finder.historyLoadError'), { duration: 2000 });
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      toast.error(t('finder.restoreError'));
+      // In case of error, maybe revert to a clean state
+      setMessages([]);
     } finally {
       setIsLoading(false);
-      if (!keepSidebarOpen) setSidebarOpen(false);
     }
   };
 
   const handleDeleteHistory = async (id: string) => {
+    toast.info(t('finder.deletingChat'));
     try {
-      const deletedItem = globalHistory.find(h => h.id === id);
       await historyApi.deleteHistory(id);
       dispatch({ type: 'DELETE_HISTORY', payload: id });
 
-      // If current chat removed, reset
-      if (deletedItem && deletedItem.threadId === threadId) {
+      // If the deleted chat was the active one, start a new chat
+      const activeThreadId = sessionStorage.getItem('activeThreadId');
+      const deletedChat = globalHistory.find(h => h.id === id);
+      if (deletedChat && deletedChat.threadId === activeThreadId) {
         startNewChat();
       }
 
-      toast.success(t('finder.historyDeleted'), { duration: 2000 });
+      toast.success(t('finder.chatDeleted'));
     } catch (error) {
       console.error('Failed to delete history:', error);
-      toast.error(t('finder.historyDeleteError'), { duration: 2000 });
+      toast.error(t('finder.deleteError'));
     }
   };
 
+  // Function to start a completely new chat session
   const startNewChat = () => {
     setMessages([]);
     setAssistantId(null);
     setThreadId(null);
+    setInput('');
+    // --- 💡 ИЗМЕНЕНИЕ: Также очищаем sessionStorage ---
     sessionStorage.removeItem('activeAssistantId');
     sessionStorage.removeItem('activeThreadId');
-    if (!sidebarOpen) inputRef.current?.focus();
-    setSidebarOpen(false);
+    toast.success(t('finder.newChatStarted'));
+    inputRef.current?.focus();
   };
 
-  /* --------------------------- Auth fallback --------------------------- */
-  if (!user) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">{t('finder.notLoggedIn.title')}</h2>
-            <p className="text-muted-foreground mb-6">{t('finder.notLoggedIn.description')}</p>
-            <Button onClick={() => navigate('/login')}>{t('finder.notLoggedIn.login')}</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* =============================== JSX =============================== */
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-80 bg-background border-r transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="font-semibold">{t('finder.title')}</h2>
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" onClick={startNewChat} className="text-xs">
-                {t('finder.newChat')}
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <ChatHistory history={globalHistory} onSelectHistory={handleSelectHistory} onDeleteHistory={handleDeleteHistory} />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur relative">
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
-              <Menu className="h-4 w-4" />
-            </Button>
-            <Link to="/finder">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <span>{t('finder.title')}</span>
-              </Button>
-            </Link>
-          </div>
-
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
-              <Heart className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">helpfund.pro</span>
-            </Link>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Link to="/consideration">
-              <Button variant="ghost" size="sm">
-                {t('header.consideration')}
-              </Button>
-            </Link>
-            <Link to="/profile">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-1">
-                <User className="h-4 w-4" />
-                <span>{t('header.profile')}</span>
-              </Button>
-            </Link>
-          </div>
+    <ErrorBoundary>
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Mobile Sidebar Toggle */}
+        <div className="absolute top-4 left-4 z-20 md:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </Button>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">{t('finder.welcome.title')}</h3>
-                <p className="text-muted-foreground mb-4">{t('finder.welcome.description')}</p>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>
-                    <strong>{t('finder.welcome.examples')}</strong>
-                  </p>
-                  <p>{t('finder.welcome.example1')}</p>
-                  <p>{t('finder.welcome.example2')}</p>
-                  <p>{t('finder.welcome.example3')}</p>
-                </div>
+        {/* Desktop Sidebar */}
+        <div
+          className={`fixed inset-y-0 left-0 z-30 w-80 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                {t('finder.history')}
+              </h2>
+              <div className="flex items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startNewChat}
+                  className="mr-2"
+                >
+                  {t('finder.newChat')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen(false)}
+                  className="md:hidden"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
             </div>
-          ) : (
-            <div className="max-w-4xl mx-auto">
-              {messages.map(message => (
-                <ChatMessage key={message.id} {...message} />
-              ))}
+            <div className="flex-1 overflow-y-auto">
+              <ChatHistory
+                history={globalHistory}
+                onSelectHistory={handleSelectHistory}
+                onDeleteHistory={handleDeleteHistory}
+              />
             </div>
-          )}
-          <div ref={messagesEndRef} />
+          </div>
         </div>
 
-        {/* Input */}
-        <div className="border-t bg-background p-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex space-x-2">
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col h-screen">
+          <header className="flex items-center justify-between p-4 border-b bg-white dark:bg-gray-800 dark:border-gray-700">
+            <div className="flex items-center space-x-2">
+              <Link to="/finder">
+                <Button variant="ghost" className="flex items-center space-x-2">
+                  <MessageSquare className="h-6 w-6 text-blue-500" />
+                  <span className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    {t('finder.title')}
+                  </span>
+                </Button>
+              </Link>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Link to="/consideration">
+                <Button variant="ghost">{t('header.consideration')}</Button>
+              </Link>
+              <Link to="/profile">
+                <Button variant="ghost" className="flex items-center space-x-2">
+                  <User className="h-5 w-5" />
+                  <span>{t('header.profile')}</span>
+                </Button>
+              </Link>
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {messages.length === 0 && !isLoading ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
+                <MessageSquare className="w-16 h-16 mb-4" />
+                <h2 className="text-2xl font-semibold mb-2 text-gray-800 dark:text-gray-200">
+                  {t('finder.welcome.title')}
+                </h2>
+                <p className="max-w-md">{t('finder.welcome.description')}</p>
+              </div>
+            ) : (
+              messages.map(message => (
+                <ChatMessage key={message.id} {...message} />
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <div className="p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700">
+            <div className="relative">
               <Input
                 ref={inputRef}
                 value={input}
@@ -469,19 +449,25 @@ export function FinderPage() {
                 onKeyPress={handleKeyPress}
                 placeholder={t('finder.placeholder')}
                 disabled={isLoading}
-                className="flex-1"
+                className="pr-12"
               />
-              <Button onClick={handleSendMessage} disabled={!input.trim() || isLoading} size="icon">
-                <Send className="h-4 w-4" />
+              <Button
+                type="submit"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={handleSendMessage}
+                disabled={isLoading || !input.trim()}
+              >
+                <Send className="w-5 h-5" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">{t('finder.sendHint')}</p>
           </div>
-        </div>
+        </main>
+        {/* Overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+        )}
       </div>
-
-      {/* Overlay */}
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />} 
-    </div>
+    </ErrorBoundary>
   );
 }
