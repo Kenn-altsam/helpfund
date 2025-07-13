@@ -68,7 +68,7 @@ const transformCompanyData = (company: any): Company => {
   return {
     ...company,
     // Prefer existing fields if already present; otherwise map from backend-specific names
-    name: company.name || company.bin,
+    name: company.name || 'Unnamed Company', // FIX: Ensure name is always a string
     region: company.region || company.locality,
     industry: company.industry || company.activity,
     contacts: company.contacts || null,

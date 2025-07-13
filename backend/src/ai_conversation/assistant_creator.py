@@ -220,7 +220,7 @@ class CharityFundAssistant:
                                 for company_dict in companies:
                                     formatted_company = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("company_name"),
+                                        "name": company_dict.get("name"),
                                         "bin": company_dict.get("bin"),
                                         "activity": company_dict.get("activity"),
                                         "location": company_dict.get("locality"),
@@ -245,7 +245,7 @@ class CharityFundAssistant:
                                 if company_dict:
                                     company_details = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("company_name"),
+                                        "name": company_dict.get("name"),
                                         "bin": company_dict.get("bin"),
                                         "registration_date": company_dict.get("registration_date"),
                                         "address": company_dict.get("address"),
