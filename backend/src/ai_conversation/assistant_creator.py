@@ -70,6 +70,7 @@ class CharityFundAssistant:
         """
         try:
             assistant = self.client.beta.assistants.create(
+                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions,
                 tools=[
