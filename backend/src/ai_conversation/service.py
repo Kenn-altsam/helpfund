@@ -10,7 +10,7 @@ import re
 import traceback
 from typing import Optional, Dict, Any, List
 
-from openai import AzureOpenAI
+from openai import OpenAI
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -32,22 +32,20 @@ except ImportError:  # Fallback – default to Russian
 
 
 class OpenAIService:
-    """Service for handling Azure OpenAI API interactions with database integration"""
+    """Service for handling OpenAI API interactions with database integration"""
     
     def __init__(self):
-        """Initializes the service and sets up the Azure OpenAI client."""
+        """Initializes the service and sets up the OpenAI client."""
         self.settings = get_settings()
         
-        # --- Use the SYNCHRONOUS Azure client with UPPERCASE settings ---
-        self.client = AzureOpenAI(
-            api_key=self.settings.AZURE_OPENAI_KEY,
-            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT,
-            api_version=self.settings.AZURE_OPENAI_API_VERSION,
+        # Use the SYNCHRONOUS OpenAI client
+        self.client = OpenAI(
+            api_key=self.settings.OPENAI_API_KEY,
         )
 
     def _parse_user_intent_with_history(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
-        Uses Azure OpenAI to parse the latest user message in Russian, using the full conversation history for context.
+        Uses OpenAI to parse the latest user message in Russian, using the full conversation history for context.
         """
         
         # --- DEBUG: Add extensive logging for pagination troubleshooting ---
@@ -153,11 +151,10 @@ class OpenAIService:
         messages_with_context = [{"role": "system", "content": system_prompt}] + history
 
         try:
-            print(f"🤖 [INTENT_PARSER] Calling Azure OpenAI with {len(messages_with_context)} messages...")
+            print(f"🤖 [INTENT_PARSER] Calling OpenAI with {len(messages_with_context)} messages...")
             
-            # --- REMOVE await from the API call ---
             response = self.client.chat.completions.create(
-                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME, # Use the DEPLOYMENT NAME from settings
+                model=self.settings.OPENAI_MODEL_NAME, # Use the standard model name
                 messages=messages_with_context,
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -166,7 +163,7 @@ class OpenAIService:
             result = json.loads(response.choices[0].message.content)
             
             # --- DEBUG: Log the parsed result ---
-            print(f"✅ [INTENT_PARSER] Azure OpenAI response:")
+            print(f"✅ [INTENT_PARSER] OpenAI response:")
             print(f"   Intent: {result.get('intent')}")
             print(f"   Location: {result.get('location')}")
             print(f"   Activity Keywords: {result.get('activity_keywords')}")
@@ -178,7 +175,7 @@ class OpenAIService:
             
         except Exception as e:
             # Enhanced error logging
-            print(f"❌ Error during Azure OpenAI intent parsing: {e}")
+            print(f"❌ Error during OpenAI intent parsing: {e}")
             print(f"🔍 History length: {len(history)}")
             print(f"🔍 Last user message: {history[-1].get('content', 'N/A') if history else 'No history'}")
             traceback.print_exc()
@@ -332,53 +329,28 @@ class OpenAIService:
             "preliminary_response": f"Конечно! Ищу следующую группу из {quantity} компаний в {location}. Подождите, пожалуйста."
         }
 
-    async def _enrich_companies_with_web_search(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _enrich_companies_with_web_search(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Enriches company data with information from web searches (website, contacts, tax info).
         """
-        async def search_for_company(company: Dict[str, Any]):
-            company['website'] = "Не найден"
-            company['contacts'] = "Не найдены"
-            company['tax_info'] = "Информация не найдена"
-            
-            # 1. Search for official website and contacts on Google
+        # This function can remain synchronous if the 'browse' tool is synchronous
+        # If browse is async, this would need to be an async function with asyncio.gather
+        # For now, assuming a synchronous web search for simplicity
+        
+        def search_for_company(company: Dict[str, Any]):
+            query = f"Найди сайт и дополнительную информацию о компании '{company['name']}' (БИН: {company['bin']}) в Казахстане."
             try:
-                search_query = f"{company['name']} {company.get('locality', '')} официальный сайт контакты"
-                # This is a placeholder for your actual browse tool call
-                # search_results = await browse(urls=[f"https://www.google.com/search?q={search_query}"])
-                #
-                # TODO: Parse the HTML content of search_results[0].content 
-                # to find the official website URL and contact details (phone, email).
-                # Example (conceptual):
-                # company['website'] = find_website_in_html(search_results[0].content)
-                # company['contacts'] = find_contacts_in_html(search_results[0].content)
-                pass # Remove this once you implement the parsing logic
-            except Exception:
-                pass # Ignore errors during search
-
-            # 2. Search for tax information using BIN
-            if company.get('bin'):
-                try:
-                    tax_url = f"https://kgd.gov.kz/ru/services/taxpayer_search/legal_entity?bin={company['bin']}"
-                    # tax_results = await browse(urls=[tax_url])
-                    #
-                    # TODO: Parse the HTML of tax_results[0].content to find tax debt status.
-                    # This requires inspecting the page structure of the tax portal.
-                    # Example (conceptual):
-                    # company['tax_info'] = find_tax_status_in_html(tax_results[0].content)
-                    pass # Remove this once you implement the parsing logic
-                except Exception:
-                    pass
-
+                # Assuming 'browse' is a synchronous function you have defined elsewhere
+                # search_result = browse(query, search_engine="google") 
+                # For demonstration, we'll just mock a result
+                search_result = f"Mock search result for {company['name']}"
+                company["web_search_summary"] = search_result
+            except Exception as e:
+                company["web_search_summary"] = f"Не удалось выполнить веб-поиск: {e}"
             return company
 
-        try:
-            enriched_companies = await asyncio.gather(*(search_for_company(c) for c in companies))
-            return enriched_companies
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to enrich companies with web search: {e}")
-            # Return original companies if enrichment fails
-            return companies
+        enriched_companies = [search_for_company(c) for c in companies]
+        return enriched_companies
 
     @staticmethod
     def _get_message_language(history: List[Dict[str, str]]) -> str:
@@ -389,10 +361,10 @@ class OpenAIService:
                     lang = _detect_lang(msg.get("content", ""))
                     return lang.lower()  # langdetect returns e.g., 'en', 'ru', 'kk'
                 except Exception:
-                    return "ru"
+                    return "ru" # Default
         return "ru"
 
-    async def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
+    def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response in the same language the user spoke."""
 
         user_lang = self._get_message_language(history)
@@ -492,7 +464,7 @@ class OpenAIService:
         return "\n".join(parts)
 
 
-    async def handle_conversation_turn(
+    def handle_conversation_turn(
         self,
         user_input: str,
         history: List[Dict[str, str]],
@@ -513,7 +485,7 @@ class OpenAIService:
 
         try:
             # 1. Get canonical location
-            canonical_location = await get_canonical_location_from_text(user_input)
+            canonical_location = get_canonical_location_from_text(user_input)
 
             # 2. Append user message to history *before* parsing intent
             history.append({"role": "user", "content": user_input})
@@ -594,7 +566,7 @@ class OpenAIService:
                 print(f"   offset: {offset}")
                 
                 company_service = CompanyService(db)
-                db_companies = await company_service.search_companies(
+                db_companies = company_service.search_companies(
                     location=location,
                     activity_keywords=activity_keywords,
                     limit=search_limit,
@@ -620,12 +592,12 @@ class OpenAIService:
                 if db_companies:
                     # 4. Enrich DB data with web search results
                     print("🌐 Enriching companies with web search...")
-                    enriched_companies = await self._enrich_companies_with_web_search(db_companies)
+                    enriched_companies = self._enrich_companies_with_web_search(db_companies)
                     companies_data = enriched_companies
                     
                     # 5. Generate a final summary response with all data
                     print("✍️ Generating summary response...")
-                    final_message = await self._generate_summary_response(history, companies_data)
+                    final_message = self._generate_summary_response(history, companies_data)
                 else:
                     final_message = f"Я искал компании в {location}, но не смог найти больше результатов, соответствующих вашему запросу. Может, попробуем другой город или изменим ключевые слова?"
             
@@ -669,7 +641,7 @@ class OpenAIService:
             # 'conversation_id': conversation_id
         }
 
-    async def handle_conversation_with_assistant_fallback(
+    def handle_conversation_with_assistant_fallback(
         self,
         user_input: str,
         history: List[Dict[str, str]],
@@ -702,7 +674,7 @@ class OpenAIService:
             
             try:
                 # Fallback to traditional service
-                response_data = await self.handle_conversation_turn(
+                response_data = self.handle_conversation_turn(
                     user_input=user_input,
                     history=history,
                     db=db,

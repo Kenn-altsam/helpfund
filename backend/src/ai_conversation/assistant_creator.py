@@ -9,7 +9,7 @@ the database to provide company information and maintains conversation history.
 import json
 import time
 from typing import Dict, List, Optional, Any
-from openai import AzureOpenAI
+from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
@@ -29,13 +29,8 @@ class CharityFundAssistant:
     
     def __init__(self):
         self.settings = get_settings()
-        self.client = AzureOpenAI(
-            api_key=self.settings.AZURE_OPENAI_KEY,
-            azure_endpoint=self.settings.AZURE_OPENAI_ENDPOINT, # <-- ИСПОЛЬЗУЙ azure_endpoint
-            api_version=self.settings.AZURE_OPENAI_API_VERSION,
-            # Можно также добавить:
-            # azure_deployment=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
-            # но для Assistants API model= в .create() все равно понадобится
+        self.client = OpenAI(
+            api_key=self.settings.OPENAI_API_KEY,
         )
         
         # Assistant configuration for charity fund discovery
@@ -73,7 +68,7 @@ class CharityFundAssistant:
         """
         try:
             assistant = self.client.beta.assistants.create(
-                model=self.settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                model=self.settings.OPENAI_MODEL_NAME,
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions,
                 tools=[

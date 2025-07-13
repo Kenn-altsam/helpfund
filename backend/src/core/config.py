@@ -7,10 +7,12 @@
 # """
 
 from functools import lru_cache
-from typing import List
+from typing import List, Any
 
 from pydantic import PostgresDsn, Field, AliasChoices, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+import os
 
 
 class Settings(BaseSettings):
@@ -67,10 +69,7 @@ class Settings(BaseSettings):
     # OpenAI - UPDATED FOR AZURE
     # ------------------------------------------------------------------
     OPENAI_API_KEY: str = ""
-    AZURE_OPENAI_KEY: str = ""
-    AZURE_OPENAI_ENDPOINT: str = ""
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = ""
-    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
+    OPENAI_MODEL_NAME: str = "gpt-4-turbo"  # Default model
 
     # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
@@ -94,12 +93,46 @@ class Settings(BaseSettings):
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
-    def model_post_init(self, __context):
-        # Updated check for Azure keys
-        if not self.AZURE_OPENAI_KEY or not self.AZURE_OPENAI_ENDPOINT:
-            print("⚠️  Warning: AZURE_OPENAI_KEY or AZURE_OPENAI_ENDPOINT is not set.")
-        if "your-secret-key" in self.SECRET_KEY:
-            print("⚠️  Warning: Using a default SECRET_KEY. Please set a secure one for production.")
+    def model_post_init(self, __context: Any) -> None:
+        """
+        Validate and process settings after initialization.
+        """
+        # Load environment variables from .env file
+        load_dotenv()
+        
+        # Override settings from environment variables if they exist
+        for field in self.model_fields:
+            env_val = os.getenv(field)
+            if env_val is not None:
+                setattr(self, field, env_val)
+
+        # Basic validation
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL must be set in the environment.")
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY must be set in the environment.")
+        if not self.OPENAI_API_KEY:
+            print("⚠️  Warning: OPENAI_API_KEY is not set.")
+
+    def print_settings(self):
+        """Prints loaded settings for verification."""
+        settings_to_print = self.model_dump()
+        # Mask sensitive keys
+        sensitive_keys = ["DATABASE_URL", "SECRET_KEY", "OPENAI_API_KEY"]
+        for key in sensitive_keys:
+            if key in settings_to_print and settings_to_print[key]:
+                settings_to_print[key] = f"***{settings_to_print[key][-4:]}"
+
+        print("\n--- Application Settings ---")
+        for key, value in settings_to_print.items():
+            print(f"  - {key}: {value}")
+        print("--------------------------\n")
+        
+        # Provide feedback on loaded keys
+        print("Key Loading Status:")
+        print(f"  - Database URL Loaded: {'Yes' if self.DATABASE_URL else 'No'}")
+        print(f"  - Secret Key Loaded: {'Yes' if self.SECRET_KEY else 'No'}")
+        print(f"  - OpenAI Key Loaded: {'Yes' if self.OPENAI_API_KEY else 'No'}")
 
 @lru_cache()
 def get_settings() -> Settings:

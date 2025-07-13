@@ -33,14 +33,11 @@ def get_client() -> OpenAI:
         settings = get_settings()
         
         # Explicitly check for required settings
-        if not settings.AZURE_OPENAI_KEY or not settings.AZURE_OPENAI_ENDPOINT:
-            raise ValueError("Azure OpenAI credentials are not configured for the location service.")
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is not configured for the location service.")
         
         _client = OpenAI(
-            api_key=settings.AZURE_OPENAI_KEY,
-            base_url=f"{settings.AZURE_OPENAI_ENDPOINT}openai/deployments/{settings.AZURE_OPENAI_DEPLOYMENT_NAME}",
-            default_headers={"api-key": settings.AZURE_OPENAI_KEY},
-            api_version=settings.AZURE_OPENAI_API_VERSION,
+            api_key=settings.OPENAI_API_KEY,
             timeout=15.0, # Add a timeout for network resilience
         )
     return _client
@@ -48,7 +45,7 @@ def get_client() -> OpenAI:
 @lru_cache(maxsize=256) # Increased cache size
 def get_canonical_location_from_text(text: str) -> Optional[str]:
     """
-    Uses Azure OpenAI to extract the canonical city name from a user's query.
+    Uses OpenAI to extract the canonical city name from a user's query.
     Results are cached, and specific API errors are handled gracefully.
     """
     if not text.strip():
@@ -61,7 +58,7 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
         settings = get_settings()
         client = get_client()
         response = client.chat.completions.create(
-            model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+            model=settings.OPENAI_MODEL_NAME,
             messages=[
                 {"role": "system", "content": LOCATION_EXTRACTION_PROMPT},
                 {"role": "user", "content": text}
