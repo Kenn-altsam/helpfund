@@ -7,6 +7,7 @@ Data models for AI conversation requests and responses.
 from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field
 from pydantic import validator
+import uuid
 
 
 class ConversationInput(BaseModel):
@@ -44,9 +45,9 @@ class ChatRequest(BaseModel):
         None,
         description="Optional OpenAI Assistant ID for persistent conversations"
     )
-    thread_id: Optional[str] = Field(
+    chat_id: Optional[str] = Field(
         None,
-        description="Optional OpenAI Thread ID for persistent conversations"
+        description="Optional Database Chat ID (UUID) for persistent conversations"
     )
     
     @validator('history', pre=True, always=True)
@@ -88,7 +89,7 @@ class ChatRequest(BaseModel):
                     {"role": "assistant", "content": "Hello! I'm here to help you find potential corporate sponsors in Kazakhstan. How can I assist you today?"}
                 ],
                 "assistant_id": "asst_abc123",
-                "thread_id": "thread_xyz789"
+                "chat_id": str(uuid.uuid4())
             }
         }
 
@@ -178,7 +179,11 @@ class ChatResponse(BaseModel):
         None,
         description="OpenAI Assistant ID used for this response"
     )
-    thread_id: Optional[str] = Field(
+    chat_id: Optional[str] = Field(
+        None,
+        description="Database Chat ID (UUID) for this conversation"
+    )
+    openai_thread_id: Optional[str] = Field(
         None,
         description="OpenAI Thread ID used for this response"
     )
@@ -236,7 +241,8 @@ class ChatResponse(BaseModel):
                     }
                 ],
                 "assistant_id": "asst_abc123",
-                "thread_id": "thread_xyz789"
+                "chat_id": str(uuid.uuid4()),
+                "openai_thread_id": "thread_xyz789"
             }
         }
 
@@ -244,14 +250,14 @@ class ChatResponse(BaseModel):
 class CompanyData(BaseModel):
     """Model for company data in chat responses"""
     
-    bin: str = Field(..., description="Business Identification Number")
+    bin: str = Field(..., description="Business Identification Number (BIN)")
     name: str = Field(..., description="Company name")
-    registration_date: Optional[str] = Field(None, description="Registration date")
-    address: Optional[str] = Field(None, description="Company address")
+    oked: Optional[str] = Field(None, description="OKED code")
     activity: Optional[str] = Field(None, description="Business activity")
-    annual_tax: Optional[float] = Field(None, description="Annual tax payment")
-    website: Optional[str] = Field(None, description="Company website")
-    contacts: Optional[Dict[str, str]] = Field(None, description="Contact information")
+    kato: Optional[str] = Field(None, description="KATO code")
+    locality: Optional[str] = Field(None, description="Locality or region")
+    krp: Optional[str] = Field(None, description="KRP code")
+    size: Optional[str] = Field(None, description="Company size category")
 
     class Config:
         extra = "allow"
@@ -259,15 +265,12 @@ class CompanyData(BaseModel):
             "example": {
                 "bin": "123456789012",
                 "name": "Tech Solutions LLP",
-                "registration_date": "2020-01-01",
-                "address": "Almaty, Kazakhstan",
-                "activity": "Software development",
-                "annual_tax": 1000000.0,
-                "website": "https://example.com",
-                "contacts": {
-                    "phone": "+7 777 123 4567",
-                    "email": "contact@example.com"
-                }
+                "oked": "62011",
+                "activity": "Computer programming activities",
+                "kato": "751110000",
+                "locality": "Almaty",
+                "krp": "2",
+                "size": "Medium",
             }
         }
 
@@ -302,7 +305,8 @@ class APIResponse(BaseModel):
                     "companies": [],
                     "updated_history": [],
                     "assistant_id": "asst_abc123",
-                    "thread_id": "thread_xyz789"
+                    "chat_id": "some-uuid-string-here",
+                    "openai_thread_id": "thread_xyz789"
                 },
                 "message": "Request processed successfully"
             }
