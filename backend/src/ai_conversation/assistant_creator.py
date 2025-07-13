@@ -500,3 +500,5 @@ def handle_conversation_with_context(
         # This is the DB chat ID. It can be None if this is a new chat.
         "chat_id": chat_id
     }
+
+charity_assistant = CharityFundAssistant()
