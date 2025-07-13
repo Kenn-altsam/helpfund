@@ -50,10 +50,10 @@ app = FastAPI(
 # Very permissive settings to ensure iPhone/Android apps can connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_credentials=settings.allow_credentials,
-    allow_methods=settings.allow_methods,
-    allow_headers=settings.allow_headers,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=settings.ALLOW_CREDENTIALS,
+    allow_methods=settings.ALLOW_METHODS,
+    allow_headers=settings.ALLOW_HEADERS,
     expose_headers=["*"],  # Allow all response headers to be accessible
 )
 
