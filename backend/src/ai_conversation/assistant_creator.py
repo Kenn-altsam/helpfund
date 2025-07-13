@@ -48,7 +48,6 @@ class CharityFundAssistant:
         - Provide actionable insights about potential sponsorship opportunities
         - Remember previous requests in the conversation to provide consistent help
         - When providing company lists, include relevant details like location, industry, and contact availability
-        - Always present company lists sorted by their tax_payment_2025 in descending order (highest taxpayers first) for the specified location
         - Suggest next steps for charity funds to approach potential sponsors
 
         You have access to a comprehensive database of companies in Kazakhstan with information about:
@@ -172,62 +171,49 @@ class CharityFundAssistant:
             raise
 
     async def run_assistant_with_tools(
-        self, 
-        assistant_id: str, 
-        thread_id: str, 
+        self,
+        assistant_id: str,
+        thread_id: str,
         db: Session,
         instructions: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Runs the assistant. Returns the company data instead of saving it to metadata.
+        This version does NOT reference tax_payment_2025.
         """
-        companies_found_in_turn = []  # Track companies found in this specific run
-        
+        companies_found_in_turn = []
+
         try:
-            # Create a run with the assistant
             run = await self.client.beta.threads.runs.create(
                 thread_id=thread_id,
                 assistant_id=assistant_id,
                 instructions=instructions or "Help the user find potential corporate sponsors for their charity fund. Use the provided functions to search for companies and provide detailed information."
             )
-            
-            # Poll for completion and handle function calls
+
             while run.status in ["queued", "in_progress", "requires_action"]:
                 await asyncio.sleep(1)
-                run = await self.client.beta.threads.runs.retrieve(
-                    thread_id=thread_id,
-                    run_id=run.id
-                )
-                
-                # Handle function calls
+                run = await self.client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+
                 if run.status == "requires_action":
                     tool_outputs = []
-                    
                     for tool_call in run.required_action.submit_tool_outputs.tool_calls:
                         function_name = tool_call.function.name
                         function_args = json.loads(tool_call.function.arguments)
-                        
                         print(f"🔧 Executing function: {function_name} with args: {function_args}")
-                        
-                        # Handle company search
+
                         if function_name == "search_companies":
                             try:
-                                # Create company service with database session
                                 company_service = CompanyService(db)
-                                
-                                # Determine page and limit
-                                limit = int(function_args.get("limit", 50)) if int(function_args.get("limit", 50)) > 0 else 50
+                                limit = int(function_args.get("limit", 50))
                                 page = function_args.get("page", 1)
                                 offset = (page - 1) * limit
-                                
+
                                 companies = await company_service.search_companies(
                                     location=function_args.get("location"),
                                     activity_keywords=function_args.get("activity_keywords"),
                                     limit=limit,
                                     offset=offset
                                 )
-                                
-                                # The search_companies method already returns dictionaries
                                 formatted_companies = []
                                 for company_dict in companies:
                                     formatted_company = {
@@ -240,40 +226,20 @@ class CharityFundAssistant:
                                         "size": company_dict.get("company_size"),
                                     }
                                     formatted_companies.append(formatted_company)
-                                    companies_found_in_turn.append(formatted_company)  # Track for context
+                                    companies_found_in_turn.append(formatted_company)
                                 
-                                result = {
-                                    "companies": formatted_companies,
-                                    "total_found": len(formatted_companies),  # This should reflect current page's count
-                                    "search_criteria": function_args,
-                                    "page": page,
-                                    "limit": limit  # Report the actual limit used
-                                }
-                                
-                                tool_outputs.append({
-                                    "tool_call_id": tool_call.id,
-                                    "output": json.dumps(result, ensure_ascii=False)
-                                })
-                                
+                                result = {"companies": formatted_companies, "total_found": len(formatted_companies), "search_criteria": function_args, "page": page, "limit": limit}
+                                tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(result, ensure_ascii=False)})
                                 print(f"✅ Search completed: {len(formatted_companies)} companies found")
-                                
                             except Exception as e:
                                 print(f"❌ Error in search_companies: {str(e)}")
-                                error_msg = f"Error searching companies: {str(e)}. Please try with different search criteria."
-                                tool_outputs.append({
-                                    "tool_call_id": tool_call.id,
-                                    "output": error_msg
-                                })
-                        
-                        # Handle company details
+                                tool_outputs.append({"tool_call_id": tool_call.id, "output": f"Error searching companies: {str(e)}."})
+
                         elif function_name == "get_company_details":
                             try:
-                                # Create company service with database session
                                 company_service = CompanyService(db)
-                                
                                 company_id = function_args.get("company_id")
                                 company_dict = await company_service.get_company_by_id(company_id)
-                                
                                 if company_dict:
                                     company_details = {
                                         "id": company_dict.get("id"),
@@ -285,64 +251,40 @@ class CharityFundAssistant:
                                         "kato": company_dict.get("kato"),
                                         "krp": company_dict.get("krp"),
                                         "size": company_dict.get("size"),
-                                        "tax_payment_2025": company_dict.get("tax_payment_2025")  # Include for consistency
                                     }
-                                    
-                                    companies_found_in_turn.append(company_details)  # Track for context
-                                    
-                                    tool_outputs.append({
-                                        "tool_call_id": tool_call.id,
-                                        "output": json.dumps(company_details, ensure_ascii=False)
-                                    })
-                                    
+                                    companies_found_in_turn.append(company_details)
+                                    tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(company_details, ensure_ascii=False)})
                                     print(f"✅ Company details retrieved for: {company_details.get('name')}")
                                 else:
-                                    tool_outputs.append({
-                                        "tool_call_id": tool_call.id,
-                                        "output": "Company not found. Please check the company ID and try again."
-                                    })
-                                    
+                                    tool_outputs.append({"tool_call_id": tool_call.id, "output": "Company not found."})
                             except Exception as e:
                                 print(f"❌ Error in get_company_details: {str(e)}")
-                                error_msg = f"Error getting company details: {str(e)}. Please verify the company ID."
-                                tool_outputs.append({
-                                    "tool_call_id": tool_call.id,
-                                    "output": error_msg
-                                })
+                                tool_outputs.append({"tool_call_id": tool_call.id, "output": f"Error getting company details: {str(e)}."})
                     
-                    # Submit tool outputs
-                    run = await self.client.beta.threads.runs.submit_tool_outputs(
-                        thread_id=thread_id,
-                        run_id=run.id,
-                        tool_outputs=tool_outputs
-                    )
-            
-            # Get the assistant's response
+                    run = await self.client.beta.threads.runs.submit_tool_outputs(thread_id=thread_id, run_id=run.id, tool_outputs=tool_outputs)
+
             messages = await self.client.beta.threads.messages.list(thread_id=thread_id)
             latest_message = messages.data[0]
-            
             assistant_response_content = latest_message.content[0].text.value if latest_message.content else ""
-            
             print(f"🤖 Assistant completed with status: {run.status}")
             print(f"📊 Companies processed in this turn: {len(companies_found_in_turn)}")
 
             return {
                 "status": run.status,
                 "message": assistant_response_content,
-                "companies": companies_found_in_turn,  # Companies found in this run
+                "companies": companies_found_in_turn,
                 "run_id": run.id,
                 "companies_found": len(companies_found_in_turn)
             }
-            
+
         except Exception as e:
             print(f"❌ Error running assistant: {str(e)}")
             import traceback
             traceback.print_exc()
-            
             return {
                 "status": "error",
                 "message": f"Извините, произошла ошибка при обработке запроса: {str(e)}",
-                "companies": companies_found_in_turn,  # Include any companies found before error
+                "companies": companies_found_in_turn,
                 "run_id": None,
                 "companies_found": len(companies_found_in_turn)
             }
