@@ -179,9 +179,7 @@ class CharityFundAssistant:
         instructions: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Run the assistant with function calling capabilities.
-        Handles company search and data retrieval from the database.
-        Now tracks companies data for context preservation.
+        Runs the assistant. Returns the company data instead of saving it to metadata.
         """
         companies_found_in_turn = []  # Track companies found in this specific run
         
@@ -279,7 +277,7 @@ class CharityFundAssistant:
                                 if company_dict:
                                     company_details = {
                                         "id": company_dict.get("id"),
-                                        "name": company_dict.get("name"),
+                                        "name": company_dict.get("company_name"),
                                         "bin": company_dict.get("bin"),
                                         "activity": company_dict.get("activity"),
                                         "location": company_dict.get("locality"),
@@ -327,17 +325,6 @@ class CharityFundAssistant:
             
             print(f"🤖 Assistant completed with status: {run.status}")
             print(f"📊 Companies processed in this turn: {len(companies_found_in_turn)}")
-
-            # Explicitly persist companies found in this turn as metadata on the assistant's response
-            if companies_found_in_turn:
-                # Add a new assistant message with the consolidated companies_found_in_turn as metadata
-                await self.add_message_to_thread(
-                    thread_id=thread_id,
-                    message=assistant_response_content,  # Use the actual assistant's generated response
-                    role="assistant",
-                    metadata={"companies": companies_found_in_turn}
-                )
-                print(f"💾 Persisted {len(companies_found_in_turn)} companies as metadata for the latest assistant message.")
 
             return {
                 "status": run.status,
