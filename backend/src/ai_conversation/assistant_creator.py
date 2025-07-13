@@ -9,7 +9,7 @@ the database to provide company information and maintains conversation history.
 import json
 import asyncio
 from typing import Dict, List, Optional, Any
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
@@ -29,7 +29,11 @@ class CharityFundAssistant:
     
     def __init__(self):
         self.settings = get_settings()
-        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+        self.client = AsyncAzureOpenAI(
+            api_key=self.settings.azure_openai_key,
+            azure_endpoint=self.settings.azure_openai_endpoint,
+            api_version=self.settings.azure_openai_api_version,
+        )
         
         # Assistant configuration for charity fund discovery
         self.system_instructions = """
@@ -68,7 +72,7 @@ class CharityFundAssistant:
             assistant = await self.client.beta.assistants.create(
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions,
-                model="gpt-4o",
+                model=self.settings.azure_openai_deployment_name,
                 tools=[
                     {
                         "type": "function",

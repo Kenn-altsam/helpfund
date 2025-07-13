@@ -1,12 +1,21 @@
 # backend/src/ai_conversation/location_service.py
 
-import openai
+from openai import AsyncAzureOpenAI
 import json
 import os
 
+from ..core.config import get_settings
+
+# Get settings to configure the client
+settings = get_settings()
+
 # Make sure your OpenAI client is configured.
 # It automatically reads the OPENAI_API_KEY from your environment variables.
-client = openai.AsyncOpenAI()
+client = AsyncAzureOpenAI(
+    api_key=settings.azure_openai_key,
+    azure_endpoint=settings.azure_openai_endpoint,
+    api_version=settings.azure_openai_api_version,
+)
 
 async def get_canonical_location_from_text(user_input: str) -> str | None:
     """
@@ -32,7 +41,7 @@ async def get_canonical_location_from_text(user_input: str) -> str | None:
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Fast and cost-effective
+            model=settings.azure_openai_deployment_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input},

@@ -70,9 +70,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     
     # +++ NEW AZURE SETTINGS +++
-    AZURE_OPENAI_KEY: str = ""
-    AZURE_OPENAI_ENDPOINT: str = ""
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = ""
+    AZURE_OPENAI_KEY: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_KEY", "AZURE_API_KEY"))
+    AZURE_OPENAI_ENDPOINT: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_ENDPOINT", "AZURE_API_BASE"))
+    AZURE_OPENAI_DEPLOYMENT_NAME: str = Field("", validation_alias=AliasChoices("AZURE_OPENAI_DEPLOYMENT_NAME", "AZURE_DEPLOYMENT_ID"))
     AZURE_OPENAI_API_VERSION: str = "2024-02-01" # A stable API version
 
     # ------------------------------------------------------------------
@@ -153,12 +153,14 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Return an application-wide, cached Settings instance."""
-    print("⚙️  Loading settings…")
-    try:
-        settings = Settings()
-        print("✅ Settings loaded successfully.")
-        return settings
-    except Exception as e:
-        print(f"❌ FATAL: Failed to load settings. Error: {e}")
-        raise
+    """Returns the application settings, cached for performance."""
+    print("⚙️  Loading settings...")
+    settings = Settings()
+    
+    # --- Add detailed logging for Azure settings ---
+    print(f"  - Azure Key Loaded: {'Yes' if settings.AZURE_OPENAI_KEY else 'No'}")
+    print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
+    print(f"  - Azure Deployment Loaded: {settings.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
+    print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
+    
+    return settings
