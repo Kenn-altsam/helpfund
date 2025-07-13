@@ -15,7 +15,7 @@ router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
 
 @router.post("/chat-assistant", response_model=ChatResponse)
-async def handle_chat_with_assistant(
+def handle_chat_with_assistant(
     request: ChatRequest, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user) 
@@ -41,7 +41,7 @@ async def handle_chat_with_assistant(
     try:
         # 1. CALL THE REFACTORED AI LOGIC
         # This function now handles all the OpenAI-side complexity.
-        response_data = await handle_conversation_with_context(
+        response_data = handle_conversation_with_context(
             user_input=request.user_input,
             db=db,
             user=current_user,

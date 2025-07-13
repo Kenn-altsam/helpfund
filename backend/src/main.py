@@ -7,7 +7,7 @@ This service helps charity funds discover companies and sponsorship opportunitie
 
 import os
 from typing import List
-from contextlib import asynccontextmanager
+from contextlib import contextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,13 +27,13 @@ load_dotenv()
 # Get settings
 settings = get_settings()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@contextmanager
+def lifespan(app: FastAPI):
     """Application lifespan"""
     print("✅ Ayala Foundation Backend API starting up")
     # Initialize database tables
-    init_database()
-    print("✅ Database initialized")
+    # init_database() - This is now handled by Alembic migrations
+    print("✅ Database migrations should be handled manually via Alembic")
     yield
     print("✅ Ayala Foundation Backend API shutting down")
 
@@ -71,7 +71,7 @@ app.include_router(companies_router, prefix="/api/v1")
 app.include_router(chats_router, prefix="/api/v1")
 
 @app.get("/")
-async def root():
+def root():
     """Root endpoint - API health check"""
     return {
         "status": "success",
@@ -80,7 +80,7 @@ async def root():
     }
 
 @app.get("/health")
-async def health_check():
+def health_check():
     """Health check endpoint"""
     return {
         "status": "success",
@@ -92,7 +92,7 @@ async def health_check():
     }
 
 @app.get("/network-test")
-async def network_test():
+def network_test():
     """Network connectivity test endpoint for mobile debugging"""
     return {
         "status": "success",
@@ -110,7 +110,7 @@ async def network_test():
     }
 
 @app.get("/test")
-async def simple_test():
+def simple_test():
     """Simple test endpoint for iOS app connectivity"""
     return {
         "message": "Backend is working!",

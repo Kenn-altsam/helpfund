@@ -6,9 +6,8 @@ Business logic for company data retrieval and processing.
 
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from uuid import UUID
-import asyncio
 
 from .models import Company
 from ..core.translation_service import CityTranslationService
@@ -20,7 +19,7 @@ class CompanyService:
     def __init__(self, db: Session):
         self.db = db
     
-    async def search_companies(
+    def search_companies(
         self,
         location: Optional[str] = None,
         company_name: Optional[str] = None,
@@ -32,25 +31,6 @@ class CompanyService:
         Searches for companies with flexible filtering and pagination.
         Handles cases where location or activity keywords might be missing.
         """
-        # Run the synchronous DB query in an async-compatible way
-        return await asyncio.to_thread(
-            self._execute_search_query, 
-            location, 
-            company_name, 
-            activity_keywords, 
-            limit, 
-            offset
-        )
-
-    def _execute_search_query(
-        self,
-        location: Optional[str],
-        company_name: Optional[str],
-        activity_keywords: Optional[List[str]],
-        limit: int,
-        offset: int
-    ) -> List[Dict[str, Any]]:
-        
         print(f"🗃️ [DB_SERVICE] Executing search query:")
         print(f"   location: {location}")
         print(f"   company_name: {company_name}")
@@ -122,7 +102,7 @@ class CompanyService:
         print(f"🔄 [DB_SERVICE] Converted {len(converted_results)} results to dictionaries")
         return converted_results
 
-    async def get_companies_by_location(
+    def get_companies_by_location(
         self, 
         location: str, 
         limit: int = 50,
@@ -139,12 +119,6 @@ class CompanyService:
         Returns:
             List of company dictionaries
         """
-        return await asyncio.to_thread(
-            self._execute_location_query, location, limit, offset
-        )
-
-    def _execute_location_query(self, location: str, limit: int, offset: int) -> List[Dict[str, Any]]:
-        """Execute location-based query synchronously"""
         # Translate location input to Russian if needed
         translated_location = CityTranslationService.translate_city_name(location)
         query = self.db.query(Company).filter(
@@ -154,7 +128,7 @@ class CompanyService:
         companies = query.order_by(Company.company_name.asc()).offset(offset).limit(limit).all()
         return [self._company_to_dict(company) for company in companies]
 
-    async def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
+    def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
         """
         Get company by ID
         
@@ -164,10 +138,6 @@ class CompanyService:
         Returns:
             Company dictionary or None
         """
-        return await asyncio.to_thread(self._get_company_by_id_sync, company_id)
-
-    def _get_company_by_id_sync(self, company_id: str) -> Optional[Dict[str, Any]]:
-        """Get company by ID synchronously"""
         try:
             company = self.db.query(Company).filter(
                 Company.bin_number == company_id
@@ -180,19 +150,13 @@ class CompanyService:
         except Exception:
             return None
 
-    async def get_all_locations(self) -> List[Dict[str, Any]]:
+    def get_all_locations(self) -> List[Dict[str, Any]]:
         """
         Get all unique locations with company counts
         
         Returns:
             List of location dictionaries with counts
         """
-        return await asyncio.to_thread(self._get_all_locations_sync)
-
-    def _get_all_locations_sync(self) -> List[Dict[str, Any]]:
-        """Get all locations synchronously"""
-        from sqlalchemy import func
-        
         result = self.db.query(
             Company.locality,
             func.count(Company.bin_number).label('company_count')
@@ -208,7 +172,7 @@ class CompanyService:
             for row in result
         ]
 
-    async def get_companies_by_region_keywords(
+    def get_companies_by_region_keywords(
         self, 
         keywords: List[str], 
         limit: int = 20
@@ -223,14 +187,6 @@ class CompanyService:
         Returns:
             List of company dictionaries
         """
-        return await asyncio.to_thread(
-            self._get_companies_by_keywords_sync, keywords, limit
-        )
-
-    def _get_companies_by_keywords_sync(
-        self, keywords: List[str], limit: int
-    ) -> List[Dict[str, Any]]:
-        """Get companies by keywords synchronously"""
         query = self.db.query(Company)
         
         # Build OR conditions for each keyword
@@ -248,12 +204,16 @@ class CompanyService:
         """Converts a Company SQLAlchemy object to a dictionary."""
         return {
             "id": company.bin_number,
-            "bin": company.bin_number,
             "name": company.company_name,
-            "oked": company.oked_code,
+            "bin": company.bin_number,
             "activity": company.activity,
-            "kato": company.kato_code,
             "locality": company.locality,
-            "krp": company.krp_code,
             "size": company.company_size,
-        } 
+            "oked": company.oked_code,
+            "kato": company.kato_code,
+            "krp": company.krp_code,
+        }
+
+    def get_total_company_count(self) -> int:
+        """Get the total number of companies in the database."""
+        return self.db.query(Company).count() 

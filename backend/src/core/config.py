@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # If DATABASE_URL is not provided directly, it can be assembled from the
     # individual connection parts defined below (legacy support).
     # ------------------------------------------------------------------
-    DATABASE_URL: PostgresDsn | None = None
+    DATABASE_URL: str | None = None
 
     # Individual parts (legacy)
     DB_HOST: str = "localhost"
@@ -81,20 +81,18 @@ class Settings(BaseSettings):
     ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     ALLOW_HEADERS: List[str] = ["*"]
 
-    @model_validator(mode='before')
-    @classmethod
-    def assemble_db_connection(cls, values: dict) -> dict:
-        if not values.get('DATABASE_URL'):
-            # Build the URL from individual parts if it's not provided
-            values['DATABASE_URL'] = str(PostgresDsn.build(
-                scheme="postgresql",
-                username=values.get('DB_USER', 'postgres'),
-                password=values.get('DB_PASSWORD', ''),
-                host=values.get('DB_HOST', 'localhost'),
-                port=int(values.get('DB_PORT', 5432)),
-                path=f"/{values.get('DB_NAME', 'nFac_server')}"
-            ))
-        return values
+    @property
+    def database_url(self) -> str:
+        if self.DATABASE_URL:
+            # Just return the URL as is
+            return str(self.DATABASE_URL)
+
+        # --- >>> THIS IS THE CRITICAL CHANGE <<< ---
+        # Assemble a standard synchronous URL
+        return (
+            f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
 
     def model_post_init(self, __context):
         # Updated check for Azure keys
