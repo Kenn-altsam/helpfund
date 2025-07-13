@@ -64,32 +64,13 @@ api.interceptors.response.use(
 
 // Helper function to transform backend company data to frontend format
 const transformCompanyData = (company: any): Company => {
-  // Format tax information for display
-  const formatTaxAmount = (amount?: number) => {
-    if (!amount) return '0';
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'KZT',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const taxYears = ['2020', '2021', '2022', '2023', '2024', '2025']
-    .map(year => ({
-      year,
-      amount: company[`tax_${year}`]
-    }))
-    .filter(tax => tax.amount)
-    .map(tax => `${tax.year}: ${formatTaxAmount(tax.amount)}`)
-    .join('\n');
 
   return {
     ...company,
     // Prefer existing fields if already present; otherwise map from backend-specific names
+    name: company.name || company.bin,
     region: company.region || company.locality,
     industry: company.industry || company.activity,
-    taxes: taxYears || 'Нет данных о налогах',
-    // These fields might be added by the AI service or other sources
     contacts: company.contacts || null,
     website: company.website || null
   };
