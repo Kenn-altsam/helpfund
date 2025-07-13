@@ -12,8 +12,8 @@ settings = get_settings()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-ALGORITHM: str = settings.algorithm
-SECRET_KEY: str = settings.secret_key
+ALGORITHM: str = settings.ALGORITHM
+SECRET_KEY: str = settings.SECRET_KEY
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -34,7 +34,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta is not None:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

@@ -103,7 +103,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 
@@ -353,7 +353,7 @@ async def request_password_reset(request: PasswordResetRequest, db: Session = De
 async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)):
     """Reset password with token"""
     try:
-        payload = jwt.decode(reset_data.token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(reset_data.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         purpose: str = payload.get("purpose")
         
