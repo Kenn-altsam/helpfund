@@ -233,15 +233,12 @@ export const historyApi = {
       const rawChatItems = Array.isArray(response.data) ? response.data : [];
 
       return rawChatItems.map((item: any) => {
-        const threadId = item.openai_thread_id || ''; 
-        const assistantId = item.openai_assistant_id || '';
-        
+        // FIX: Use correct field names from backend (snake_case)
+        const threadId = item.thread_id || '';
+        const assistantId = item.assistant_id || '';
         return {
           id: item.id || threadId || generateId(),
-          // The title from the chat model is now the source of truth
-          userPrompt: item.title || 'Untitled Chat', 
-          // This part is tricky. The list view doesn't have the last AI response.
-          // We will leave it empty and let the full history load provide the companies.
+          userPrompt: item.title || 'Untitled Chat',
           aiResponse: [],
           created_at: item.updated_at ? new Date(item.updated_at).toISOString() : new Date().toISOString(),
           threadId: threadId,
