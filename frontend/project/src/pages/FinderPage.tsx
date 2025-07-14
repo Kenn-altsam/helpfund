@@ -179,7 +179,9 @@ export function FinderPage() {
         thread_id: threadId || undefined,
       };
 
+      console.log('[handleSendMessage] Sending request to chatApi.sendMessage:', requestPayload);
       const response = await chatApi.sendMessage(requestPayload);
+      console.log('[handleSendMessage] Received response:', response);
 
       // Persist IDs returned by backend
       if (response.assistant_id) setAssistantId(response.assistant_id);
@@ -215,6 +217,7 @@ export function FinderPage() {
         if (existingChat) {
           payload.id = existingChat.id;
         }
+        console.log('[handleSendMessage] Saving history with payload:', payload);
         await historyApi.saveHistory(payload);
 
         const updatedHistoryItem: ChatHistoryItem = {
@@ -237,7 +240,7 @@ export function FinderPage() {
         toast.success(t('finder.companiesFound', { count: response.companies.length }), { duration: 2000 });
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[handleSendMessage] Failed to send message:', error);
       setMessages(prev => prev.filter(m => m.type !== 'loading'));
       toast.error(t('finder.searchError'), { duration: 2000 });
     } finally {
@@ -257,6 +260,8 @@ export function FinderPage() {
     item: ChatHistoryItem,
     keepSidebarOpen = false,
   ) => {
+    console.log('[handleSelectHistory] Called with item:', item);
+    console.log('[handleSelectHistory] threadId:', item.threadId, 'assistantId:', item.assistantId);
     // fast-return if already selected
     if (item.threadId === threadId && messages.length) {
       if (!keepSidebarOpen) setSidebarOpen(false);
@@ -270,26 +275,22 @@ export function FinderPage() {
     try {
       let historyToSet: Message[] = [];
 
-      // --- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ПРОВЕРКА ID И ВЕТВЛЕНИЕ ЛОГИКИ ---
-      // Теперь item.threadId и item.assistantId должны быть строками благодаря api.ts
-      // поэтому эта проверка должна проходить для корректных записей истории
       if (item.threadId && item.assistantId) {
-        /** 1 ▶ получаем полную историю */
+        console.log('[handleSelectHistory] Fetching conversation history for threadId:', item.threadId, 'assistantId:', item.assistantId);
         const history = await chatApi.getConversationHistory(
           item.assistantId,
           item.threadId,
         );
+        console.log('[handleSelectHistory] Received conversation history:', history);
 
-        /** 2 ▶ нормализуем каждую запись */
         historyToSet = history.map((h: any) => ({
           id: h.id ?? generateId(),
           type: h.role as 'user' | 'assistant',
           content: h.content,
-          companies: h.companies ?? h.metadata?.companies ?? [],
+          companies: h.companies ?? [],
           createdAt: h.created_at ?? Date.now(),
         }));
 
-        /** 3 ▶ если бэкенд забыл компании для последнего сообщения, патчим */
         const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
         if (
           lastAssistant &&
@@ -298,12 +299,8 @@ export function FinderPage() {
         ) {
           lastAssistant.companies = item.aiResponse;
         }
-
       } else {
-        // Если threadId или assistantId отсутствуют (в теории, этого быть не должно после исправлений в api.ts)
-        // мы переходим непосредственно к запасной логике без генерации ошибки.
-        console.warn(`History item for thread ${item.threadId} or assistant ${item.assistantId} has missing IDs. Falling back to summary reconstruction.`);
-        
+        console.warn('[handleSelectHistory] Missing threadId or assistantId. Fallback logic.');
         const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
         historyToSet = [
           { id: generateId(), type: 'user', content: item.userPrompt },
@@ -316,18 +313,15 @@ export function FinderPage() {
         ];
         toast.error(t('finder.historyLoadError'), { duration: 2000 });
       }
-      // --- КОНЕЦ КРИТИЧЕСКОГО ИСПРАВЛЕНИЯ ---
+      // --- END PATCH ---
 
-      /** 4 ▶ обновляем состояние */
       setThreadId(item.threadId);
       setAssistantId(item.assistantId);
       setMessages(historyToSet);
+      console.log('[handleSelectHistory] Set messages:', historyToSet);
 
     } catch (err) {
-      // This catch block will now ONLY be hit if chatApi.getConversationHistory()
-      // itself fails (i.e., if threadId and assistantId *were* present, but the API call to fetch full history failed).
-      console.error('Failed to load full conversation history from API (API call failed):', err);
-      
+      console.error('[handleSelectHistory] Failed to load full conversation history from API:', err);
       const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
       setMessages([
         { id: generateId(), type: 'user', content: item.userPrompt },
