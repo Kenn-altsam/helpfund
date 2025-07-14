@@ -198,20 +198,18 @@ export const chatApi = {
   },
 
   /**
-   * Retrieve full message history for a given assistant/thread.
-   * The backend returns an array of { role: 'user' | 'assistant', content: string }
+   * Retrieve full message history for a given chat by its ID.
    */
   getConversationHistory: async (
-    _assistantId: string,
-    threadId: string
-  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>> => {
+    chatId: string
+  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[]; created_at?: string }>> => {
     try {
-      const response = await api.get(`/chats/${threadId}`);
+      const response = await api.get(`/chats/${chatId}`);
       return (response.data.messages || []).map((msg: any) => ({
         role: msg.role,
         content: msg.content,
-        // Ensure companies are mapped and always an array from the full conversation history
         companies: (msg.data?.companies_found || []).map(transformCompanyData),
+        created_at: msg.created_at,
       }));
     } catch (error) {
       console.error('Failed to load conversation history:', error);

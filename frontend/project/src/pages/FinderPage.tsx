@@ -261,9 +261,8 @@ export function FinderPage() {
     keepSidebarOpen = false,
   ) => {
     console.log('[handleSelectHistory] Called with item:', item);
-    console.log('[handleSelectHistory] threadId:', item.threadId, 'assistantId:', item.assistantId);
     // fast-return if already selected
-    if (item.threadId === threadId && messages.length) {
+    if (item.id === threadId && messages.length) {
       if (!keepSidebarOpen) setSidebarOpen(false);
       return;
     }
@@ -275,48 +274,30 @@ export function FinderPage() {
     try {
       let historyToSet: Message[] = [];
 
-      if (item.threadId && item.assistantId) {
-        console.log('[handleSelectHistory] Fetching conversation history for threadId:', item.threadId, 'assistantId:', item.assistantId);
-        const history = await chatApi.getConversationHistory(
-          item.assistantId,
-          item.threadId,
-        );
-        console.log('[handleSelectHistory] Received conversation history:', history);
+      // Always fetch by chat ID
+      console.log('[handleSelectHistory] Fetching conversation history for chatId:', item.id);
+      const history = await chatApi.getConversationHistory(item.id);
+      console.log('[handleSelectHistory] Received conversation history:', history);
 
-        historyToSet = history.map((h: any) => ({
-          id: h.id ?? generateId(),
-          type: h.role as 'user' | 'assistant',
-          content: h.content,
-          companies: h.companies ?? [],
-          createdAt: h.created_at ?? Date.now(),
-        }));
+      historyToSet = history.map((h: any) => ({
+        id: h.id ?? generateId(),
+        type: h.role as 'user' | 'assistant',
+        content: h.content,
+        companies: h.companies ?? [],
+        createdAt: h.created_at ?? Date.now(),
+      }));
 
-        const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
-        if (
-          lastAssistant &&
-          (lastAssistant.companies?.length ?? 0) === 0 &&
-          item.aiResponse?.length
-        ) {
-          lastAssistant.companies = item.aiResponse;
-        }
-      } else {
-        console.warn('[handleSelectHistory] Missing threadId or assistantId. Fallback logic.');
-        const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
-        historyToSet = [
-          { id: generateId(), type: 'user', content: item.userPrompt },
-          {
-            id: generateId(),
-            type: 'assistant',
-            content: t('finder.response', { count: companiesForFallback.length }),
-            companies: companiesForFallback,
-          },
-        ];
-        toast.error(t('finder.historyLoadError'), { duration: 2000 });
+      const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
+      if (
+        lastAssistant &&
+        (lastAssistant.companies?.length ?? 0) === 0 &&
+        item.aiResponse?.length
+      ) {
+        lastAssistant.companies = item.aiResponse;
       }
-      // --- END PATCH ---
 
-      setThreadId(item.threadId);
-      setAssistantId(item.assistantId);
+      setThreadId(item.threadId || '');
+      setAssistantId(item.assistantId || '');
       setMessages(historyToSet);
       console.log('[handleSelectHistory] Set messages:', historyToSet);
 
