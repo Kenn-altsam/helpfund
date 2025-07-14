@@ -29,7 +29,10 @@ def get_user_chats(
     current_user: User = Depends(get_current_user)
 ):
     """Get all chat sessions for the logged-in user (for the sidebar)."""
-    return chat_service.get_chats_for_user(db=db, user=current_user)
+    chats = chat_service.get_chats_for_user(db=db, user=current_user)
+    for chat in chats:
+        print(f"[get_user_chats] Chat ID: {chat.id}, thread_id: {getattr(chat, 'openai_thread_id', None)}, assistant_id: {getattr(chat, 'openai_assistant_id', None)}")
+    return chats
 
 @router.post("/history", status_code=200)
 def save_chat_history_summary(
