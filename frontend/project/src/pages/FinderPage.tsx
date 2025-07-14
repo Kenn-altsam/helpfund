@@ -100,10 +100,7 @@ export function FinderPage() {
             }
 
             // Пытаемся загрузить историю напрямую из треда OpenAI
-            const recoveredHistory = await chatApi.getConversationHistory(
-              assistantIdFromStorage,
-              activeThreadId
-            );
+            const recoveredHistory = await chatApi.getConversationHistory(activeThreadId);
 
             // Если история в треде не пуста, значит, чат реален
             if (recoveredHistory.length > 0) {
