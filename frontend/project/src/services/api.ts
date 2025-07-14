@@ -224,6 +224,7 @@ export const chatApi = {
 export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
+      // This endpoint remains correct as it fetches the list of all chats.
       const response = await api.get('/chats/');
       
       console.log('Raw response from /chats/ endpoint:', response);
@@ -232,20 +233,19 @@ export const historyApi = {
       const rawChatItems = Array.isArray(response.data) ? response.data : [];
 
       return rawChatItems.map((item: any) => {
-        // --- CRITICAL FIX START ---
-        // Ensure threadId and assistantId are always non-empty strings.
-        // If backend sends null or undefined, default to an empty string.
-        const threadId = item.thread_id || ''; 
-        const assistantId = item.assistant_id || '';
-        // --- CRITICAL FIX END ---
-
+        const threadId = item.openai_thread_id || ''; 
+        const assistantId = item.openai_assistant_id || '';
+        
         return {
-          id: item.id || item.thread_id || generateId(), // Ensure a unique 'id' for React keys
-          userPrompt: item.user_prompt || item.title || 'Untitled Chat', // Map user_prompt or title
-          aiResponse: (item.companies_found || item.raw_companies_data || item.ai_response || []),
-          created_at: item.created_at ? new Date(item.created_at).toISOString() : new Date().toISOString(),
-          threadId: threadId,         // Use the defensively handled value
-          assistantId: assistantId,   // Use the defensively handled value
+          id: item.id || threadId || generateId(),
+          // The title from the chat model is now the source of truth
+          userPrompt: item.title || 'Untitled Chat', 
+          // This part is tricky. The list view doesn't have the last AI response.
+          // We will leave it empty and let the full history load provide the companies.
+          aiResponse: [],
+          created_at: item.updated_at ? new Date(item.updated_at).toISOString() : new Date().toISOString(),
+          threadId: threadId,
+          assistantId: assistantId,
         };
       });
     } catch (error) {
@@ -258,13 +258,13 @@ export const historyApi = {
     }
   },
 
-  // Эти функции относятся к устаревшей или другой части системы (funds),
-  // и, возможно, не используются AI-чатом для сохранения истории как списка
   saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
     try {
-      await api.post('/funds/chat/history/save', {
-        user_input: item.userPrompt,
-        companies_data: item.rawAiResponse,
+      // MODIFIED: Point to the new, correct endpoint and use the new payload structure.
+      await api.post('/chats/history', {
+        id: item.id, // The chat ID, which might be an existing one to update
+        user_prompt: item.userPrompt,
+        raw_ai_response: item.rawAiResponse,
         created_at: item.created_at,
         thread_id: item.threadId,
         assistant_id: item.assistantId,
@@ -277,7 +277,8 @@ export const historyApi = {
 
   deleteHistory: async (id: string): Promise<void> => {
     try {
-      await api.delete(`/funds/chat/history/${id}`);
+      // MODIFIED: Point to the new, correct endpoint.
+      await api.delete(`/chats/${id}`);
     } catch (error) {
       console.error('Failed to delete chat history:', error);
       throw error;

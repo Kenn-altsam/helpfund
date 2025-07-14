@@ -19,6 +19,79 @@ def get_chat_history(db: Session, chat_id: uuid.UUID, user: User) -> Optional[mo
     """
     return db.query(models.Chat).filter(models.Chat.id == chat_id, models.Chat.user_id == user.id).first()
 
+def save_chat_summary_to_db(
+    db: Session,
+    user_id: uuid.UUID,
+    thread_id: str,
+    assistant_id: str,
+    user_prompt: str,
+    raw_ai_response: List[Any],
+    created_at: str, # ISO 8601 string
+    chat_id: Optional[uuid.UUID] = None,
+) -> models.Chat:
+    """
+    Saves or updates a chat summary. It finds a chat by thread_id and user_id.
+    If it exists, it updates the title. If not, it creates a new chat.
+    It also stores the raw_ai_response in a placeholder message.
+    """
+    # Try to find an existing chat by thread_id for this user
+    chat = db.query(models.Chat).filter(
+        models.Chat.openai_thread_id == thread_id,
+        models.Chat.user_id == user_id
+    ).first()
+
+    if chat:
+        # Update existing chat's title
+        chat.title = user_prompt
+        # Optionally, clear old placeholder AI responses if needed
+        # (for now, we just add a new one)
+    else:
+        # Create a new chat if it doesn't exist
+        chat = models.Chat(
+            id=chat_id or uuid.uuid4(),
+            user_id=user_id,
+            openai_thread_id=thread_id,
+            openai_assistant_id=assistant_id,
+            title=user_prompt,
+            # The 'created_at' from the request is a string, we parse it.
+            # The database will set its own created_at, but we can set updated_at.
+            updated_at=datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        )
+        db.add(chat)
+        db.flush() # We need the chat.id for the message
+
+    # Create a placeholder message to store the raw AI response,
+    # as there's no direct column for it on the Chat model.
+    # This keeps the data associated with the turn.
+    placeholder_message = models.Message(
+        chat_id=chat.id,
+        role="assistant_summary", # A special role to distinguish it
+        content="Placeholder for raw AI response from this turn.",
+        data={"companies_found": raw_ai_response}
+    )
+    db.add(placeholder_message)
+
+    db.commit()
+    db.refresh(chat)
+    return chat
+
+def delete_chat_from_db(db: Session, chat_id: uuid.UUID, user_id: uuid.UUID):
+    """
+    Deletes a chat session from the database, ensuring the user owns it.
+    """
+    chat_to_delete = db.query(models.Chat).filter(
+        models.Chat.id == chat_id,
+        models.Chat.user_id == user_id
+    ).first()
+
+    if not chat_to_delete:
+        # We can raise an error that will be caught in the router
+        raise ValueError("Chat not found or permission denied.")
+
+    db.delete(chat_to_delete)
+    db.commit()
+
+
 # --- Functions needed by assistant_creator.py ---
 
 def get_chat_by_id(db: Session, chat_id: uuid.UUID, user_id: uuid.UUID) -> Optional[models.Chat]:

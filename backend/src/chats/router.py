@@ -3,12 +3,23 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
 
 from ..core.database import get_db
+from ..auth.dependencies import get_current_user
 from ..auth.models import User
-from ..auth.dependencies import get_current_user # Our security dependency
-from . import service, schemas
+from . import service as chat_service, schemas
+
+# Pydantic model for the incoming request to save/update a chat summary
+class ChatHistorySaveRequest(BaseModel):
+    id: Optional[str] = None
+    user_prompt: str = Field(..., description="The last user prompt.")
+    raw_ai_response: List[Any] = Field(default_factory=list, description="The raw AI response data (e.g., companies).")
+    created_at: str = Field(..., description="ISO timestamp of the interaction.")
+    thread_id: str = Field(..., description="OpenAI Thread ID.")
+    assistant_id: str = Field(..., description="OpenAI Assistant ID.")
+
 
 router = APIRouter(prefix="/chats", tags=["Chats"])
 
@@ -18,7 +29,36 @@ def get_user_chats(
     current_user: User = Depends(get_current_user)
 ):
     """Get all chat sessions for the logged-in user (for the sidebar)."""
-    return service.get_chats_for_user(db=db, user=current_user)
+    return chat_service.get_chats_for_user(db=db, user=current_user)
+
+@router.post("/history", status_code=200)
+def save_chat_history_summary(
+    request: ChatHistorySaveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Saves or updates a chat history summary."""
+    try:
+        chat_id_uuid: Optional[uuid.UUID] = uuid.UUID(request.id) if request.id else None
+        
+        chat_service.save_chat_summary_to_db(
+            db=db,
+            user_id=current_user.id,
+            chat_id=chat_id_uuid,
+            user_prompt=request.user_prompt,
+            raw_ai_response=request.raw_ai_response,
+            created_at=request.created_at,
+            thread_id=request.thread_id,
+            assistant_id=request.assistant_id
+        )
+        return {"message": "Chat summary saved successfully."}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Chat ID format. Must be a UUID.")
+    except Exception as e:
+        # Log the exception for debugging
+        print(f"Error saving chat summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save chat summary: {str(e)}")
+
 
 @router.get("/{chat_id}", response_model=schemas.ChatHistoryResponseSchema)
 def get_single_chat_history(
@@ -27,7 +67,24 @@ def get_single_chat_history(
     current_user: User = Depends(get_current_user)
 ):
     """Get the full message history for a specific chat."""
-    chat = service.get_chat_history(db=db, chat_id=chat_id, user=current_user)
+    chat = chat_service.get_chat_history(db=db, chat_id=chat_id, user=current_user)
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found or you don't have permission.")
-    return chat 
+    return chat
+
+@router.delete("/{chat_id}", status_code=204)
+def delete_chat(
+    chat_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Deletes a chat history record by its ID."""
+    try:
+        chat_id_uuid = uuid.UUID(chat_id)
+        chat_service.delete_chat_from_db(db=db, chat_id=chat_id_uuid, user_id=current_user.id)
+        return {} # Returns 204 No Content
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Chat ID format. Must be a UUID.")
+    except Exception as e:
+        # Catch potential errors from the service layer, like the ValueError for not found
+        raise HTTPException(status_code=500, detail=f"Failed to delete chat: {str(e)}") 

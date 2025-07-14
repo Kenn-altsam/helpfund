@@ -205,14 +205,17 @@ export function FinderPage() {
         const existingChat = globalHistory.find(h => h.threadId === effectiveThreadId);
 
         // Persist full history item in backend
-        await historyApi.saveHistory({
-          id: existingChat?.id,
+        const payload: any = {
           userPrompt: currentInput,
           rawAiResponse: response.rawCompanies || [],
           created_at: new Date().toISOString(),
           threadId: effectiveThreadId,
           assistantId: response.assistant_id || assistantId || '',
-        });
+        };
+        if (existingChat) {
+          payload.id = existingChat.id;
+        }
+        await historyApi.saveHistory(payload);
 
         const updatedHistoryItem: ChatHistoryItem = {
           id: existingChat?.id || generateId(),
