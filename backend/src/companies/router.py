@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import sys
 from pathlib import Path
+import logging
 
 from .service import CompanyService
 from ..core.database import get_db
@@ -301,11 +302,18 @@ def get_consideration(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    rows = db.execute(
-        text("SELECT company_bin FROM consideration WHERE user_id = :uid"),
-        {"uid": str(current_user.id)}
-    ).fetchall()
-    return [row[0] for row in rows]
+    try:
+        logging.info(f"Fetching consideration list for user_id={current_user.id}")
+        rows = db.execute(
+            text("SELECT company_bin FROM consideration WHERE user_id = :uid"),
+            {"uid": str(current_user.id)}
+        ).fetchall()
+        result = [row[0] for row in rows]
+        logging.info(f"Consideration list for user_id={current_user.id}: {result}")
+        return result
+    except Exception as e:
+        logging.error(f"Error fetching consideration list for user_id={current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch consideration list: {e}")
 
 @router.post("/consideration/{company_bin}", status_code=status.HTTP_201_CREATED, summary="Add company to consideration")
 def add_consideration(
