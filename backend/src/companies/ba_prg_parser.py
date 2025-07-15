@@ -19,11 +19,10 @@ def parse_and_update_ba_prg(
     current_user: User = Depends(get_current_user),
 ):
     """
-    TEMPORARY ENDPOINT: Fetches and parses data from ba.prg.kz API, updates company fields if NULL.
+    TEMPORARY ENDPOINT: Fetches and parses data from ba.prg.kz API, updates company fields if NULL and API value is not null.
     This endpoint is for one-time use and should be deleted after use.
     """
     try:
-        # 1. Get all BINs from the companies table
         bin_rows = db.execute(text('SELECT "BIN" FROM companies')).fetchall()
         company_bins = [row[0] for row in bin_rows]
         updated = 0
@@ -34,15 +33,18 @@ def parse_and_update_ba_prg(
                 resp = requests.get(api_url, timeout=10)
                 if resp.status_code != 200:
                     logging.warning(f"Failed to fetch {api_url} (status {resp.status_code})")
-                    failed += 1
                     continue
-                data = resp.json()
-                # --- Extract tax data ---
-                tax_data_2023 = None
-                tax_data_2024 = None
-                tax_data_2025 = None
                 try:
-                    tax_graph = data.get('taxes', {}).get('taxGraph', [])
+                    data = resp.json()
+                except Exception:
+                    logging.error(f"Non-JSON response for BIN={bin}")
+                    continue
+
+                # Defensive extraction
+                tax_data_2023 = tax_data_2024 = tax_data_2025 = contacts = website = None
+
+                tax_graph = data.get('taxes', {}).get('taxGraph', [])
+                if isinstance(tax_graph, list):
                     for item in tax_graph:
                         if item.get('year') == 2023:
                             tax_data_2023 = item.get('value')
@@ -50,41 +52,59 @@ def parse_and_update_ba_prg(
                             tax_data_2024 = item.get('value')
                         if item.get('year') == 2025:
                             tax_data_2025 = item.get('value')
-                except Exception as e:
-                    logging.error(f"Error extracting tax data for BIN={bin}: {e}")
-                # --- Extract contacts ---
-                phones = [p['value'] for p in data.get('egovContacts', {}).get('phone', [])]
-                emails = [e['value'] for e in data.get('gosZakupContacts', {}).get('email', [])]
+
+                phones = []
+                egov_contacts = data.get('egovContacts')
+                if egov_contacts and isinstance(egov_contacts.get('phone'), list):
+                    phones = [p['value'] for p in egov_contacts['phone'] if 'value' in p]
+
+                emails = []
+                goszakup_contacts = data.get('gosZakupContacts')
+                if goszakup_contacts and isinstance(goszakup_contacts.get('email'), list):
+                    emails = [e['value'] for e in goszakup_contacts['email'] if 'value' in e]
+
                 contacts = ', '.join(phones + emails) if (phones or emails) else None
-                # --- Extract website ---
-                websites = [w['value'] for w in data.get('gosZakupContacts', {}).get('website', [])]
+
+                websites = []
+                if goszakup_contacts and isinstance(goszakup_contacts.get('website'), list):
+                    websites = [w['value'] for w in goszakup_contacts['website'] if 'value' in w]
                 website = websites[0] if websites else None
-                # Only update if any field is not None and the DB field is NULL
-                sql = text('''
-                    UPDATE companies
-                    SET
-                        tax_data_2023 = CASE WHEN tax_data_2023 IS NULL THEN :tax2023 ELSE tax_data_2023 END,
-                        tax_data_2024 = CASE WHEN tax_data_2024 IS NULL THEN :tax2024 ELSE tax_data_2024 END,
-                        tax_data_2025 = CASE WHEN tax_data_2025 IS NULL THEN :tax2025 ELSE tax_data_2025 END,
-                        contacts = CASE WHEN contacts IS NULL THEN :contacts ELSE contacts END,
-                        website = CASE WHEN website IS NULL THEN :website ELSE website END
-                    WHERE "BIN" = :bin
-                ''')
-                db.execute(sql, {
-                    "tax2023": tax_data_2023,
-                    "tax2024": tax_data_2024,
-                    "tax2025": tax_data_2025,
-                    "contacts": contacts,
-                    "website": website,
-                    "bin": bin
-                })
-                updated += 1
-                logging.info(f"Updated company BIN={bin}")
+
+                # Build update only for non-null values
+                update_fields = {}
+                set_clauses = []
+                if tax_data_2023 is not None:
+                    set_clauses.append('tax_data_2023 = CASE WHEN tax_data_2023 IS NULL THEN :tax2023 ELSE tax_data_2023 END')
+                    update_fields['tax2023'] = tax_data_2023
+                if tax_data_2024 is not None:
+                    set_clauses.append('tax_data_2024 = CASE WHEN tax_data_2024 IS NULL THEN :tax2024 ELSE tax_data_2024 END')
+                    update_fields['tax2024'] = tax_data_2024
+                if tax_data_2025 is not None:
+                    set_clauses.append('tax_data_2025 = CASE WHEN tax_data_2025 IS NULL THEN :tax2025 ELSE tax_data_2025 END')
+                    update_fields['tax2025'] = tax_data_2025
+                if contacts is not None:
+                    set_clauses.append('contacts = CASE WHEN contacts IS NULL THEN :contacts ELSE contacts END')
+                    update_fields['contacts'] = contacts
+                if website is not None:
+                    set_clauses.append('website = CASE WHEN website IS NULL THEN :website ELSE website END')
+                    update_fields['website'] = website
+
+                if set_clauses:
+                    update_fields['bin'] = bin
+                    sql = text(f'''
+                        UPDATE companies
+                        SET {', '.join(set_clauses)}
+                        WHERE "BIN" = :bin
+                    ''')
+                    db.execute(sql, update_fields)
+                    db.commit()
+                    updated += 1
+                    logging.info(f"Updated company BIN={bin}")
             except Exception as e:
+                db.rollback()
                 logging.error(f"Error processing BIN={bin}: {e}")
                 failed += 1
-        db.commit()
-        return {"message": f"Updated {updated} companies, failed {failed} (using ba.prg.kz API)"}
+        return {"message": f"Updated {updated} companies, failed {failed} (using ba.prg.kz API, nulls skipped)"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Parser error: {e}") 
