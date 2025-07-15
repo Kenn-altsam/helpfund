@@ -142,6 +142,60 @@ async def get_companies_by_location(
         )
 
 
+# --- Consideration Endpoints ---
+@router.get("/consideration", response_model=List[str], summary="Get user's considered companies")
+def get_consideration(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        logging.info(f"[CONSIDERATION] User ID: {current_user.id}")
+        logging.info(f"[CONSIDERATION] DB: {db}")
+        sql = "SELECT company_bin FROM consideration WHERE user_id = :uid"
+        logging.info(f"[CONSIDERATION] Executing SQL: {sql} with uid={str(current_user.id)}")
+        rows = db.execute(
+            text(sql),
+            {"uid": str(current_user.id)}
+        ).fetchall()
+        result = [row[0] for row in rows]
+        logging.info(f"[CONSIDERATION] Result for user_id={current_user.id}: {result}")
+        return result
+    except Exception as e:
+        logging.error(f"[CONSIDERATION] Error for user_id={current_user.id}: {e}")
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to fetch consideration list: {e}")
+
+@router.post("/consideration/{company_bin}", status_code=status.HTTP_201_CREATED, summary="Add company to consideration")
+def add_consideration(
+    company_bin: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db.execute(
+        text("""
+        INSERT INTO consideration (user_id, company_bin)
+        VALUES (:uid, :bin)
+        ON CONFLICT (user_id, company_bin) DO NOTHING
+        """),
+        {"uid": str(current_user.id), "bin": company_bin}
+    )
+    db.commit()
+    return {"message": "Company added to consideration"}
+
+@router.delete("/consideration/{company_bin}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove company from consideration")
+def remove_consideration(
+    company_bin: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db.execute(
+        text("DELETE FROM consideration WHERE user_id = :uid AND company_bin = :bin"),
+        {"uid": str(current_user.id), "bin": company_bin}
+    )
+    db.commit()
+    return
+
+
 @router.get(
     "/{company_id}",
     summary="Get Company Details",
@@ -294,60 +348,5 @@ async def translate_city_name(
             status_code=500,
             detail=f"Failed to translate city name: {str(e)}"
         )
-
-
-# --- Consideration Endpoints ---
-
-@router.get("/consideration", response_model=List[str], summary="Get user's considered companies")
-def get_consideration(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        logging.info(f"[CONSIDERATION] User ID: {current_user.id}")
-        logging.info(f"[CONSIDERATION] DB: {db}")
-        sql = "SELECT company_bin FROM consideration WHERE user_id = :uid"
-        logging.info(f"[CONSIDERATION] Executing SQL: {sql} with uid={str(current_user.id)}")
-        rows = db.execute(
-            text(sql),
-            {"uid": str(current_user.id)}
-        ).fetchall()
-        result = [row[0] for row in rows]
-        logging.info(f"[CONSIDERATION] Result for user_id={current_user.id}: {result}")
-        return result
-    except Exception as e:
-        logging.error(f"[CONSIDERATION] Error for user_id={current_user.id}: {e}")
-        logging.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to fetch consideration list: {e}")
-
-@router.post("/consideration/{company_bin}", status_code=status.HTTP_201_CREATED, summary="Add company to consideration")
-def add_consideration(
-    company_bin: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    db.execute(
-        text("""
-        INSERT INTO consideration (user_id, company_bin)
-        VALUES (:uid, :bin)
-        ON CONFLICT (user_id, company_bin) DO NOTHING
-        """),
-        {"uid": str(current_user.id), "bin": company_bin}
-    )
-    db.commit()
-    return {"message": "Company added to consideration"}
-
-@router.delete("/consideration/{company_bin}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove company from consideration")
-def remove_consideration(
-    company_bin: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    db.execute(
-        text("DELETE FROM consideration WHERE user_id = :uid AND company_bin = :bin"),
-        {"uid": str(current_user.id), "bin": company_bin}
-    )
-    db.commit()
-    return
 
 
