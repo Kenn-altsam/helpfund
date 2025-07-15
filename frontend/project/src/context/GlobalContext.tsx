@@ -171,12 +171,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         const bins = await companiesApi.getConsideration();
+        console.log('[GlobalContext] Bins returned from getConsideration:', bins);
         // Fetch company details for each BIN
         const companies: Company[] = await Promise.all(
           bins.map(async (bin) => {
+            console.log('[GlobalContext] Fetching details for bin:', bin);
+            if (bin === 'consideration') {
+              console.warn('[GlobalContext] WARNING: "consideration" found in bins! This should not happen.');
+            }
             try {
               return await companiesApi.getDetails(bin);
             } catch (e) {
+              console.error(`[GlobalContext] Failed to get details for bin: ${bin}`, e);
               // If company not found, skip
               return null;
             }
