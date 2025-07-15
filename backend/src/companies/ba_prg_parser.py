@@ -75,13 +75,13 @@ def parse_and_update_ba_prg(
                 set_clauses = []
                 if tax_data_2023 is not None:
                     set_clauses.append('tax_data_2023 = CASE WHEN tax_data_2023 IS NULL THEN :tax2023 ELSE tax_data_2023 END')
-                    update_fields['tax2023'] = tax_data_2023
+                    update_fields['tax2023'] = str(tax_data_2023)
                 if tax_data_2024 is not None:
                     set_clauses.append('tax_data_2024 = CASE WHEN tax_data_2024 IS NULL THEN :tax2024 ELSE tax_data_2024 END')
-                    update_fields['tax2024'] = tax_data_2024
+                    update_fields['tax2024'] = str(tax_data_2024)
                 if tax_data_2025 is not None:
                     set_clauses.append('tax_data_2025 = CASE WHEN tax_data_2025 IS NULL THEN :tax2025 ELSE tax_data_2025 END')
-                    update_fields['tax2025'] = tax_data_2025
+                    update_fields['tax2025'] = str(tax_data_2025)
                 if contacts is not None:
                     set_clauses.append('contacts = CASE WHEN contacts IS NULL THEN :contacts ELSE contacts END')
                     update_fields['contacts'] = contacts
