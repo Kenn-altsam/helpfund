@@ -302,7 +302,7 @@ def get_consideration(
     current_user: User = Depends(get_current_user)
 ):
     rows = db.execute(
-        "SELECT company_bin FROM consideration WHERE user_id = :uid",
+        text("SELECT company_bin FROM consideration WHERE user_id = :uid"),
         {"uid": str(current_user.id)}
     ).fetchall()
     return [row[0] for row in rows]
@@ -314,11 +314,11 @@ def add_consideration(
     current_user: User = Depends(get_current_user)
 ):
     db.execute(
-        """
+        text("""
         INSERT INTO consideration (user_id, company_bin)
         VALUES (:uid, :bin)
         ON CONFLICT (user_id, company_bin) DO NOTHING
-        """,
+        """),
         {"uid": str(current_user.id), "bin": company_bin}
     )
     db.commit()
