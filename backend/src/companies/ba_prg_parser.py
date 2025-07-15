@@ -61,7 +61,7 @@ def parse_and_update_ba_prg(
                     tax_data_2025 = COALESCE(tax_data_2025, :tax2025),
                     contacts = COALESCE(contacts, :contacts),
                     website = COALESCE(website, :website)
-                WHERE bin = :bin
+                WHERE \"BIN\" = :bin
             """)
             db.execute(sql, {
                 "tax2023": tax_data_2023,
