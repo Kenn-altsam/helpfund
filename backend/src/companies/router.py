@@ -331,7 +331,7 @@ def remove_consideration(
     current_user: User = Depends(get_current_user)
 ):
     db.execute(
-        "DELETE FROM consideration WHERE user_id = :uid AND company_bin = :bin",
+        text("DELETE FROM consideration WHERE user_id = :uid AND company_bin = :bin"),
         {"uid": str(current_user.id), "bin": company_bin}
     )
     db.commit()
