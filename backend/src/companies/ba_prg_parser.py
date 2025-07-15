@@ -37,7 +37,7 @@ def parse_and_update_ba_prg(
         # tax_data_2023, tax_data_2024, tax_data_2025, contacts, website
         #
         # Example: Let's say you have a list of company BINs to update
-        # company_bins = ["201140015461", "250440002972", "971240001315"]  # Replace with real BINs or logic
+        company_bins = ["201140015461", "250440002972", "971240001315"]  # Replace with real BINs or logic
         updated = 0
         for bin in company_bins:
             # Fetch company page (replace with real URL pattern)
