@@ -5,7 +5,7 @@ Provides endpoints for searching and retrieving company data.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import sys
@@ -15,6 +15,8 @@ from .service import CompanyService
 from ..core.database import get_db
 from ..core.translation_service import CityTranslationService
 from ..ai_conversation.models import APIResponse
+from ..auth.dependencies import get_current_user
+from ..auth.models import User
 
 # Ensure project root (parent of src) is on Python path so that the top-level
 # `parser` package with the KGD scraping utilities can be imported.
@@ -290,5 +292,49 @@ async def translate_city_name(
             status_code=500,
             detail=f"Failed to translate city name: {str(e)}"
         )
+
+
+# --- Consideration Endpoints ---
+
+@router.get("/consideration", response_model=List[str], summary="Get user's considered companies")
+def get_consideration(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    rows = db.execute(
+        "SELECT company_bin FROM consideration WHERE user_id = :uid",
+        {"uid": str(current_user.id)}
+    ).fetchall()
+    return [row[0] for row in rows]
+
+@router.post("/consideration/{company_bin}", status_code=status.HTTP_201_CREATED, summary="Add company to consideration")
+def add_consideration(
+    company_bin: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db.execute(
+        """
+        INSERT INTO consideration (user_id, company_bin)
+        VALUES (:uid, :bin)
+        ON CONFLICT (user_id, company_bin) DO NOTHING
+        """,
+        {"uid": str(current_user.id), "bin": company_bin}
+    )
+    db.commit()
+    return {"message": "Company added to consideration"}
+
+@router.delete("/consideration/{company_bin}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove company from consideration")
+def remove_consideration(
+    company_bin: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db.execute(
+        "DELETE FROM consideration WHERE user_id = :uid AND company_bin = :bin",
+        {"uid": str(current_user.id), "bin": company_bin}
+    )
+    db.commit()
+    return
 
 

@@ -162,7 +162,36 @@ export const companiesApi = {
       console.error('Failed to get supported cities:', error);
       throw error;
     }
-  }
+  },
+
+  // --- Consideration Endpoints ---
+  getConsideration: async (): Promise<string[]> => {
+    try {
+      const response = await api.get('/companies/consideration');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get consideration list:', error);
+      throw error;
+    }
+  },
+
+  addConsideration: async (companyBin: string): Promise<void> => {
+    try {
+      await api.post(`/companies/consideration/${companyBin}`);
+    } catch (error) {
+      console.error('Failed to add company to consideration:', error);
+      throw error;
+    }
+  },
+
+  removeConsideration: async (companyBin: string): Promise<void> => {
+    try {
+      await api.delete(`/companies/consideration/${companyBin}`);
+    } catch (error) {
+      console.error('Failed to remove company from consideration:', error);
+      throw error;
+    }
+  },
 };
 
 // Chat API

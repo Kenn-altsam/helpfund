@@ -5,15 +5,39 @@ import { Button } from '@/components/ui/Button';
 import { CompanyCard } from '@/components/CompanyCard';
 import { useGlobalContext } from '@/context/GlobalContext';
 import { toast } from 'sonner';
+import React from 'react';
 
 export function ConsiderationPage() {
   const { t } = useTranslation();
   const { state, removeFromConsideration } = useGlobalContext();
   const { considerationList } = state;
+  const [loadingBin, setLoadingBin] = React.useState<string | null>(null);
+  const [clearing, setClearing] = React.useState(false);
 
-  const handleRemoveCompany = (bin: string) => {
-    removeFromConsideration(bin);
-    toast.success(t('consideration.companyRemoved'), { duration: 2000 });
+  const handleRemoveCompany = async (bin: string) => {
+    setLoadingBin(bin);
+    try {
+      await removeFromConsideration(bin);
+      toast.success(t('consideration.companyRemoved'), { duration: 2000 });
+    } catch (error) {
+      toast.error(t('consideration.removeError') || 'Failed to remove company', { duration: 2000 });
+    } finally {
+      setLoadingBin(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    setClearing(true);
+    try {
+      for (const company of considerationList) {
+        await removeFromConsideration(company.bin);
+      }
+      toast.success(t('consideration.cleared'), { duration: 2000 });
+    } catch (error) {
+      toast.error(t('consideration.clearError') || 'Failed to clear consideration list', { duration: 2000 });
+    } finally {
+      setClearing(false);
+    }
   };
 
   if (considerationList.length === 0) {
@@ -51,17 +75,14 @@ export function ConsiderationPage() {
               }
             </p>
           </div>
-          
           {considerationList.length > 0 && (
             <Button
               variant="outline"
-              onClick={() => {
-                considerationList.forEach(company => removeFromConsideration(company.bin));
-                toast.success(t('consideration.cleared'), { duration: 2000 });
-              }}
+              onClick={handleClearAll}
+              disabled={clearing}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              {t('consideration.clearAll')}
+              {clearing ? t('consideration.clearing') || t('consideration.clearAll') : t('consideration.clearAll')}
             </Button>
           )}
         </div>
@@ -76,8 +97,13 @@ export function ConsiderationPage() {
               size="sm"
               className="absolute top-2 right-2"
               onClick={() => handleRemoveCompany(company.bin)}
+              disabled={loadingBin === company.bin || clearing}
             >
-              <Trash2 className="h-4 w-4" />
+              {loadingBin === company.bin ? (
+                <span className="flex items-center"><span className="animate-spin mr-2 w-4 h-4 border-2 border-t-transparent border-white rounded-full"></span>{t('consideration.companyRemoved')}</span>
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
             </Button>
           </div>
         ))}

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { GlobalState, GlobalAction, Company } from '../types/index';
-import { authApi } from '@/services/api';
+import { authApi, companiesApi } from '@/services/api';
 
 const initialState: GlobalState = {
   history: [],
@@ -93,8 +93,8 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
 interface GlobalContextType {
   state: GlobalState;
   dispatch: React.Dispatch<GlobalAction>;
-  addToConsideration: (company: Company) => void;
-  removeFromConsideration: (bin: string) => void;
+  addToConsideration: (company: Company) => Promise<void>;
+  removeFromConsideration: (bin: string) => Promise<void>;
   isInConsideration: (bin: string) => boolean;
 }
 
@@ -102,7 +102,6 @@ const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(globalReducer, initialState);
-  const prevConsiderationList = useRef(state.considerationList);
   const userLoadAttempted = useRef(false);
   const loadRetryCount = useRef(0);
   const maxRetries = 3;
@@ -162,45 +161,61 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Load consideration list when user changes
+  // Load consideration list from backend when user changes
   useEffect(() => {
-    if (!state.user) return;
-
-    const key = `helpfund-consideration-${state.user.id}`;
-    const saved = localStorage.getItem(key);
-    let companies: Company[] = [];
-    if (saved) {
-      try {
-        companies = JSON.parse(saved);
-      } catch (error) {
-        console.error('Failed to parse consideration list:', error);
+    let isMounted = true;
+    const fetchConsiderationList = async () => {
+      if (!state.user) {
+        dispatch({ type: 'SET_CONSIDERATION_LIST', payload: [] });
+        return;
       }
-    }
-
-    dispatch({ type: 'SET_CONSIDERATION_LIST', payload: companies });
-    prevConsiderationList.current = companies;
+      try {
+        const bins = await companiesApi.getConsideration();
+        // Fetch company details for each BIN
+        const companies: Company[] = await Promise.all(
+          bins.map(async (bin) => {
+            try {
+              return await companiesApi.getDetails(bin);
+            } catch (e) {
+              // If company not found, skip
+              return null;
+            }
+          })
+        ).then(arr => arr.filter(Boolean) as Company[]);
+        if (isMounted) {
+          dispatch({ type: 'SET_CONSIDERATION_LIST', payload: companies });
+        }
+      } catch (error) {
+        console.error('Failed to load consideration list from backend:', error);
+        if (isMounted) {
+          dispatch({ type: 'SET_CONSIDERATION_LIST', payload: [] });
+        }
+      }
+    };
+    fetchConsiderationList();
+    return () => { isMounted = false; };
   }, [state.user]);
 
-  // Save consideration list to localStorage only when it changes and user is present
-  useEffect(() => {
+  const addToConsideration = async (company: Company) => {
     if (!state.user) return;
-
-    const currentList = JSON.stringify(state.considerationList);
-    const previousList = JSON.stringify(prevConsiderationList.current);
-
-    if (currentList !== previousList) {
-      const key = `helpfund-consideration-${state.user.id}`;
-      localStorage.setItem(key, currentList);
-      prevConsiderationList.current = state.considerationList;
+    try {
+      await companiesApi.addConsideration(company.bin);
+      dispatch({ type: 'ADD_CONSIDERATION', payload: company });
+    } catch (error) {
+      console.error('Failed to add company to consideration:', error);
+      throw error;
     }
-  }, [state.considerationList, state.user]);
-
-  const addToConsideration = (company: Company) => {
-    dispatch({ type: 'ADD_CONSIDERATION', payload: company });
   };
 
-  const removeFromConsideration = (bin: string) => {
-    dispatch({ type: 'REMOVE_CONSIDERATION', payload: bin });
+  const removeFromConsideration = async (bin: string) => {
+    if (!state.user) return;
+    try {
+      await companiesApi.removeConsideration(bin);
+      dispatch({ type: 'REMOVE_CONSIDERATION', payload: bin });
+    } catch (error) {
+      console.error('Failed to remove company from consideration:', error);
+      throw error;
+    }
   };
 
   const isInConsideration = (bin: string) => {
