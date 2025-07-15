@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { GlobalProvider } from '@/context/GlobalContext';
 import { Header } from '@/components/layout/Header';
@@ -44,6 +44,8 @@ function AppContent() {
               </ProtectedRoute>
             } 
           />
+          {/* Redirect /companies/consideration to /consideration to avoid treating 'consideration' as a companyId */}
+          <Route path="/companies/consideration" element={<Navigate to="/consideration" replace />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/register" element={<AuthPage />} />
         </Routes>
