@@ -11,6 +11,7 @@ from sqlalchemy import text
 import sys
 from pathlib import Path
 import logging
+import traceback
 
 from .service import CompanyService
 from ..core.database import get_db
@@ -162,7 +163,7 @@ async def get_company_details(
     """
     try:
         company_service = CompanyService(db)
-        company = await company_service.get_company_by_id(company_id)
+        company = company_service.get_company_by_id(company_id)  # Removed await
         
         if not company:
             raise HTTPException(
@@ -303,16 +304,20 @@ def get_consideration(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        logging.info(f"Fetching consideration list for user_id={current_user.id}")
+        logging.info(f"[CONSIDERATION] User ID: {current_user.id}")
+        logging.info(f"[CONSIDERATION] DB: {db}")
+        sql = "SELECT company_bin FROM consideration WHERE user_id = :uid"
+        logging.info(f"[CONSIDERATION] Executing SQL: {sql} with uid={str(current_user.id)}")
         rows = db.execute(
-            text("SELECT company_bin FROM consideration WHERE user_id = :uid"),
+            text(sql),
             {"uid": str(current_user.id)}
         ).fetchall()
         result = [row[0] for row in rows]
-        logging.info(f"Consideration list for user_id={current_user.id}: {result}")
+        logging.info(f"[CONSIDERATION] Result for user_id={current_user.id}: {result}")
         return result
     except Exception as e:
-        logging.error(f"Error fetching consideration list for user_id={current_user.id}: {e}")
+        logging.error(f"[CONSIDERATION] Error for user_id={current_user.id}: {e}")
+        logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to fetch consideration list: {e}")
 
 @router.post("/consideration/{company_bin}", status_code=status.HTTP_201_CREATED, summary="Add company to consideration")
