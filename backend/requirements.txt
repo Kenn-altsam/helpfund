@@ -39,3 +39,5 @@ email-validator>=2.0.0
 # Consider if these are truly needed in the backend container
 # playwright>=1.40.0
 # pandas>=2.0.0
+
+beautifulsoup4>=4.12.2
