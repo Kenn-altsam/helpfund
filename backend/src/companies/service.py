@@ -201,23 +201,22 @@ class CompanyService:
         return [self._company_to_dict(company) for company in companies]
 
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
-        """Converts a Company SQLAlchemy object to a dictionary."""
+        """Converts a Company SQLAlchemy object to a dictionary, always including all fields."""
         return {
-            "id": company.bin_number,
-            "name": company.company_name or "",
-            "bin": company.bin_number,
-            "activity": company.activity,
-            "locality": company.locality,
-            "size": company.company_size,
-            "oked": company.oked_code,
-            "kato": company.kato_code,
-            "krp": company.krp_code,
-            "tax_data_2023": company.tax_data_2023,
-            "tax_data_2024": company.tax_data_2024,
-            "tax_data_2025": company.tax_data_2025,
-            "contacts": company.contacts,
-            "website": company.website,
-            # No phone or email here
+            "id": getattr(company, "bin_number", None),
+            "name": getattr(company, "company_name", "") or "",
+            "bin": getattr(company, "bin_number", None),
+            "activity": getattr(company, "activity", None),
+            "locality": getattr(company, "locality", None),
+            "size": getattr(company, "company_size", None),
+            "oked": getattr(company, "oked_code", None),
+            "kato": getattr(company, "kato_code", None),
+            "krp": getattr(company, "krp_code", None),
+            "tax_data_2023": getattr(company, "tax_data_2023", None),
+            "tax_data_2024": getattr(company, "tax_data_2024", None),
+            "tax_data_2025": getattr(company, "tax_data_2025", None),
+            "contacts": getattr(company, "contacts", None),
+            "website": getattr(company, "website", None),
         }
 
     def get_total_company_count(self) -> int:
