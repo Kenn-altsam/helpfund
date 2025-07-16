@@ -33,6 +33,9 @@ def parse_and_update_ba_prg(
             try:
                 api_url = f"https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru"
                 resp = requests.get(api_url, timeout=10)
+                if resp.status_code == 404:
+                    logging.warning(f"No data for BIN={bin} (status 404)")
+                    continue
                 if resp.status_code != 200:
                     logging.warning(f"Failed to fetch {api_url} (status {resp.status_code})")
                     continue
