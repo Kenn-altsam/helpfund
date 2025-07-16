@@ -48,32 +48,28 @@ export function CompanyCard({ company }: CompanyCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Only show fields that exist on Company type */}
-        {company.tax_data_2023 !== undefined && (
-          <div className="text-xs">
-            <b>Tax 2023:</b> {company.tax_data_2023}
-          </div>
-        )}
-        {company.tax_data_2024 !== undefined && (
-          <div className="text-xs">
-            <b>Tax 2024:</b> {company.tax_data_2024}
-          </div>
-        )}
-        {company.tax_data_2025 !== undefined && (
-          <div className="text-xs">
-            <b>Tax 2025:</b> {company.tax_data_2025}
-          </div>
-        )}
-        {company.contacts && (
-          <div className="text-xs">
-            <b>Contacts:</b> {company.contacts}
-          </div>
-        )}
-        {company.website && (
-          <div className="text-xs">
-            <b>Website:</b> <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{company.website}</a>
-          </div>
-        )}
+        {/* Show tax_data_2023 */}
+        <div className="text-xs">
+          <b>Tax 2023:</b> {company.tax_data_2023 !== undefined && company.tax_data_2023 !== null ? company.tax_data_2023 : 'tax_data_2023 missing'}
+        </div>
+        {/* Show tax_data_2024 */}
+        <div className="text-xs">
+          <b>Tax 2024:</b> {company.tax_data_2024 !== undefined && company.tax_data_2024 !== null ? company.tax_data_2024 : 'tax_data_2024 missing'}
+        </div>
+        {/* Show tax_data_2025 */}
+        <div className="text-xs">
+          <b>Tax 2025:</b> {company.tax_data_2025 !== undefined && company.tax_data_2025 !== null ? company.tax_data_2025 : 'tax_data_2025 missing'}
+        </div>
+        {/* Show contacts */}
+        <div className="text-xs">
+          <b>Contacts:</b> {company.contacts !== undefined && company.contacts !== null && company.contacts !== '' ? company.contacts : 'contacts missing'}
+        </div>
+        {/* Show website */}
+        <div className="text-xs">
+          <b>Website:</b> {company.website !== undefined && company.website !== null && company.website !== '' ? (
+            <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{company.website}</a>
+          ) : 'website missing'}
+        </div>
       </CardContent>
 
       <CardFooter>
