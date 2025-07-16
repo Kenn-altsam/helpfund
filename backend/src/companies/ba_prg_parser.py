@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import requests
@@ -17,13 +17,15 @@ router = APIRouter(
 def parse_and_update_ba_prg(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    limit: int = Query(100, ge=1, le=500, description="Number of companies to process in this batch (default 100)"),
+    offset: int = Query(0, ge=0, description="Offset for batch processing (default 0)"),
 ):
     """
     TEMPORARY ENDPOINT: Fetches and parses data from ba.prg.kz API, updates company fields if NULL and API value is not null.
-    This endpoint is for one-time use and should be deleted after use.
+    Processes companies in batches using limit and offset.
     """
     try:
-        bin_rows = db.execute(text('SELECT "BIN" FROM companies')).fetchall()
+        bin_rows = db.execute(text('SELECT "BIN" FROM companies ORDER BY "BIN" OFFSET :offset LIMIT :limit'), {"offset": offset, "limit": limit}).fetchall()
         company_bins = [row[0] for row in bin_rows]
         updated = 0
         failed = 0
@@ -104,7 +106,7 @@ def parse_and_update_ba_prg(
                 db.rollback()
                 logging.error(f"Error processing BIN={bin}: {e}")
                 failed += 1
-        return {"message": f"Updated {updated} companies, failed {failed} (using ba.prg.kz API, nulls skipped)"}
+        return {"message": f"Updated {updated} companies, failed {failed} (using ba.prg.kz API, nulls skipped, batch: offset={offset}, limit={limit})"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Parser error: {e}") 
