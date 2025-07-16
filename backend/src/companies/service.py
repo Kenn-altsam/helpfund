@@ -8,9 +8,12 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 from uuid import UUID
+import logging
 
 from .models import Company
 from ..core.translation_service import CityTranslationService
+
+logging.basicConfig(level=logging.INFO)
 
 
 class CompanyService:
@@ -27,17 +30,7 @@ class CompanyService:
         limit: int = 10,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """
-        Searches for companies with flexible filtering and pagination.
-        Handles cases where location or activity keywords might be missing.
-        """
-        print(f"🗃️ [DB_SERVICE] Executing search query:")
-        print(f"   location: {location}")
-        print(f"   company_name: {company_name}")
-        print(f"   activity_keywords: {activity_keywords}")
-        print(f"   limit: {limit}")
-        print(f"   offset: {offset}")
-        
+        logging.info(f"[DB_SERVICE][SEARCH] location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}, offset={offset}")
         query = self.db.query(Company)
         filters = []
 
@@ -48,13 +41,13 @@ class CompanyService:
             # Use ilike for case-insensitive search
             location_filter = Company.locality.ilike(f"%{translated_location}%")
             filters.append(location_filter)
-            print(f"🔍 [DB_SERVICE] Added location filter: Locality ILIKE '%{translated_location}%' (original input: '{location}')")
+            logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%' (original input: '{location}')")
 
         # 2. Add company name filter if provided
         if company_name:
             name_filter = Company.company_name.ilike(f"%{company_name}%")
             filters.append(name_filter)
-            print(f"🔍 [DB_SERVICE] Added name filter: Company ILIKE '%{company_name}%'")
+            logging.info(f"[DB_SERVICE][SEARCH] Added name filter: Company ILIKE '%{company_name}%' ")
 
         # 3. Add activity filter if provided
         if activity_keywords and len(activity_keywords) > 0:
@@ -64,42 +57,41 @@ class CompanyService:
                 activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
             # Combine keyword filters with OR (e.g., "строительство" OR "ремонт")
             filters.append(or_(*activity_filters))
-            print(f"🔍 [DB_SERVICE] Added activity filters for keywords: {activity_keywords}")
+            logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
 
         # If we have any filters, apply them with AND
         if filters:
             query = query.filter(and_(*filters))
-            print(f"🔍 [DB_SERVICE] Applied {len(filters)} filters with AND")
+            logging.info(f"[DB_SERVICE][SEARCH] Applied {len(filters)} filters with AND")
         else:
-            print(f"⚠️ [DB_SERVICE] No filters applied - will return all companies")
+            logging.warning(f"[DB_SERVICE][SEARCH] No filters applied - will return all companies")
 
         # --- 4. CRITICAL PAGINATION LOGIC ---
         # A consistent order is REQUIRED for pagination (OFFSET) to work reliably.
         # We order by company name to ensure the same query always returns results
         # in the same sequence. Your model uses 'Company' for the name column.
         query = query.order_by(Company.company_name.asc())
-        print(f"🔄 [DB_SERVICE] Applied ORDER BY Company name ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY Company name ASC")
 
         # Apply the offset to skip previous pages' results, then apply the limit.
         results = query.offset(offset).limit(limit).all()
-        print(f"📊 [DB_SERVICE] Applied OFFSET {offset} LIMIT {limit}")
-        print(f"✅ [DB_SERVICE] Query executed, returned {len(results)} results")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied OFFSET {offset} LIMIT {limit}")
+        logging.info(f"[DB_SERVICE][SEARCH] Query executed, returned {len(results)} results")
         
         # --- DEBUG: Log first few results for verification ---
         if results:
-            print(f"🏢 [DB_SERVICE] First few results:")
             for i, result in enumerate(results[:3]):
-                print(f"   {i+1}. {result.company_name} (BIN: {result.bin_number})")
+                logging.info(f"[DB_SERVICE][SEARCH] Result {i+1}: {result.company_name} (BIN: {result.bin_number})")
             if len(results) > 3:
-                print(f"   ... and {len(results) - 3} more")
+                logging.info(f"[DB_SERVICE][SEARCH] ... and {len(results) - 3} more")
         else:
-            print(f"⚠️ [DB_SERVICE] No results returned from database")
+            logging.warning(f"[DB_SERVICE][SEARCH] No results returned from database")
         
         # --- END OF PAGINATION LOGIC ---
 
         # Convert SQLAlchemy objects to dictionaries for the AI service
         converted_results = [self._company_to_dict(c) for c in results]
-        print(f"🔄 [DB_SERVICE] Converted {len(converted_results)} results to dictionaries")
+        logging.info(f"[DB_SERVICE][SEARCH] Converted {len(converted_results)} results to dictionaries")
         return converted_results
 
     def get_companies_by_location(
@@ -108,6 +100,7 @@ class CompanyService:
         limit: int = 50,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
+        logging.info(f"[DB_SERVICE][BY_LOCATION] location={location}, limit={limit}, offset={offset}")
         """
         Get companies by specific location
         
@@ -126,9 +119,11 @@ class CompanyService:
         )
         
         companies = query.order_by(Company.company_name.asc()).offset(offset).limit(limit).all()
+        logging.info(f"[DB_SERVICE][BY_LOCATION] Query returned {len(companies)} companies")
         return [self._company_to_dict(company) for company in companies]
 
     def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
+        logging.info(f"[DB_SERVICE][DETAILS] company_id={company_id}")
         """
         Get company by ID
         
@@ -144,13 +139,17 @@ class CompanyService:
             ).first()
             
             if company:
+                logging.info(f"[DB_SERVICE][DETAILS] Company found: {company.company_name} (BIN: {company.bin_number})")
                 return self._company_to_dict(company)
+            logging.warning(f"[DB_SERVICE][DETAILS] Company not found: {company_id}")
             return None
             
-        except Exception:
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][DETAILS] Error: {e}")
             return None
 
     def get_all_locations(self) -> List[Dict[str, Any]]:
+        logging.info(f"[DB_SERVICE][LOCATIONS] Getting all locations with company counts")
         """
         Get all unique locations with company counts
         
@@ -163,7 +162,7 @@ class CompanyService:
         ).group_by(Company.locality).order_by(
             func.count(Company.bin_number).desc()
         ).all()
-        
+        logging.info(f"[DB_SERVICE][LOCATIONS] Query returned {len(result)} locations")
         return [
             {
                 'location': row.locality,

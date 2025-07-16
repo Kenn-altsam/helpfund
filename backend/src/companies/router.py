@@ -36,6 +36,8 @@ router = APIRouter(
     }
 )
 
+logging.basicConfig(level=logging.INFO)
+
 
 @router.get(
     "/search",
@@ -72,6 +74,7 @@ async def search_companies(
     Returns:
         List of companies matching the criteria
     """
+    logging.info(f"[COMPANIES][SEARCH] Request: location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}")
     try:
         company_service = CompanyService(db)
         companies = await company_service.search_companies(
@@ -80,6 +83,7 @@ async def search_companies(
             activity_keywords=activity_keywords,
             limit=limit
         )
+        logging.info(f"[COMPANIES][SEARCH] Found {len(companies)} companies")
         
         return APIResponse(
             status="success",
@@ -88,6 +92,8 @@ async def search_companies(
         )
         
     except Exception as e:
+        logging.error(f"[COMPANIES][SEARCH] Error: {e}")
+        logging.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to search companies: {str(e)}"
@@ -117,11 +123,14 @@ async def get_companies_by_location(
     Returns:
         List of companies in the specified location
     """
+    logging.info(f"[COMPANIES][BY_LOCATION] Request: location={location}, limit={limit}, offset={offset}")
     try:
         company_service = CompanyService(db)
         companies = await company_service.get_companies_by_location(location, limit, offset)
+        logging.info(f"[COMPANIES][BY_LOCATION] Found {len(companies)} companies in {location}")
         
         if not companies:
+            logging.warning(f"[COMPANIES][BY_LOCATION] No companies found in location: {location}")
             raise HTTPException(
                 status_code=404,
                 detail=f"No companies found in location: {location}"
@@ -136,6 +145,8 @@ async def get_companies_by_location(
     except HTTPException:
         raise
     except Exception as e:
+        logging.error(f"[COMPANIES][BY_LOCATION] Error: {e}")
+        logging.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get companies by location: {str(e)}"
@@ -215,15 +226,18 @@ async def get_company_details(
     Returns:
         Detailed company information
     """
+    logging.info(f"[COMPANIES][DETAILS] Request: company_id={company_id}")
     try:
         company_service = CompanyService(db)
         company = company_service.get_company_by_id(company_id)  # Removed await
         
         if not company:
+            logging.warning(f"[COMPANIES][DETAILS] Company not found: {company_id}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Company not found with ID: {company_id}"
             )
+        logging.info(f"[COMPANIES][DETAILS] Company details retrieved for {company_id}")
             
         return APIResponse(
             status="success",
@@ -234,6 +248,8 @@ async def get_company_details(
     except HTTPException:
         raise
     except Exception as e:
+        logging.error(f"[COMPANIES][DETAILS] Error: {e}")
+        logging.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get company details: {str(e)}"
@@ -257,9 +273,11 @@ async def get_locations(
     Returns:
         List of locations with company counts
     """
+    logging.info(f"[COMPANIES][LOCATIONS] Request: get all locations")
     try:
         company_service = CompanyService(db)
         locations = await company_service.get_all_locations()
+        logging.info(f"[COMPANIES][LOCATIONS] Found {len(locations)} locations")
         
         return APIResponse(
             status="success",
@@ -268,6 +286,8 @@ async def get_locations(
         )
         
     except Exception as e:
+        logging.error(f"[COMPANIES][LOCATIONS] Error: {e}")
+        logging.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get locations: {str(e)}"
