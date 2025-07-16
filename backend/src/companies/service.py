@@ -212,6 +212,14 @@ class CompanyService:
             "oked": company.oked_code,
             "kato": company.kato_code,
             "krp": company.krp_code,
+            "tax_data_2023": company.tax_payment_2023,
+            "tax_data_2024": company.tax_payment_2024,
+            "tax_data_2025": company.tax_payment_2025,
+            "contacts": {
+                "phone": company.phone,
+                "email": company.email
+            },
+            "website": company.website,
         }
 
     def get_total_company_count(self) -> int:

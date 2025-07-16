@@ -40,6 +40,7 @@ def upgrade() -> None:
     sa.Column('executive', sa.String(length=255), nullable=True),
     sa.Column('phone', sa.String(length=100), nullable=True),
     sa.Column('email', sa.String(length=255), nullable=True),
+    sa.Column('website', sa.String(length=255), nullable=True),
     sa.PrimaryKeyConstraint('BIN')
     )
     op.create_index(op.f('ix_companies_Activity'), 'companies', ['Activity'], unique=False)
@@ -91,4 +92,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_companies_Company'), table_name='companies')
     op.drop_index(op.f('ix_companies_Activity'), table_name='companies')
     op.drop_table('companies')
+    # In downgrade, drop the website column if it exists
     # ### end Alembic commands ###

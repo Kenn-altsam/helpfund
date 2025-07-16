@@ -6,7 +6,7 @@ SQLAlchemy models for companies
 Defines the database schema for company data.
 """
 
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, Float
 # NOTE: Removed unused imports like Integer, Float, Date, etc.
 
 # Make sure you import 'Base' from your database setup file
@@ -29,6 +29,13 @@ class Company(Base):
     locality = Column("Locality", String(100), index=True)
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
+    
+    tax_payment_2023 = Column("tax_payment_2023", Float, nullable=True)
+    tax_payment_2024 = Column("tax_payment_2024", Float, nullable=True)
+    tax_payment_2025 = Column("tax_payment_2025", Float, nullable=True)
+    phone = Column("phone", String(100), nullable=True)
+    email = Column("email", String(255), nullable=True)
+    website = Column("website", String(255), nullable=True)
     
     # --- REMOVED columns that DO NOT exist in your database ---
     # The following fields were causing the "UndefinedColumn" errors and have been deleted.

@@ -23,6 +23,14 @@ export interface Company {
   locality: string;
   krp: string;
   size: string;
+  tax_data_2023?: number;
+  tax_data_2024?: number;
+  tax_data_2025?: number;
+  contacts?: {
+    phone?: string;
+    email?: string;
+  };
+  website?: string;
 }
 
 export interface ChatHistoryItem {
