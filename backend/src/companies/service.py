@@ -67,11 +67,9 @@ class CompanyService:
             logging.warning(f"[DB_SERVICE][SEARCH] No filters applied - will return all companies")
 
         # --- 4. CRITICAL PAGINATION LOGIC ---
-        # A consistent order is REQUIRED for pagination (OFFSET) to work reliably.
-        # We order by company name to ensure the same query always returns results
-        # in the same sequence. Your model uses 'Company' for the name column.
-        query = query.order_by(Company.company_name.asc())
-        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY Company name ASC")
+        # Sort by length of tax_data_2025 DESC, then by company name ASC for tie-breaker
+        query = query.order_by(func.length(Company.tax_data_2025).desc().nullslast(), Company.company_name.asc())
+        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY LENGTH(tax_data_2025) DESC, Company name ASC")
 
         # Apply the offset to skip previous pages' results, then apply the limit.
         results = query.offset(offset).limit(limit).all()
@@ -91,7 +89,6 @@ class CompanyService:
 
         # Convert SQLAlchemy objects to dictionaries for the AI service
         converted_results = [self._company_to_dict(c) for c in results]
-        logging.info(f"[DB_SERVICE][SEARCH] Converted {len(converted_results)} results to dictionaries")
         return converted_results
 
     def get_companies_by_location(
@@ -118,9 +115,10 @@ class CompanyService:
             Company.locality.ilike(f'%{translated_location}%')
         )
         
-        companies = query.order_by(Company.company_name.asc()).offset(offset).limit(limit).all()
+        companies = query.order_by(func.length(Company.tax_data_2025).desc().nullslast(), Company.company_name.asc()).offset(offset).limit(limit).all()
         logging.info(f"[DB_SERVICE][BY_LOCATION] Query returned {len(companies)} companies")
-        return [self._company_to_dict(company) for company in companies]
+        result_dicts = [self._company_to_dict(company) for company in companies]
+        return result_dicts
 
     def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
         logging.info(f"[DB_SERVICE][DETAILS] company_id={company_id}")
