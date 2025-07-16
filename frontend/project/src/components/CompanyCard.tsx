@@ -48,37 +48,30 @@ export function CompanyCard({ company }: CompanyCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {/* Only show fields that exist on Company type */}
         {company.tax_data_2023 !== undefined && (
           <div className="text-xs">
-            <strong>Tax 2023:</strong> {company.tax_data_2023}
+            <b>Tax 2023:</b> {company.tax_data_2023}
           </div>
         )}
         {company.tax_data_2024 !== undefined && (
           <div className="text-xs">
-            <strong>Tax 2024:</strong> {company.tax_data_2024}
+            <b>Tax 2024:</b> {company.tax_data_2024}
           </div>
         )}
         {company.tax_data_2025 !== undefined && (
           <div className="text-xs">
-            <strong>Tax 2025:</strong> {company.tax_data_2025}
+            <b>Tax 2025:</b> {company.tax_data_2025}
           </div>
         )}
-        {company.contacts && (company.contacts.phone || company.contacts.email) && (
+        {company.contacts && (
           <div className="text-xs">
-            <strong>Contacts:</strong>
-            <div className="ml-2">
-              {company.contacts.phone && (
-                <div>📞 {company.contacts.phone}</div>
-              )}
-              {company.contacts.email && (
-                <div>✉️ {company.contacts.email}</div>
-              )}
-            </div>
+            <b>Contacts:</b> {company.contacts}
           </div>
         )}
         {company.website && (
           <div className="text-xs">
-            <strong>Website:</strong> <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{company.website}</a>
+            <b>Website:</b> <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{company.website}</a>
           </div>
         )}
       </CardContent>

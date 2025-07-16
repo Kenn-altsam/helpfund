@@ -37,6 +37,12 @@ export function CompanyCardSkeleton() {
             <Skeleton className="h-4 w-32" />
           </div>
         </div>
+        {/* Extra skeletons for new fields */}
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </CardContent>
 
       <CardFooter>

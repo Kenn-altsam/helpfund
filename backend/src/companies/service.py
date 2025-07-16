@@ -215,11 +215,9 @@ class CompanyService:
             "tax_data_2023": company.tax_data_2023,
             "tax_data_2024": company.tax_data_2024,
             "tax_data_2025": company.tax_data_2025,
-            "contacts": {
-                "phone": company.phone,
-                "email": company.email
-            },
+            "contacts": company.contacts,
             "website": company.website,
+            # No phone or email here
         }
 
     def get_total_company_count(self) -> int:

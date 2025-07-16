@@ -26,10 +26,7 @@ export interface Company {
   tax_data_2023?: number;
   tax_data_2024?: number;
   tax_data_2025?: number;
-  contacts?: {
-    phone?: string;
-    email?: string;
-  };
+  contacts?: string;
   website?: string;
 }
 

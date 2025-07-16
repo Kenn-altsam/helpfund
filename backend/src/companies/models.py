@@ -29,27 +29,15 @@ class Company(Base):
     locality = Column("Locality", String(100), index=True)
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
-    
+
     tax_data_2023 = Column("tax_data_2023", Float, nullable=True)
     tax_data_2024 = Column("tax_data_2024", Float, nullable=True)
     tax_data_2025 = Column("tax_data_2025", Float, nullable=True)
-    phone = Column("phone", String(100), nullable=True)
-    email = Column("email", String(255), nullable=True)
+    contacts = Column("contacts", String(255), nullable=True)
     website = Column("website", String(255), nullable=True)
     
     # --- REMOVED columns that DO NOT exist in your database ---
-    # The following fields were causing the "UndefinedColumn" errors and have been deleted.
-    
-    # REMOVED: location = Column("location", ...)
-    # REMOVED: tax_payment_2021 = Column(Float)
-    # REMOVED: tax_payment_2022 = Column(Float)
-    # REMOVED: tax_payment_2023 = Column(Float)
-    # REMOVED: tax_payment_2024 = Column(Float)
-    # REMOVED: tax_payment_2025 = Column(Float)
-    # REMOVED: degreeofrisk = Column(String(100))
-    # REMOVED: executive = Column(String(255))
-    # REMOVED: phone = Column(String(100))
-    # REMOVED: email = Column(String(255))
+    # (No need to mention phone or email anymore)
     
     def __repr__(self):
         return f"<Company(company_name='{self.company_name}', bin_number='{self.bin_number}')>"
