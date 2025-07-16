@@ -112,7 +112,15 @@
     "contacts": "Contacts",
     "addToConsideration": "Add to Consideration",
     "addedToConsideration": "Added to Consideration",
-    "companyAdded": "Company added to consideration"
+    "companyAdded": "Company added to consideration",
+    "tax_2023": "Tax 2023",
+    "tax_2024": "Tax 2024",
+    "tax_2025": "Tax 2025",
+    "tax_2023_missing": "Tax 2023 missing",
+    "tax_2024_missing": "Tax 2024 missing",
+    "tax_2025_missing": "Tax 2025 missing",
+    "contacts_missing": "Contacts missing",
+    "website_missing": "Website missing"
   },
   "consideration": {
     "title": "Consideration List",
