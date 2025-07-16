@@ -30,9 +30,9 @@ class Company(Base):
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
     
-    tax_payment_2023 = Column("tax_payment_2023", Float, nullable=True)
-    tax_payment_2024 = Column("tax_payment_2024", Float, nullable=True)
-    tax_payment_2025 = Column("tax_payment_2025", Float, nullable=True)
+    tax_data_2023 = Column("tax_data_2023", Float, nullable=True)
+    tax_data_2024 = Column("tax_data_2024", Float, nullable=True)
+    tax_data_2025 = Column("tax_data_2025", Float, nullable=True)
     phone = Column("phone", String(100), nullable=True)
     email = Column("email", String(255), nullable=True)
     website = Column("website", String(255), nullable=True)
