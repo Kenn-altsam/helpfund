@@ -350,8 +350,3 @@ async def translate_city_name(
         )
 
 
-# --- TEMPORARY: Register ba.prg.kz parser router (easy to remove) ---
-from .ba_prg_parser import router as ba_prg_parser_router
-router.include_router(ba_prg_parser_router)
-
-
