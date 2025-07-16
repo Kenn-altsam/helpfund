@@ -223,9 +223,16 @@ class CharityFundAssistant:
                                         "name": company_dict.get("name"),
                                         "bin": company_dict.get("bin"),
                                         "activity": company_dict.get("activity"),
-                                        "location": company_dict.get("locality"),
-                                        "oked": company_dict.get("oked_code"),
-                                        "size": company_dict.get("company_size"),
+                                        "locality": company_dict.get("locality"),
+                                        "size": company_dict.get("size"),
+                                        "oked": company_dict.get("oked"),
+                                        "kato": company_dict.get("kato"),
+                                        "krp": company_dict.get("krp"),
+                                        "tax_data_2023": company_dict.get("tax_data_2023"),
+                                        "tax_data_2024": company_dict.get("tax_data_2024"),
+                                        "tax_data_2025": company_dict.get("tax_data_2025"),
+                                        "contacts": company_dict.get("contacts"),
+                                        "website": company_dict.get("website"),
                                     }
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)
