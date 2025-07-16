@@ -66,8 +66,20 @@ export function CompanyCard({ company }: CompanyCardProps) {
         </div>
         {/* Show website */}
         <div className="text-xs">
-          <b>{t("company.website")}:</b> {company.website !== undefined && company.website !== null && company.website !== '' ? (
-            <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{company.website}</a>
+          <b>{t("company.website")}:</b>{" "}
+          {company.website !== undefined && company.website !== null && company.website !== '' ? (
+            <a
+              href={
+                company.website.startsWith('http://') || company.website.startsWith('https://')
+                  ? company.website
+                  : `https://${company.website}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 underline"
+            >
+              {company.website}
+            </a>
           ) : t("company.website_missing")}
         </div>
       </CardContent>
