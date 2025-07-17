@@ -213,7 +213,7 @@ class CharityFundAssistant:
                                 if offset is None:
                                     # Get chat_id from context (you should have it in the function or pass it in)
                                     chat_id = ...  # <-- get this from your context/request/session
-                                    from backend.src.ai_conversation.service import ChatService  # adjust import if needed
+                                    from .service import ChatService  # adjust import if needed
                                     chat_service = ChatService()
                                     prev_search_calls = chat_service.count_search_requests(db, chat_id)
                                     # Subtract 1 if this is the first search in this request (so first search is offset=0)
