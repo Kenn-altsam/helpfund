@@ -209,31 +209,21 @@ class CharityFundAssistant:
                             try:
                                 company_service = CompanyService(db)
                                 limit = int(function_args.get("limit", 50))
-                                # Fallback: determine page/offset if missing
-                                page = function_args.get("page")
                                 offset = function_args.get("offset")
                                 if offset is None:
-                                    # Try to infer page/offset from thread history
-                                    # Fetch all previous tool calls in this thread
-                                    # (Assume self.client is OpenAI client)
-                                    prev_search_calls = 0
-                                    try:
-                                        messages = self.client.beta.threads.messages.list(thread_id=thread_id)
-                                        for msg in messages.data:
-                                            for content in msg.content:
-                                                if hasattr(content, 'tool_calls'):
-                                                    for tool_call in content.tool_calls:
-                                                        if getattr(tool_call.function, 'name', None) == 'search_companies':
-                                                            prev_search_calls += 1
-                                    except Exception as e:
-                                        print(f"[Pagination Fallback] Could not fetch thread messages: {e}")
-                                    # The current call is not yet counted, so offset = prev_search_calls * limit
-                                    offset = prev_search_calls * limit
+                                    # Get chat_id from context (you should have it in the function or pass it in)
+                                    chat_id = ...  # <-- get this from your context/request/session
+                                    from backend.src.ai_conversation.service import ChatService  # adjust import if needed
+                                    chat_service = ChatService()
+                                    prev_search_calls = chat_service.count_search_requests(db, chat_id)
+                                    # Subtract 1 if this is the first search in this request (so first search is offset=0)
+                                    offset = max(0, (prev_search_calls - 1) * limit)
                                     print(f"[Pagination Fallback] Calculated offset={offset} (prev_search_calls={prev_search_calls}, limit={limit})")
                                 else:
                                     offset = int(offset)
                                 companies = company_service.search_companies(
                                     location=function_args.get("location"),
+                                    company_name=function_args.get("company_name"),
                                     activity_keywords=function_args.get("activity_keywords"),
                                     limit=limit,
                                     offset=offset
@@ -259,6 +249,7 @@ class CharityFundAssistant:
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)
                                 
+                                page = (offset // limit) + 1 if limit else 1
                                 result = {"companies": formatted_companies, "total_found": len(formatted_companies), "search_criteria": function_args, "page": page, "limit": limit}
                                 tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(result, ensure_ascii=False)})
                                 print(f"✅ Search completed: {len(formatted_companies)} companies found")
