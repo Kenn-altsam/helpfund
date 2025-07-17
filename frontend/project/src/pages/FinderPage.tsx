@@ -20,26 +20,6 @@ interface Message {
   createdAt?: number | string;
 }
 
-// Helper to get/set last companies list in sessionStorage
-function saveLastCompaniesList(threadId: string | null, companies: Company[]) {
-  if (threadId) {
-    sessionStorage.setItem('lastCompaniesList_' + threadId, JSON.stringify(companies));
-  }
-}
-
-// Move the getLastCompaniesList function definition above the useEffect that uses it, so it is in scope.
-function getLastCompaniesList(threadId: string | null): Company[] {
-  if (threadId) {
-    const data = sessionStorage.getItem('lastCompaniesList_' + threadId);
-    if (data) {
-      try {
-        return JSON.parse(data);
-      } catch {}
-    }
-  }
-  return [];
-}
-
 export function FinderPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -167,36 +147,6 @@ export function FinderPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, user]);
-
-  // Add after all imports
-  useEffect(() => {
-    // Find last assistant message with companies
-    const lastAssistant = [...messages].reverse().find(m => m.type === 'assistant' && m.companies && m.companies.length > 0);
-    if (lastAssistant && threadId) {
-      saveLastCompaniesList(threadId, lastAssistant.companies!);
-    }
-  }, [messages, threadId]);
-
-  useEffect(() => {
-    if (threadId) {
-      // Only restore if there are no assistant messages with companies
-      const hasCompanies = messages.some(m => m.type === 'assistant' && m.companies && m.companies.length > 0);
-      if (!hasCompanies) {
-        const fallbackCompanies = getLastCompaniesList(threadId);
-        if (fallbackCompanies.length > 0) {
-          setMessages([
-            {
-              id: generateId(),
-              type: 'assistant',
-              content: t('finder.response', { count: fallbackCompanies.length }),
-              companies: fallbackCompanies,
-            },
-          ]);
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
 
   /* ------------------------------ Handlers ------------------------------ */
   const handleSendMessage = async () => {
@@ -334,8 +284,14 @@ export function FinderPage() {
         createdAt: h.created_at ?? Date.now(),
       }));
 
-      // Remove fallback logic that tries to use aiResponse if companies is missing
-      // Always rely on companies from backend
+      const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
+      if (
+        lastAssistant &&
+        (lastAssistant.companies?.length ?? 0) === 0 &&
+        item.aiResponse?.length
+      ) {
+        lastAssistant.companies = item.aiResponse;
+      }
 
       setThreadId(item.threadId || '');
       setAssistantId(item.assistantId || '');
