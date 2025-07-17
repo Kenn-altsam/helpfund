@@ -334,14 +334,8 @@ export function FinderPage() {
         createdAt: h.created_at ?? Date.now(),
       }));
 
-      const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
-      if (
-        lastAssistant &&
-        (lastAssistant.companies?.length ?? 0) === 0 &&
-        item.aiResponse?.length
-      ) {
-        lastAssistant.companies = item.aiResponse;
-      }
+      // Remove fallback logic that tries to use aiResponse if companies is missing
+      // Always rely on companies from backend
 
       setThreadId(item.threadId || '');
       setAssistantId(item.assistantId || '');

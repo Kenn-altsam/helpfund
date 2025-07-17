@@ -294,7 +294,7 @@ class CharityFundAssistant:
 
     def get_conversation_history(self, thread_id: str) -> List[Dict[str, Any]]:
         """
-        Get all messages from a conversation thread, including metadata.
+        Get all messages from a conversation thread, including metadata and companies.
         """
         try:
             messages = self.client.beta.threads.messages.list(thread_id=thread_id)
@@ -302,17 +302,26 @@ class CharityFundAssistant:
             for msg in messages.data:
                 content = msg.content[0].text.value if msg.content else ""
                 metadata = msg.metadata if msg.metadata else {}
-                
                 # Try to parse metadata values back from JSON strings if they were stringified
                 parsed_metadata = {}
                 for key, value in metadata.items():
                     try:
-                        # Attempt to load value as JSON, if it fails, keep it as a string
                         parsed_metadata[key] = json.loads(value)
                     except (json.JSONDecodeError, TypeError):
                         parsed_metadata[key] = value
-
-                history.append({"role": msg.role, "content": content, "metadata": parsed_metadata})
+                # --- Add companies extraction logic ---
+                companies = []
+                # Try both 'companies' and 'companies_found' keys
+                if 'companies' in parsed_metadata and isinstance(parsed_metadata['companies'], list):
+                    companies = parsed_metadata['companies']
+                elif 'companies_found' in parsed_metadata and isinstance(parsed_metadata['companies_found'], list):
+                    companies = parsed_metadata['companies_found']
+                history.append({
+                    "role": msg.role,
+                    "content": content,
+                    "companies": companies,
+                    "metadata": parsed_metadata
+                })
             return history
         except Exception as e:
             print(f"❌ Error getting conversation history: {str(e)}")
