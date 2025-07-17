@@ -207,9 +207,29 @@ class CharityFundAssistant:
                             try:
                                 company_service = CompanyService(db)
                                 limit = int(function_args.get("limit", 50))
-                                page = function_args.get("page", 1)
-                                offset = (page - 1) * limit
-
+                                # Fallback: determine page/offset if missing
+                                page = function_args.get("page")
+                                offset = function_args.get("offset")
+                                if offset is None:
+                                    # Try to infer page/offset from thread history
+                                    # Fetch all previous tool calls in this thread
+                                    # (Assume self.client is OpenAI client)
+                                    prev_search_calls = 0
+                                    try:
+                                        messages = self.client.beta.threads.messages.list(thread_id=thread_id)
+                                        for msg in messages.data:
+                                            for content in msg.content:
+                                                if hasattr(content, 'tool_calls'):
+                                                    for tool_call in content.tool_calls:
+                                                        if getattr(tool_call.function, 'name', None) == 'search_companies':
+                                                            prev_search_calls += 1
+                                    except Exception as e:
+                                        print(f"[Pagination Fallback] Could not fetch thread messages: {e}")
+                                    # The current call is not yet counted, so offset = prev_search_calls * limit
+                                    offset = prev_search_calls * limit
+                                    print(f"[Pagination Fallback] Calculated offset={offset} (prev_search_calls={prev_search_calls}, limit={limit})")
+                                else:
+                                    offset = int(offset)
                                 companies = company_service.search_companies(
                                     location=function_args.get("location"),
                                     activity_keywords=function_args.get("activity_keywords"),
