@@ -77,7 +77,7 @@ async def search_companies(
     logging.info(f"[COMPANIES][SEARCH] Request: location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}")
     try:
         company_service = CompanyService(db)
-        companies = await company_service.search_companies(
+        companies = company_service.search_companies(
             location=location,
             company_name=company_name,
             activity_keywords=activity_keywords,
@@ -126,7 +126,7 @@ async def get_companies_by_location(
     logging.info(f"[COMPANIES][BY_LOCATION] Request: location={location}, limit={limit}, offset={offset}")
     try:
         company_service = CompanyService(db)
-        companies = await company_service.get_companies_by_location(location, limit, offset)
+        companies = company_service.get_companies_by_location(location, limit, offset)
         logging.info(f"[COMPANIES][BY_LOCATION] Found {len(companies)} companies in {location}")
         
         if not companies:
