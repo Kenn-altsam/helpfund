@@ -100,10 +100,10 @@ export const companiesApi = {
     }
   },
 
-  getByLocation: async (location: string, limit: number = 50, offset: number = 0) => {
+  getByLocation: async (location: string, limit: number = 50) => {
     try {
       const response = await api.get(`/companies/by-location/${encodeURIComponent(location)}`, {
-        params: { limit, offset }
+        params: { limit }
       });
       return response.data.data.map(transformCompanyData);
     } catch (error) {

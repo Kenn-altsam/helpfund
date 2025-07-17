@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { ChatMessage } from '@/components/ChatMessage';
 import { ChatHistory } from '@/components/ChatHistory';
 import { useGlobalContext } from '@/context/GlobalContext';
-import { chatApi, historyApi, companiesApi } from '@/services/api';
+import { chatApi, historyApi } from '@/services/api';
 import { ChatHistoryItem, Company } from '@/types';
 import { generateId } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -34,37 +34,6 @@ export function FinderPage() {
   // --- 💡 ИЗМЕНЕНИЕ 1: Читаем начальные значения из sessionStorage ---
   const [assistantId, setAssistantId] = useState<string | null>(() => sessionStorage.getItem('activeAssistantId'));
   const [threadId, setThreadId] = useState<string | null>(() => sessionStorage.getItem('activeThreadId'));
-
-  const [searchContext, setSearchContext] = useState<{
-    city: string;
-    limit: number;
-    offset: number;
-    companies: Company[];
-  }>({
-    city: '',
-    limit: 30,
-    offset: 0,
-    companies: [],
-  });
-
-  function isMoreRequest(input: string) {
-    const triggers = [
-      'еще', 'добавь', 'покажи еще', 'more', 'add more',
-      'тағы', 'тағы да', 'тағы көрсет', 'тағы қос', 'тағы жібер', 'тағы 15', 'тағы 10', 'тағы 5', 'тағы 20', 'тағы 30'
-    ];
-    return triggers.some(trigger => input.toLowerCase().includes(trigger));
-  }
-
-  function parseLimitFromInput(input: string) {
-    const match = input.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : null;
-  }
-
-  function parseCityFromInput(input: string) {
-    // Very basic: looks for "в <город>"
-    const match = input.match(/в\s+([А-Яа-яA-Za-z\-]+)/);
-    return match ? match[1] : '';
-  }
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -193,48 +162,29 @@ export function FinderPage() {
     setIsLoading(true);
 
     try {
-      if (isMoreRequest(currentInput)) {
-        // User wants more companies
-        const moreCount = parseLimitFromInput(currentInput) || 15;
-        const newOffset = searchContext.offset + searchContext.limit;
-        const moreCompanies = await companiesApi.getByLocation(
-          searchContext.city,
-          moreCount,
-          newOffset
-        );
-        setSearchContext(ctx => ({
-          ...ctx,
-          companies: [...ctx.companies, ...moreCompanies],
-          offset: newOffset,
-          limit: moreCount,
+      const previousMessages = messages
+        .filter(m => m.type === 'user' || m.type === 'assistant')
+        .map(m => ({
+          role: m.type as 'user' | 'assistant',
+          content: m.content || '',
         }));
-        setMessages(prev => {
-          const withoutLoading = prev.filter(m => m.type !== 'loading');
-          return [
-            ...withoutLoading,
-            {
-              id: generateId(),
-              type: 'assistant',
-              content: `Добавлено еще ${moreCompanies.length} компаний.`,
-              companies: moreCompanies,
-            },
-          ];
-        });
-        setIsLoading(false);
-        inputRef.current?.focus();
-        return;
-      }
 
-      // New search
-      const city = parseCityFromInput(currentInput);
-      const limit = parseLimitFromInput(currentInput) || 30;
-      const companies = await companiesApi.getByLocation(city, limit, 0);
-      setSearchContext({
-        city,
-        limit,
-        offset: 0,
-        companies,
-      });
+      const requestPayload = {
+        user_input: currentInput,
+        history: previousMessages,
+        assistant_id: assistantId || undefined,
+        thread_id: threadId || undefined,
+      };
+
+      console.log('[handleSendMessage] Sending request to chatApi.sendMessage:', requestPayload);
+      const response = await chatApi.sendMessage(requestPayload);
+      console.log('[handleSendMessage] Received response:', response);
+
+      // Persist IDs returned by backend
+      if (response.assistant_id) setAssistantId(response.assistant_id);
+      if (response.thread_id) setThreadId(response.thread_id);
+
+      // Replace loading message with assistant response
       setMessages(prev => {
         const withoutLoading = prev.filter(m => m.type !== 'loading');
         return [
@@ -242,18 +192,57 @@ export function FinderPage() {
           {
             id: generateId(),
             type: 'assistant',
-            content: `Найдено ${companies.length} компаний в ${city}.`,
-            companies: companies,
+            content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
+            companies: response.companies || [],
           },
         ];
       });
-      setIsLoading(false);
-      inputRef.current?.focus();
+
+      /* --------------------- HISTORY MANAGEMENT --------------------- */
+      const effectiveThreadId = response.thread_id || threadId;
+      if (effectiveThreadId) {
+        const existingChat = globalHistory.find(h => h.threadId === effectiveThreadId);
+
+        // Persist full history item in backend
+        const payload: any = {
+          userPrompt: currentInput,
+          rawAiResponse: response.rawCompanies || [],
+          created_at: new Date().toISOString(),
+          threadId: effectiveThreadId,
+          assistantId: response.assistant_id || assistantId || '',
+        };
+        if (existingChat) {
+          payload.id = existingChat.id;
+        }
+        console.log('[handleSendMessage] Saving history with payload:', payload);
+        await historyApi.saveHistory(payload);
+
+        const updatedHistoryItem: ChatHistoryItem = {
+          id: existingChat?.id || generateId(),
+          userPrompt: currentInput,
+          aiResponse: response.companies || [],
+          created_at: new Date().toISOString(),
+          threadId: effectiveThreadId,
+          assistantId: response.assistant_id || assistantId || '',
+        };
+
+        if (existingChat) {
+          dispatch({ type: 'UPDATE_HISTORY', payload: updatedHistoryItem });
+        } else {
+          dispatch({ type: 'ADD_HISTORY', payload: updatedHistoryItem });
+        }
+      }
+
+      if (response.companies?.length) {
+        toast.success(t('finder.companiesFound', { count: response.companies.length }), { duration: 2000 });
+      }
     } catch (error) {
+      console.error('[handleSendMessage] Failed to send message:', error);
       setMessages(prev => prev.filter(m => m.type !== 'loading'));
+      toast.error(t('finder.searchError'), { duration: 2000 });
+    } finally {
       setIsLoading(false);
       inputRef.current?.focus();
-      toast.error('Ошибка поиска компаний', { duration: 2000 });
     }
   };
 
