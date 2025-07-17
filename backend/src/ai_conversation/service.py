@@ -502,8 +502,27 @@ class OpenAIService:
             location = parsed_intent.get("location")
             activity_keywords = parsed_intent.get("activity_keywords")
             page = parsed_intent.get("page_number", 1)
-            
-            print(f"🎯 Intent parsed: {intent}, location: {location}, keywords: {activity_keywords}")
+
+            # --- Fallback: If user message is a 'more' request and page==1, try to increment page manually ---
+            more_patterns = [
+                r'\bещё\b', r'\bеще\b', r'\bmore\b', r'\bnext\b', r'\bследующ', r'\bдальше\b', r'\bдополнительно\b', r'\bещё [0-9]+', r'\bещё компаний', r'\bещё фирм', r'\bещё организаций', r'\bещё предприятий', r'\bещё раз', r'\bещё результатов', r'\bещё фирм', r'\bещё компаний', r'\bещё', r'\bещё раз', r'\bещё результатов', r'\bещё фирм', r'\bещё организаций', r'\bещё предприятий',
+                r'\badditional\b', r'\banother\b', r'\bshow more\b', r'\bfind more\b'
+            ]
+            user_message = history[-1]["content"].lower() if history else ""
+            is_more = any(re.search(pat, user_message) for pat in more_patterns)
+            if is_more and page == 1:
+                # Count previous user search requests (not 'more')
+                prev_page = 1
+                for msg in history[:-1]:
+                    if msg.get('role') == 'user':
+                        msg_text = msg.get('content', '').lower()
+                        if any(re.search(pat, msg_text) for pat in more_patterns):
+                            prev_page += 1
+                page = prev_page + 1
+                print(f"⚠️ [FALLBACK] Detected 'more' request but page==1. Forcing page={page}")
+                parsed_intent['page_number'] = page
+
+            print(f"🎯 Intent parsed: {intent}, location: {location}, keywords: {activity_keywords}, page: {page}")
             
             # Calculate search parameters
             raw_quantity_from_ai = parsed_intent.get("quantity")
