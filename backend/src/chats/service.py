@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from sqlalchemy.orm.exc import NoResultFound
 
 from . import models
 from ..auth.models import User # Your User model
@@ -215,3 +216,10 @@ def save_conversation_turn(
     db.refresh(chat)
     
     return chat
+
+def count_user_messages(db: Session, chat_id: uuid.UUID) -> int:
+    """Counts the number of user messages in a given chat."""
+    return db.query(models.Message).filter(
+        models.Message.chat_id == chat_id,
+        models.Message.role == 'user'
+    ).count()
