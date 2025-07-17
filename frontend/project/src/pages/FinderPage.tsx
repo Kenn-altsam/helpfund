@@ -49,7 +49,7 @@ export function FinderPage() {
   const [threadId, setThreadId] = useState<string | null>(() => sessionStorage.getItem('activeThreadId'));
 
   // Add currentPage state for pagination
-  const [currentPage, setCurrentPage] = useState(1);
+  // const [currentPage, setCurrentPage] = useState(1);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,9 +75,9 @@ export function FinderPage() {
   }, [threadId]);
 
   // When threadId changes (new chat or history selection), reset currentPage
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [threadId]);
+  // useEffect(() => {
+  //   setCurrentPage(1);
+  // }, [threadId]);
 
   /* --------------------------- Scroll helpers --------------------------- */
   const scrollToBottom = () => {
@@ -185,21 +185,8 @@ export function FinderPage() {
       }
     }
 
-    let nextPage = currentPage;
-    let userMessage: Message;
-    let loadingMessage: Message = { id: generateId(), type: 'loading' };
-
-    if (isMore) {
-      // If 'more', increment page and use last search context
-      nextPage = currentPage + 1;
-      userMessage = { id: generateId(), type: 'user', content: input.trim() };
-      setCurrentPage(nextPage);
-    } else {
-      // New search: reset page
-      nextPage = 1;
-      setCurrentPage(1);
-      userMessage = { id: generateId(), type: 'user', content: input.trim() };
-    }
+    const userMessage: Message = { id: generateId(), type: 'user', content: input.trim() };
+    const loadingMessage: Message = { id: generateId(), type: 'loading' };
 
     setMessages(prev => [...prev, userMessage, loadingMessage]);
 
@@ -253,19 +240,46 @@ export function FinderPage() {
       if (response.thread_id) setThreadId(response.thread_id);
 
       if (isMore && response.companies?.length) {
-        // Append companies to the last assistant message
+        // Append companies to the last assistant message, but deduplicate
         setMessages(prev => {
           // Remove loading
           const withoutLoading = prev.filter(m => m.type !== 'loading');
           // Find last assistant message
           const lastAssistantIdx = withoutLoading.map(m => m.type).lastIndexOf('assistant');
           if (lastAssistantIdx !== -1) {
-            // Append companies to last assistant message
+            // Gather all previously shown companies (by id, bin, or name)
+            const shownCompanies = new Set<string>();
+            withoutLoading.forEach(m => {
+              if (m.companies) {
+                m.companies.forEach(c => {
+                  // Prefer id, then bin, then name
+                  if (c.id) {
+                    shownCompanies.add(c.id);
+                  } else if (c.bin) {
+                    shownCompanies.add(c.bin);
+                  } else if (c.name) {
+                    shownCompanies.add(c.name);
+                  }
+                });
+              }
+            });
+            // Filter new companies to only those not already shown
+            const newUniqueCompanies = (response.companies ?? []).filter(c => {
+              if (c.id) {
+                return !shownCompanies.has(c.id);
+              } else if (c.bin) {
+                return !shownCompanies.has(c.bin);
+              } else if (c.name) {
+                return !shownCompanies.has(c.name);
+              }
+              return true;
+            });
+            // Append only unique new companies
             const updated = [...withoutLoading];
             const lastAssistant = { ...updated[lastAssistantIdx] };
             lastAssistant.companies = [
               ...(lastAssistant.companies || []),
-              ...(response.companies ?? []),
+              ...newUniqueCompanies,
             ];
             updated[lastAssistantIdx] = lastAssistant;
             return updated;
