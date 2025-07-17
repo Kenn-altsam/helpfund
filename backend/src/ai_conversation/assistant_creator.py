@@ -185,6 +185,8 @@ class CharityFundAssistant:
         """
         companies_found_in_turn = []
 
+        print(f"[run_assistant_with_tools] Using assistant_id={assistant_id}, thread_id={thread_id}")
+
         try:
             run = self.client.beta.threads.runs.create(
                 thread_id=thread_id,
@@ -484,6 +486,7 @@ def handle_conversation_with_context(
             thread_id = assistant_manager.create_conversation_thread()
             chat_service.update_chat_openai_ids(db, current_chat.id, assistant_id, thread_id)
             
+    print(f"[handle_conversation_with_context] Using assistant_id={assistant_id}, thread_id={thread_id}, chat_id={getattr(current_chat, 'id', None)}")
     try:
         # Save the user's message to the database first
         chat_service.create_message(db, chat_id=current_chat.id, content=user_input, role="user")
