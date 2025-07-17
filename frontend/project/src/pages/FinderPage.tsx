@@ -231,9 +231,18 @@ export function FinderPage() {
         // page: nextPage,
       };
 
-      console.log('[handleSendMessage] Sending request to chatApi.sendMessage:', requestPayload);
+      console.log('[handleSendMessage] SENDING:', {
+        assistantId,
+        threadId,
+        requestPayload
+      });
+
       const response = await chatApi.sendMessage(requestPayload);
-      console.log('[handleSendMessage] Received response:', response);
+      console.log('[handleSendMessage] RECEIVED:', {
+        response_assistant_id: response.assistant_id,
+        response_thread_id: response.thread_id,
+        response
+      });
 
       // Persist IDs returned by backend
       if (response.assistant_id) setAssistantId(response.assistant_id);
