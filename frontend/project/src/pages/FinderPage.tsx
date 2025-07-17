@@ -20,6 +20,19 @@ interface Message {
   createdAt?: number | string;
 }
 
+// Helper: List of 'more' keywords in multiple languages
+const MORE_KEYWORDS = [
+  'more', 'show more', 'next', 'additional', 'another',
+  'ещё', 'еще', 'далее', 'следующие', 'ещё компании', 'ещё фирм', 'больше', 'продолжить', 'продолжи',
+  'ещё', 'ещё раз', 'ещё результатов', 'ещё фирм', 'ещё организаций', 'ещё предприятий',
+  // Add more as needed
+];
+
+function isMoreCommand(input: string) {
+  const normalized = input.trim().toLowerCase();
+  return MORE_KEYWORDS.some(keyword => normalized === keyword || normalized.startsWith(keyword + ' '));
+}
+
 export function FinderPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -34,6 +47,9 @@ export function FinderPage() {
   // --- 💡 ИЗМЕНЕНИЕ 1: Читаем начальные значения из sessionStorage ---
   const [assistantId, setAssistantId] = useState<string | null>(() => sessionStorage.getItem('activeAssistantId'));
   const [threadId, setThreadId] = useState<string | null>(() => sessionStorage.getItem('activeThreadId'));
+
+  // Add currentPage state for pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +72,11 @@ export function FinderPage() {
     } else {
       sessionStorage.removeItem('activeThreadId'); // Очищаем, если ID стал null
     }
+  }, [threadId]);
+
+  // When threadId changes (new chat or history selection), reset currentPage
+  useEffect(() => {
+    setCurrentPage(1);
   }, [threadId]);
 
   /* --------------------------- Scroll helpers --------------------------- */
@@ -152,8 +173,33 @@ export function FinderPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { id: generateId(), type: 'user', content: input.trim() };
-    const loadingMessage: Message = { id: generateId(), type: 'loading' };
+    const isMore = isMoreCommand(input);
+    if (isMore) {
+      // Find last user search prompt (not a 'more' command)
+      const hasSearchPrompt = messages.some(
+        m => m.type === 'user' && !isMoreCommand(m.content || '')
+      );
+      if (!hasSearchPrompt) {
+        toast.error('Please start a new search before requesting more results.');
+        return;
+      }
+    }
+
+    let nextPage = currentPage;
+    let userMessage: Message;
+    let loadingMessage: Message = { id: generateId(), type: 'loading' };
+
+    if (isMore) {
+      // If 'more', increment page and use last search context
+      nextPage = currentPage + 1;
+      userMessage = { id: generateId(), type: 'user', content: input.trim() };
+      setCurrentPage(nextPage);
+    } else {
+      // New search: reset page
+      nextPage = 1;
+      setCurrentPage(1);
+      userMessage = { id: generateId(), type: 'user', content: input.trim() };
+    }
 
     setMessages(prev => [...prev, userMessage, loadingMessage]);
 
@@ -162,18 +208,40 @@ export function FinderPage() {
     setIsLoading(true);
 
     try {
-      const previousMessages = messages
+      // For 'more', use previous search context
+      let previousMessages = messages
         .filter(m => m.type === 'user' || m.type === 'assistant')
         .map(m => ({
           role: m.type as 'user' | 'assistant',
           content: m.content || '',
         }));
 
+      // If 'more', try to find the last user search prompt (not a 'more' command)
+      let lastSearchPrompt = '';
+      if (isMore) {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const m = messages[i];
+          if (m.type === 'user' && !isMoreCommand(m.content || '')) {
+            lastSearchPrompt = m.content || '';
+            break;
+          }
+        }
+        // If found, add it to the history for context
+        if (lastSearchPrompt) {
+          previousMessages = [
+            ...previousMessages,
+            { role: 'user', content: lastSearchPrompt },
+          ];
+        }
+      }
+
       const requestPayload = {
         user_input: currentInput,
         history: previousMessages,
         assistant_id: assistantId || undefined,
         thread_id: threadId || undefined,
+        // Optionally, you can add page/quantity if your backend supports it directly
+        // page: nextPage,
       };
 
       console.log('[handleSendMessage] Sending request to chatApi.sendMessage:', requestPayload);
@@ -184,19 +252,51 @@ export function FinderPage() {
       if (response.assistant_id) setAssistantId(response.assistant_id);
       if (response.thread_id) setThreadId(response.thread_id);
 
-      // Replace loading message with assistant response
-      setMessages(prev => {
-        const withoutLoading = prev.filter(m => m.type !== 'loading');
-        return [
-          ...withoutLoading,
-          {
-            id: generateId(),
-            type: 'assistant',
-            content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
-            companies: response.companies || [],
-          },
-        ];
-      });
+      if (isMore && response.companies?.length) {
+        // Append companies to the last assistant message
+        setMessages(prev => {
+          // Remove loading
+          const withoutLoading = prev.filter(m => m.type !== 'loading');
+          // Find last assistant message
+          const lastAssistantIdx = withoutLoading.map(m => m.type).lastIndexOf('assistant');
+          if (lastAssistantIdx !== -1) {
+            // Append companies to last assistant message
+            const updated = [...withoutLoading];
+            const lastAssistant = { ...updated[lastAssistantIdx] };
+            lastAssistant.companies = [
+              ...(lastAssistant.companies || []),
+              ...(response.companies ?? []),
+            ];
+            updated[lastAssistantIdx] = lastAssistant;
+            return updated;
+          } else {
+            // If no assistant message, just add as new
+            return [
+              ...withoutLoading,
+              {
+                id: generateId(),
+                type: 'assistant',
+                content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
+                companies: response.companies || [],
+              },
+            ];
+          }
+        });
+      } else {
+        // Normal: replace loading with new assistant message
+        setMessages(prev => {
+          const withoutLoading = prev.filter(m => m.type !== 'loading');
+          return [
+            ...withoutLoading,
+            {
+              id: generateId(),
+              type: 'assistant',
+              content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
+              companies: response.companies || [],
+            },
+          ];
+        });
+      }
 
       /* --------------------- HISTORY MANAGEMENT --------------------- */
       const effectiveThreadId = response.thread_id || threadId;
