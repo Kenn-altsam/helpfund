@@ -20,6 +20,13 @@ interface Message {
   createdAt?: number | string;
 }
 
+// Helper to get/set last companies list in sessionStorage
+function saveLastCompaniesList(threadId: string | null, companies: Company[]) {
+  if (threadId) {
+    sessionStorage.setItem('lastCompaniesList_' + threadId, JSON.stringify(companies));
+  }
+}
+
 export function FinderPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -147,6 +154,15 @@ export function FinderPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, user]);
+
+  // Add after all imports
+  useEffect(() => {
+    // Find last assistant message with companies
+    const lastAssistant = [...messages].reverse().find(m => m.type === 'assistant' && m.companies && m.companies.length > 0);
+    if (lastAssistant && threadId) {
+      saveLastCompaniesList(threadId, lastAssistant.companies!);
+    }
+  }, [messages, threadId]);
 
   /* ------------------------------ Handlers ------------------------------ */
   const handleSendMessage = async () => {
