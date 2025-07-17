@@ -162,7 +162,7 @@ export function HomePage() {
             <div className="relative">
               <img
                 src="https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=800"
-                alt="Команда helpfund.pro"
+                alt="Команда helpfund.live"
                 className="rounded-lg shadow-lg w-full h-96 object-cover"
               />
             </div>

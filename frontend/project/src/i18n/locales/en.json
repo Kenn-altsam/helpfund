@@ -17,7 +17,8 @@
     "remove": "Remove"
   },
   "header": {
-    "title": "helpfund.pro",
+    "title": "helpfund.live",
+    "slogan": "AI-powered corporate sponsor search",
     "home": "Home",
     "finder": "Find Sponsors",
     "consideration": "Consideration",
@@ -36,13 +37,15 @@
     "consulting": "Consulting",
     "training": "Training",
     "contacts": "Contacts",
-    "copyright": "© 2025 helpfund.pro. All rights reserved.",
-    "initiative": "Initiative"
+    "copyright": "© 2025 helpfund.live. All rights reserved.",
+    "initiative": "Initiative",
+    "contact": "Contact us",
+    "support": "Support"
   },
   "home": {
     "hero": {
       "title": "Find perfect corporate sponsors for your projects",
-      "subtitle": "helpfund.pro helps social projects find potential corporate partners using AI technologies",
+      "subtitle": "helpfund.live helps social projects find potential corporate partners using AI technologies",
       "findSponsors": "Find Sponsors"
     },
     "features": {
@@ -73,7 +76,7 @@
       "startSearch": "Start Search"
     },
     "about": {
-      "title": "About helpfund.pro",
+      "title": "About helpfund.live",
       "description1": "We are a website that helps social projects find corporate sponsors. Our mission is to create a bridge between those who need support and those who are ready to help.",
       "description2": "Using modern technologies and big data, we make the sponsor search process more efficient and transparent."
     }

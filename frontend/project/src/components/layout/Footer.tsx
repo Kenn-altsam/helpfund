@@ -84,8 +84,8 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="mailto:info@helpfund.pro" className="hover:text-primary transition-colors">
-                  info@helpfund.pro
+                <a href="mailto:info@helpfund.live" className="hover:text-primary transition-colors">
+                  info@helpfund.live
                 </a>
               </li>
               <li>г. Алматы, ул. Абая 150</li>
