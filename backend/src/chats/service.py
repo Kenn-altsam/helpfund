@@ -4,7 +4,6 @@ import uuid
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy.orm.exc import NoResultFound
 
 from . import models
 from ..auth.models import User # Your User model
@@ -217,9 +216,23 @@ def save_conversation_turn(
     
     return chat
 
-def count_user_messages(db: Session, chat_id: uuid.UUID) -> int:
-    """Counts the number of user messages in a given chat."""
-    return db.query(models.Message).filter(
+def count_search_requests(db: Session, chat_id: uuid.UUID) -> int:
+    """
+    Count the number of previous search requests in a chat session.
+    This helps with pagination by determining the offset for "more" requests.
+    """
+    # Count user messages that contain search-related keywords
+    search_keywords = ['найди', 'find', 'поиск', 'search', 'компани', 'company', 'еще', 'more']
+    
+    user_messages = db.query(models.Message).filter(
         models.Message.chat_id == chat_id,
-        models.Message.role == 'user'
-    ).count()
+        models.Message.role == "user"
+    ).all()
+    
+    search_count = 0
+    for message in user_messages:
+        content_lower = message.content.lower()
+        if any(keyword in content_lower for keyword in search_keywords):
+            search_count += 1
+    
+    return search_count

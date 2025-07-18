@@ -177,8 +177,8 @@ class CharityFundAssistant:
         assistant_id: str,
         thread_id: str,
         db: Session,
-        chat_id: uuid.UUID,
-        instructions: Optional[str] = None
+        instructions: Optional[str] = None,
+        chat_id: Optional[uuid.UUID] = None
     ) -> Dict[str, Any]:
         """
         Runs the assistant. Returns the company data instead of saving it to metadata.
@@ -209,19 +209,22 @@ class CharityFundAssistant:
                         if function_name == "search_companies":
                             try:
                                 company_service = CompanyService(db)
-                                limit = int(function_args.get("limit", 15))
+                                limit = int(function_args.get("limit", 50))
                                 offset = function_args.get("offset")
                                 if offset is None:
-                                    # Count previous user messages to determine the page
-                                    prev_user_messages = chat_service.count_user_messages(db, chat_id=chat_id)
-                                    
-                                    # Offset is based on previous messages.
-                                    # The current message is already in the DB, so we subtract 1.
-                                    offset = max(0, (prev_user_messages - 1) * limit)
-                                    print(f"[Pagination Fallback] Calculated offset={offset} (prev_user_messages={prev_user_messages}, limit={limit})")
+                                    if chat_id:
+                                        # Use the chat_id to count previous search requests
+                                        from ..chats import service as chat_service
+                                        prev_search_calls = chat_service.count_search_requests(db, chat_id)
+                                        # Subtract 1 if this is the first search in this request (so first search is offset=0)
+                                        offset = max(0, (prev_search_calls - 1) * limit)
+                                        print(f"[Pagination] Calculated offset={offset} (prev_search_calls={prev_search_calls}, limit={limit})")
+                                    else:
+                                        # Fallback to offset=0 if no chat_id available
+                                        offset = 0
+                                        print(f"[Pagination] Using default offset={offset} (no chat_id available)")
                                 else:
                                     offset = int(offset)
-                                
                                 companies = company_service.search_companies(
                                     location=function_args.get("location"),
                                     company_name=function_args.get("company_name"),
@@ -250,7 +253,7 @@ class CharityFundAssistant:
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)
                                 
-                                page = (offset // limit) + 1 if limit > 0 else 1
+                                page = (offset // limit) + 1 if limit else 1
                                 result = {"companies": formatted_companies, "total_found": len(formatted_companies), "search_criteria": function_args, "page": page, "limit": limit}
                                 tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(result, ensure_ascii=False)})
                                 print(f"✅ Search completed: {len(formatted_companies)} companies found")
@@ -392,8 +395,7 @@ def start_conversation(assistant_id: str, initial_message: str, db: Session) -> 
     run_result = assistant_manager.run_assistant_with_tools(
         assistant_id=assistant_id,
         thread_id=thread_id,
-        db=db,
-        chat_id=uuid.uuid4() # Pass a dummy chat_id for now, as it's not used in this function
+        db=db
     )
 
     return {
@@ -488,12 +490,7 @@ def handle_conversation_with_context(
         assistant_manager.add_message_to_thread(thread_id, user_input)
 
         # Run the assistant and get the response, including any tool outputs (company data)
-        response = assistant_manager.run_assistant_with_tools(
-            assistant_id, 
-            thread_id, 
-            db, 
-            chat_id=current_chat.id
-        )
+        response = assistant_manager.run_assistant_with_tools(assistant_id, thread_id, db, chat_id=current_chat.id)
 
         # Retrieve the latest assistant message from the thread
         messages = assistant_manager.client.beta.threads.messages.list(thread_id=thread_id, limit=1)

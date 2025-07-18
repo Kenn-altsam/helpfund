@@ -502,7 +502,7 @@ class OpenAIService:
             location = parsed_intent.get("location")
             activity_keywords = parsed_intent.get("activity_keywords")
             page = parsed_intent.get("page_number", 1)
-
+            
             # --- Fallback: If user message is a 'more' request and page==1, try to increment page manually ---
             more_patterns = [
                 r'\bещё\b', r'\bеще\b', r'\bmore\b', r'\bnext\b', r'\bследующ', r'\bдальше\b', r'\bдополнительно\b', r'\bещё [0-9]+', r'\bещё компаний', r'\bещё фирм', r'\bещё организаций', r'\bещё предприятий', r'\bещё раз', r'\bещё результатов', r'\bещё фирм', r'\bещё компаний', r'\bещё', r'\bещё раз', r'\bещё результатов', r'\bещё фирм', r'\bещё организаций', r'\bещё предприятий',
