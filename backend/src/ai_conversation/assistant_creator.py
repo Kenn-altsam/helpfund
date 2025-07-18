@@ -52,6 +52,13 @@ class CharityFundAssistant:
         - When providing company lists, include relevant details like location, industry, and contact availability
         - Suggest next steps for charity funds to approach potential sponsors
 
+        IMPORTANT PAGINATION RULES:
+        - When a user asks for "more" companies (using words like "еще", "more", "дополнительно"), you MUST increment the page number
+        - For the first search in a conversation, use page=1 (which becomes offset=0)
+        - For subsequent "more" requests, increment the page number: page=2, page=3, etc.
+        - This ensures users get different companies when asking for more results
+        - Always include the page parameter in your search_companies function calls
+
         You have access to a comprehensive database of companies in Kazakhstan with information about:
         - Company names, BIN numbers, and registration details
         - Industry classifications and business activities
@@ -94,10 +101,10 @@ class CharityFundAssistant:
                                         "description": "Maximum number of companies to return (defaults to 50 if not specified)",
                                         "default": 10
                                     },
-                                    "page": {
+                                    "offset": {
                                         "type": "integer",
-                                        "description": "Page number for pagination (default: 1)",
-                                        "default": 1
+                                        "description": "Offset for pagination (number of companies to skip). Use 0 for first page, limit for second page, 2*limit for third page, etc.",
+                                        "default": 0
                                     }
                                 },
                                 "required": []
@@ -212,11 +219,15 @@ class CharityFundAssistant:
                                 limit = int(function_args.get("limit", 50))
                                 offset = function_args.get("offset")
                                 if offset is None:
+                                    # If AI didn't provide offset, calculate it based on chat history
                                     if chat_id:
                                         # Use the chat_id to count previous search requests
                                         from ..chats import service as chat_service
                                         prev_search_calls = chat_service.count_search_requests(db, chat_id)
-                                        # Subtract 1 if this is the first search in this request (so first search is offset=0)
+                                        # Calculate offset: (prev_search_calls - 1) * limit
+                                        # First search: prev_search_calls=1, offset=0
+                                        # Second search: prev_search_calls=2, offset=limit
+                                        # Third search: prev_search_calls=3, offset=2*limit
                                         offset = max(0, (prev_search_calls - 1) * limit)
                                         print(f"[Pagination] Calculated offset={offset} (prev_search_calls={prev_search_calls}, limit={limit})")
                                     else:
@@ -225,6 +236,7 @@ class CharityFundAssistant:
                                         print(f"[Pagination] Using default offset={offset} (no chat_id available)")
                                 else:
                                     offset = int(offset)
+                                    print(f"[Pagination] Using AI-provided offset={offset}")
                                 companies = company_service.search_companies(
                                     location=function_args.get("location"),
                                     company_name=function_args.get("company_name"),
@@ -253,7 +265,7 @@ class CharityFundAssistant:
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)
                                 
-                                page = (offset // limit) + 1 if limit else 1
+                                page = (offset // limit) + 1 if limit and offset > 0 else 1
                                 result = {"companies": formatted_companies, "total_found": len(formatted_companies), "search_criteria": function_args, "page": page, "limit": limit}
                                 tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(result, ensure_ascii=False)})
                                 print(f"✅ Search completed: {len(formatted_companies)} companies found")

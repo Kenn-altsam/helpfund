@@ -222,17 +222,20 @@ def count_search_requests(db: Session, chat_id: uuid.UUID) -> int:
     This helps with pagination by determining the offset for "more" requests.
     """
     # Count user messages that contain search-related keywords
-    search_keywords = ['найди', 'find', 'поиск', 'search', 'компани', 'company', 'еще', 'more']
+    search_keywords = ['найди', 'find', 'поиск', 'search', 'компани', 'company', 'еще', 'more', 'дополнительно', 'additional']
     
     user_messages = db.query(models.Message).filter(
         models.Message.chat_id == chat_id,
         models.Message.role == "user"
-    ).all()
+    ).order_by(models.Message.created_at.asc()).all()
     
     search_count = 0
     for message in user_messages:
         content_lower = message.content.lower()
+        # Check if this message contains search keywords
         if any(keyword in content_lower for keyword in search_keywords):
             search_count += 1
+            print(f"[count_search_requests] Found search request #{search_count}: '{message.content[:50]}...'")
     
+    print(f"[count_search_requests] Total search requests in chat {chat_id}: {search_count}")
     return search_count
