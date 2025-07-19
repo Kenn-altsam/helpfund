@@ -22,6 +22,45 @@ class CompanyService:
     def __init__(self, db: Session):
         self.db = db
     
+    def test_offset_functionality(self, location: str = "Алматы") -> Dict[str, Any]:
+        """
+        Test function to verify that offset is working correctly.
+        This will run the same query with different offsets to see if we get different results.
+        """
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Testing offset functionality for location: {location}")
+        
+        # Test with offset 0
+        results_0 = self.search_companies(location=location, limit=5, offset=0)
+        first_companies_0 = [r['name'] for r in results_0[:3]]
+        
+        # Test with offset 5
+        results_5 = self.search_companies(location=location, limit=5, offset=5)
+        first_companies_5 = [r['name'] for r in results_5[:3]]
+        
+        # Test with offset 10
+        results_10 = self.search_companies(location=location, limit=5, offset=10)
+        first_companies_10 = [r['name'] for r in results_10[:3]]
+        
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Offset 0 results: {first_companies_0}")
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Offset 5 results: {first_companies_5}")
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Offset 10 results: {first_companies_10}")
+        
+        # Check if results are different
+        offset_0_5_different = set(first_companies_0) != set(first_companies_5)
+        offset_5_10_different = set(first_companies_5) != set(first_companies_10)
+        
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Offset 0 vs 5 different: {offset_0_5_different}")
+        logging.info(f"[DB_SERVICE][TEST_OFFSET] Offset 5 vs 10 different: {offset_5_10_different}")
+        
+        return {
+            "offset_0_results": first_companies_0,
+            "offset_5_results": first_companies_5,
+            "offset_10_results": first_companies_10,
+            "offset_0_5_different": offset_0_5_different,
+            "offset_5_10_different": offset_5_10_different,
+            "offset_working": offset_0_5_different and offset_5_10_different
+        }
+
     def search_companies(
         self,
         location: Optional[str] = None,
@@ -75,7 +114,7 @@ class CompanyService:
         query_parts.append("ORDER BY LENGTH(COALESCE(tax_data_2025, '')) DESC, \"Company\" ASC")
         logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY LENGTH(tax_data_2025) DESC, Company ASC")
 
-        # 5. Add pagination
+        # 5. Add pagination - ALWAYS use both LIMIT and OFFSET
         query_parts.append("LIMIT :limit OFFSET :offset")
         params["limit"] = limit
         params["offset"] = offset
@@ -84,14 +123,32 @@ class CompanyService:
         # Execute the optimized query
         final_query = " ".join(query_parts)
         logging.info(f"[DB_SERVICE][SEARCH] Final query: {final_query}")
+        logging.info(f"[DB_SERVICE][SEARCH] Parameters: {params}")
         
         try:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             
+            # Debug: Test parameter binding by executing a simple query first
+            test_query = "SELECT COUNT(*) as total FROM companies WHERE 1=1"
+            if location:
+                test_query += f" AND \"Locality\" ILIKE '%{CityTranslationService.translate_city_name(location)}%'"
+            test_result = self.db.execute(text(test_query))
+            total_count = test_result.fetchone()[0]
+            logging.info(f"[DB_SERVICE][SEARCH] Total matching companies: {total_count}")
+            
+            # Execute the main query
             result = self.db.execute(text(final_query), params)
             results = result.fetchall()
             logging.info(f"[DB_SERVICE][SEARCH] Query executed, returned {len(results)} results")
+            
+            # Debug: Log the first few results to verify they're different
+            if results:
+                first_company = results[0].Company if hasattr(results[0], 'Company') else 'Unknown'
+                logging.info(f"[DB_SERVICE][SEARCH] First result: {first_company}")
+                if len(results) > 1:
+                    second_company = results[1].Company if hasattr(results[1], 'Company') else 'Unknown'
+                    logging.info(f"[DB_SERVICE][SEARCH] Second result: {second_company}")
             
             # Convert results to dictionaries
             converted_results = []

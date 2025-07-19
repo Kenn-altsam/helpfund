@@ -105,7 +105,8 @@ class CharityFundAssistant:
                                         "type": "integer",
                                         "description": "Offset for pagination (number of companies to skip). Use 0 for first page, limit for second page, 2*limit for third page, etc.",
                                         "default": 0
-                                    }
+                                    },
+
                                 },
                                 "required": []
                             }
@@ -237,6 +238,8 @@ class CharityFundAssistant:
                                 else:
                                     offset = int(offset)
                                     print(f"[Pagination] Using AI-provided offset={offset}")
+
+                                
                                 companies = company_service.search_companies(
                                     location=function_args.get("location"),
                                     company_name=function_args.get("company_name"),

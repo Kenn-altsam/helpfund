@@ -239,3 +239,20 @@ def count_search_requests(db: Session, chat_id: uuid.UUID) -> int:
     
     print(f"[count_search_requests] Total search requests in chat {chat_id}: {search_count}")
     return search_count
+
+def get_last_user_message(db: Session, chat_id: uuid.UUID) -> Optional[str]:
+    """
+    Get the last user message from a chat session.
+    This helps with detecting special requests like "remove limit".
+    """
+    last_message = db.query(models.Message).filter(
+        models.Message.chat_id == chat_id,
+        models.Message.role == "user"
+    ).order_by(models.Message.created_at.desc()).first()
+    
+    if last_message:
+        print(f"[get_last_user_message] Last user message: '{last_message.content[:50]}...'")
+        return last_message.content
+    
+    print(f"[get_last_user_message] No user messages found in chat {chat_id}")
+    return None
