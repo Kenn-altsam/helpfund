@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 import logging
 import traceback
+import time
 
 from .service import CompanyService
 from ..core.database import get_db
@@ -76,6 +77,7 @@ async def search_companies(
     Returns:
         List of companies matching the criteria with pagination metadata
     """
+    start_time = time.time()
     logging.info(f"[COMPANIES][SEARCH] Request: location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}, page={page}")
     try:
         # Calculate offset from page number
@@ -83,19 +85,29 @@ async def search_companies(
         logging.info(f"[COMPANIES][SEARCH] Calculated offset={offset} from page={page}, limit={limit}")
         
         company_service = CompanyService(db)
-        companies = await company_service.search_companies(
+        
+        # Measure search_companies time
+        search_start = time.time()
+        companies = company_service.search_companies(
             location=location,
             company_name=company_name,
             activity_keywords=activity_keywords,
             limit=limit,
             offset=offset
         )
+        search_time = time.time() - search_start
+        logging.info(f"[DEBUG] Search companies time: {search_time:.2f}s")
         logging.info(f"[COMPANIES][SEARCH] Found {len(companies)} companies")
         
-        # Get total count for pagination metadata
+        # Measure count time
+        count_start = time.time()
         total_count = company_service.get_total_company_count()
+        count_time = time.time() - count_start
+        logging.info(f"[DEBUG] Count time: {count_time:.2f}s")
         
-        return APIResponse(
+        # Measure response formation time
+        response_start = time.time()
+        response = APIResponse(
             status="success",
             data=companies,
             message=f"Found {len(companies)} companies",
@@ -110,6 +122,13 @@ async def search_companies(
                 }
             }
         )
+        response_time = time.time() - response_start
+        total_time = time.time() - start_time
+        
+        logging.info(f"[DEBUG] Response formation time: {response_time:.2f}s")
+        logging.info(f"[DEBUG] Total request time: {total_time:.2f}s")
+        
+        return response
         
     except Exception as e:
         logging.error(f"[COMPANIES][SEARCH] Error: {e}")
@@ -143,6 +162,7 @@ async def get_companies_by_location(
     Returns:
         List of companies in the specified location with pagination metadata
     """
+    start_time = time.time()
     logging.info(f"[COMPANIES][BY_LOCATION] Request: location={location}, limit={limit}, page={page}")
     try:
         # Calculate offset from page number
@@ -150,7 +170,12 @@ async def get_companies_by_location(
         logging.info(f"[COMPANIES][BY_LOCATION] Calculated offset={offset} from page={page}, limit={limit}")
         
         company_service = CompanyService(db)
-        companies = await company_service.get_companies_by_location(location, limit, offset)
+        
+        # Measure get_companies_by_location time
+        search_start = time.time()
+        companies = company_service.get_companies_by_location(location, limit, offset)
+        search_time = time.time() - search_start
+        logging.info(f"[DEBUG] Get companies by location time: {search_time:.2f}s")
         logging.info(f"[COMPANIES][BY_LOCATION] Found {len(companies)} companies in {location}")
         
         if not companies:
@@ -160,10 +185,15 @@ async def get_companies_by_location(
                 detail=f"No companies found in location: {location}"
             )
         
-        # Get total count for this location
+        # Measure count time
+        count_start = time.time()
         total_count = company_service.get_total_company_count_by_location(location)
-            
-        return APIResponse(
+        count_time = time.time() - count_start
+        logging.info(f"[DEBUG] Count by location time: {count_time:.2f}s")
+        
+        # Measure response formation time
+        response_start = time.time()
+        response = APIResponse(
             status="success",
             data=companies,
             message=f"Found {len(companies)} companies in {location}",
@@ -178,6 +208,13 @@ async def get_companies_by_location(
                 }
             }
         )
+        response_time = time.time() - response_start
+        total_time = time.time() - start_time
+        
+        logging.info(f"[DEBUG] Response formation time: {response_time:.2f}s")
+        logging.info(f"[DEBUG] Total request time: {total_time:.2f}s")
+        
+        return response
         
     except HTTPException:
         raise
@@ -313,7 +350,7 @@ async def get_locations(
     logging.info(f"[COMPANIES][LOCATIONS] Request: get all locations")
     try:
         company_service = CompanyService(db)
-        locations = await company_service.get_all_locations()
+        locations = company_service.get_all_locations()
         logging.info(f"[COMPANIES][LOCATIONS] Found {len(locations)} locations")
         
         return APIResponse(
