@@ -33,7 +33,6 @@ class Company(Base):
     company_size = Column("Size", String(50), index=True)
     
     # Additional fields from actual database (unquoted column names as per database schema)
-    registered_at = Column(DateTime(timezone=True), server_default=func.now())
     phone = Column(Text)
     email = Column(Text)
     # Note: These columns don't exist in the actual database schema
