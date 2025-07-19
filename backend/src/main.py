@@ -39,6 +39,17 @@ def on_startup():
     """Synchronous startup event handler."""
     print("✅ Ayala Foundation Backend API starting up")
     print("✅ Database schema is managed by Alembic.")
+    
+    # Apply database optimizations automatically on startup
+    try:
+        from .core.database import engine
+        from .core.database_config import optimize_database_connection
+        print("🔧 Applying database optimizations...")
+        optimize_database_connection(engine)
+        print("✅ Database optimizations completed")
+    except Exception as e:
+        print(f"⚠️  Database optimization failed (non-critical): {e}")
+        print("Database will still work, but may not be fully optimized")
 
 @app.on_event("shutdown")
 def on_shutdown():

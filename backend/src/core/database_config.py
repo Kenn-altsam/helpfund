@@ -30,90 +30,12 @@ def get_database_config() -> Dict[str, Any]:
     }
 
 
-def get_postgresql_optimization_sql() -> str:
-    """
-    Get SQL commands to optimize PostgreSQL for company queries
-    
-    Returns:
-        SQL commands for database optimization
-    """
-    return """
-    -- Optimize PostgreSQL settings for company queries
-    
-    -- Increase work memory for complex queries
-    ALTER SYSTEM SET work_mem = '256MB';
-    
-    -- Increase shared buffers for better caching
-    ALTER SYSTEM SET shared_buffers = '256MB';
-    
-    -- Optimize effective cache size
-    ALTER SYSTEM SET effective_cache_size = '1GB';
-    
-    -- Enable parallel query execution
-    ALTER SYSTEM SET max_parallel_workers_per_gather = 2;
-    ALTER SYSTEM SET max_parallel_workers = 4;
-    
-    -- Optimize random page cost for SSD
-    ALTER SYSTEM SET random_page_cost = 1.1;
-    
-    -- Enable query plan caching
-    ALTER SYSTEM SET plan_cache_mode = 'auto';
-    
-    -- Optimize checkpoint settings
-    ALTER SYSTEM SET checkpoint_completion_target = 0.9;
-    ALTER SYSTEM SET wal_buffers = '16MB';
-    
-    -- Enable statistics collection
-    ALTER SYSTEM SET track_activities = on;
-    ALTER SYSTEM SET track_counts = on;
-    ALTER SYSTEM SET track_io_timing = on;
-    
-    -- Reload configuration
-    SELECT pg_reload_conf();
-    """
-
-
-def get_company_table_optimization_sql() -> str:
-    """
-    Get SQL commands to optimize the companies table specifically
-    
-    Returns:
-        SQL commands for table optimization
-    """
-    return """
-    -- Optimize companies table for better query performance
-    
-    -- Update table statistics
-    ANALYZE companies;
-    
-    -- Vacuum the table to reclaim space and update statistics
-    VACUUM ANALYZE companies;
-    
-    -- Create additional performance indexes if needed
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
-    ON companies (tax_data_2025) 
-    WHERE tax_data_2025 IS NOT NULL AND tax_data_2025 != '';
-    
-    -- Create index for companies with contact information
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
-    ON companies (phone, email) 
-    WHERE phone IS NOT NULL OR email IS NOT NULL;
-    
-    -- Create index for companies by size category
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
-    ON companies (Size) 
-    WHERE Size LIKE '%Крупн%';
-    
-    -- Create index for companies with high tax payment (longer text = higher payment)
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
-    ON companies (LENGTH(tax_data_2025)) 
-    WHERE tax_data_2025 IS NOT NULL AND LENGTH(tax_data_2025) > 10;
-    """
+# Removed old optimization functions - now integrated into optimize_database_connection()
 
 
 def optimize_database_connection(engine) -> None:
     """
-    Apply database optimizations to the engine
+    Apply comprehensive database optimizations to the engine
     
     Args:
         engine: SQLAlchemy engine instance
@@ -126,17 +48,145 @@ def optimize_database_connection(engine) -> None:
             # Set autocommit to True for VACUUM and CREATE INDEX CONCURRENTLY
             conn.autocommit = True
             
-            # Apply table-specific optimizations
-            table_optimization_sql = get_company_table_optimization_sql()
-            for statement in table_optimization_sql.split(';'):
-                statement = statement.strip()
-                if statement and not statement.startswith('--'):
-                    try:
-                        conn.execute(text(statement))
-                        print(f"✅ Executed: {statement[:50]}...")
-                    except Exception as stmt_error:
-                        # Skip statements that fail (like CREATE INDEX CONCURRENTLY which might already exist)
-                        print(f"⚠️  Skipping table optimization statement: {stmt_error}")
+            print("🔍 Checking table schema...")
+            # Check actual table schema first
+            result = conn.execute(text("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'companies' 
+                ORDER BY ordinal_position;
+            """))
+            columns = result.fetchall()
+            
+            # Check for tax_data columns (actual database schema)
+            tax_columns = [col[0] for col in columns if col[0] in ['tax_data_2023', 'tax_data_2024', 'tax_data_2025']]
+            if tax_columns:
+                print(f"📊 Found tax data columns: {tax_columns}")
+                # Use the most recent tax data column (2025 if available, otherwise 2024, then 2023)
+                if 'tax_data_2025' in tax_columns:
+                    tax_column = 'tax_data_2025'
+                elif 'tax_data_2024' in tax_columns:
+                    tax_column = 'tax_data_2024'
+                else:
+                    tax_column = 'tax_data_2023'
+                print(f"🎯 Using tax data column: {tax_column}")
+            else:
+                print("❌ No tax_data columns found. Skipping tax-based indexes.")
+                tax_column = None
+            
+            # Create comprehensive performance indexes
+            print("📊 Creating performance indexes...")
+            
+            indexes = []
+            
+            # Only add tax-related indexes if tax column exists
+            if tax_column:
+                indexes.extend([
+                    # Composite index for location + tax payment queries
+                    f"""
+                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
+                    ON companies ("Locality", {tax_column});
+                    """,
+                    
+                    # Composite index for activity + tax payment queries
+                    f"""
+                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
+                    ON companies ("Activity", {tax_column});
+                    """,
+                    
+                    # Partial index for companies with tax data
+                    f"""
+                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
+                    ON companies ({tax_column}) 
+                    WHERE {tax_column} IS NOT NULL;
+                    """,
+                    
+                    # Composite index for region + size + tax queries
+                    f"""
+                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
+                    ON companies ("Locality", "Size", {tax_column});
+                    """,
+                    
+                    # Index for companies with non-empty tax data
+                    f"""
+                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_empty 
+                    ON companies ({tax_column}) 
+                    WHERE {tax_column} IS NOT NULL AND {tax_column} != '';
+                    """
+                ])
+            
+            # Add non-tax indexes
+            non_tax_indexes = [
+                # Full-text search index for company names
+                """
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_name_gin 
+                ON companies USING gin(to_tsvector('russian', "Company"));
+                """,
+                
+                # Full-text search index for activities
+                """
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_gin 
+                ON companies USING gin(to_tsvector('russian', "Activity"));
+                """,
+                
+                # Index for company size filtering
+                """
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size 
+                ON companies ("Size");
+                """,
+                
+                """
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
+                ON companies ("Size") 
+                WHERE "Size" LIKE '%Крупн%';
+                """
+            ]
+            
+            # Check if contact columns exist before adding contact indexes
+            contact_columns = [col[0] for col in columns if col[0] in ['phone', 'email']]
+            if len(contact_columns) >= 2:
+                indexes.append(f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
+                ON companies ({', '.join(contact_columns)}) 
+                WHERE {' OR '.join(f'{col} IS NOT NULL' for col in contact_columns)};
+                """)
+            
+            indexes.extend(non_tax_indexes)
+            
+            for i, index_sql in enumerate(indexes, 1):
+                try:
+                    print(f"  Creating index {i}/{len(indexes)}...")
+                    conn.execute(text(index_sql))
+                    print(f"  ✅ Index {i} created successfully")
+                except Exception as e:
+                    print(f"  ⚠️  Index {i} failed (may already exist): {e}")
+            
+            # Update table statistics
+            print("📈 Updating table statistics...")
+            conn.execute(text("ANALYZE companies;"))
+            print("✅ Table statistics updated")
+            
+            # Vacuum the table
+            print("🧹 Vacuuming table...")
+            conn.execute(text("VACUUM ANALYZE companies;"))
+            print("✅ Table vacuumed and analyzed")
+            
+            # Test the optimized query
+            print("🧪 Testing optimized query...")
+            if tax_column:
+                test_query = f"""
+                    SELECT COUNT(*) FROM companies 
+                    WHERE "Locality" ILIKE %s;
+                """
+            else:
+                test_query = """
+                    SELECT COUNT(*) FROM companies 
+                    WHERE "Locality" ILIKE %s;
+                """
+            
+            result = conn.execute(text(test_query), ("%Алматы%",))
+            count = result.fetchone()[0]
+            print(f"✅ Test query successful! Found {count} companies in Алматы")
                     
         print("✅ Database optimizations applied successfully")
         

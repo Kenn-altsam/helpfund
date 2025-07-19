@@ -62,7 +62,20 @@ class Settings(BaseSettings):
     # Example: "https://example.com,https://myapp.com"
     # The custom validator is removed to rely on default behavior.
     # ------------------------------------------------------------------
-    ALLOWED_ORIGINS: List[str] = Field(default_factory=list)
+    ALLOWED_ORIGINS: List[str] = Field(default=["*"])
+
+    @model_validator(mode='before')
+    @classmethod
+    def validate_allowed_origins(cls, values):
+        """Handle ALLOWED_ORIGINS parsing safely"""
+        if isinstance(values, dict) and 'ALLOWED_ORIGINS' in values:
+            origins = values['ALLOWED_ORIGINS']
+            if origins is None or origins == "":
+                values['ALLOWED_ORIGINS'] = ["*"]
+            elif isinstance(origins, str):
+                # Split comma-separated string
+                values['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins.split(',') if origin.strip()]
+        return values
 
     # ------------------------------------------------------------------
     # OpenAI - UPDATED FOR AZURE
