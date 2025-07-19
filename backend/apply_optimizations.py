@@ -59,6 +59,9 @@ def apply_optimizations():
     
     try:
         conn = get_database_connection()
+        
+        # Set autocommit to True to avoid transaction blocks for CONCURRENTLY operations
+        conn.autocommit = True
         cursor = conn.cursor()
         
         print("✅ Connected to database successfully")
@@ -186,7 +189,6 @@ def apply_optimizations():
         for index_name, index_def in indexes:
             print(f"  📌 {index_name}")
         
-        conn.commit()
         cursor.close()
         conn.close()
         
