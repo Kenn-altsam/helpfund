@@ -20,9 +20,9 @@ class Company(Base):
     __tablename__ = "companies"
     
     # Primary key - using UUID as per actual database schema
-    id = Column("id", PostgresUUID, primary_key=True, server_default=func.gen_random_uuid())
+    id = Column(PostgresUUID, primary_key=True, server_default=func.gen_random_uuid())
     
-    # Core company information
+    # Core company information (quoted column names as per database schema)
     bin_number = Column("BIN", String(12), index=True)
     company_name = Column("Company", String(255), nullable=False, index=True)
     oked_code = Column("OKED", String(50), index=True)
@@ -32,20 +32,23 @@ class Company(Base):
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
     
-    # Additional fields from actual database
-    registered_at = Column("registered_at", DateTime(timezone=True), server_default=func.now())
-    degreeofrisk = Column("degreeofrisk", Text)
-    executive = Column("executive", Text)
-    phone = Column("phone", Text)
-    email = Column("email", Text)
-    location = Column("location", String(255))
+    # Additional fields from actual database (unquoted column names as per database schema)
+    registered_at = Column(DateTime(timezone=True), server_default=func.now())
+    phone = Column(Text)
+    email = Column(Text)
+    # Note: These columns don't exist in the actual database schema
+    # degreeofrisk = Column(Text)
+    # executive = Column(Text)
+    # location = Column(String(255))
     
-    # Legacy fields for backward compatibility
-    tax_data_2023 = Column("tax_payment_2023", Text, nullable=True)
-    tax_data_2024 = Column("tax_payment_2024", Text, nullable=True)
-    tax_data_2025 = Column("tax_payment_2025", Text, nullable=True)
-    contacts = Column("contacts", Text, nullable=True)
-    website = Column("website", Text, nullable=True)
+    # Tax data fields (matching actual database schema)
+    tax_data_2023 = Column("tax_data_2023", Text, nullable=True)
+    tax_data_2024 = Column("tax_data_2024", Text, nullable=True)
+    tax_data_2025 = Column("tax_data_2025", Text, nullable=True)
+    
+    # Legacy fields for backward compatibility (these columns don't exist in actual DB)
+    # contacts = Column("contacts", Text, nullable=True)
+    # website = Column("website", Text, nullable=True)
     
     def __repr__(self):
         return f"<Company(company_name='{self.company_name}', bin_number='{self.bin_number}')>"

@@ -60,7 +60,7 @@ def test_connection():
         cursor.execute("""
             SELECT COUNT(*) FROM companies 
             WHERE "Locality" ILIKE %s
-            ORDER BY tax_data_2025 DESC NULLS LAST, "Company" ASC
+            ORDER BY tax_payment_2025 DESC NULLS LAST, "Company" ASC
             LIMIT 5;
         """, ("%Алматы%",))
         

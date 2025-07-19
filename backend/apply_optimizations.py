@@ -79,18 +79,18 @@ def apply_optimizations():
         for col_name, col_type in columns:
             print(f"  - {col_name}: {col_type}")
         
-        # Check for tax_data columns
+        # Check for tax_data columns (actual database schema)
         tax_columns = [col[0] for col in columns if col[0] in ['tax_data_2023', 'tax_data_2024', 'tax_data_2025']]
         if tax_columns:
-            print(f"📊 Found tax columns: {tax_columns}")
-            # Use the most recent tax column (2025 if available, otherwise 2024, then 2023)
+            print(f"📊 Found tax data columns: {tax_columns}")
+            # Use the most recent tax data column (2025 if available, otherwise 2024, then 2023)
             if 'tax_data_2025' in tax_columns:
                 tax_column = 'tax_data_2025'
             elif 'tax_data_2024' in tax_columns:
                 tax_column = 'tax_data_2024'
             else:
                 tax_column = 'tax_data_2023'
-            print(f"🎯 Using tax column: {tax_column}")
+            print(f"🎯 Using tax data column: {tax_column}")
         else:
             print("❌ No tax_data columns found. Skipping tax-based indexes.")
             tax_column = None

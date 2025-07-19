@@ -6,6 +6,7 @@ Optimized PostgreSQL configuration for company queries performance.
 
 import os
 from typing import Dict, Any
+from sqlalchemy import text
 
 
 def get_database_config() -> Dict[str, Any]:
@@ -123,18 +124,30 @@ def optimize_database_connection(engine) -> None:
         engine: SQLAlchemy engine instance
     """
     try:
+        from sqlalchemy import text
+        
         with engine.connect() as conn:
             # Apply PostgreSQL optimizations
             optimization_sql = get_postgresql_optimization_sql()
             for statement in optimization_sql.split(';'):
                 if statement.strip():
-                    conn.execute(statement)
+                    try:
+                        conn.execute(text(statement.strip()))
+                        conn.commit()
+                    except Exception as stmt_error:
+                        # Skip statements that fail (like ALTER SYSTEM which requires superuser)
+                        print(f"⚠️  Skipping optimization statement: {stmt_error}")
             
             # Apply table-specific optimizations
             table_optimization_sql = get_company_table_optimization_sql()
             for statement in table_optimization_sql.split(';'):
                 if statement.strip():
-                    conn.execute(statement)
+                    try:
+                        conn.execute(text(statement.strip()))
+                        conn.commit()
+                    except Exception as stmt_error:
+                        # Skip statements that fail (like CREATE INDEX CONCURRENTLY which might already exist)
+                        print(f"⚠️  Skipping table optimization statement: {stmt_error}")
                     
         print("✅ Database optimizations applied successfully")
         

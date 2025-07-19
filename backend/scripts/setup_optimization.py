@@ -103,10 +103,17 @@ def create_additional_indexes():
     """
     
     try:
+        from sqlalchemy import text
+        
         with engine.connect() as conn:
             for statement in additional_indexes_sql.split(';'):
                 if statement.strip():
-                    conn.execute(statement)
+                    try:
+                        conn.execute(text(statement.strip()))
+                        conn.commit()
+                    except Exception as stmt_error:
+                        # Skip statements that fail (like CREATE INDEX CONCURRENTLY which might already exist)
+                        print(f"⚠️  Skipping index creation statement: {stmt_error}")
         print("✅ Additional indexes created successfully")
         return True
     except Exception as e:

@@ -65,10 +65,10 @@ def test_simple_query():
         # Test 4: Order by tax_data_2025
         print("\n🧪 Test 4: Order by tax_data_2025")
         cursor.execute("""
-            SELECT \"Company\", \"Locality\", tax_data_2025 
-            FROM companies 
-            WHERE tax_data_2025 IS NOT NULL 
-            ORDER BY tax_data_2025 DESC NULLS LAST 
+            SELECT \"Company\", \"Locality\", tax_payment_2025
+FROM companies
+WHERE tax_payment_2025 IS NOT NULL
+ORDER BY tax_payment_2025 DESC NULLS LAST 
             LIMIT 3;
         """)
         tax_companies = cursor.fetchall()

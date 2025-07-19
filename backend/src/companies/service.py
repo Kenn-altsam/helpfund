@@ -70,10 +70,10 @@ class CompanyService:
             query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
             logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
 
-        # 4. Optimized ORDER BY using indexed numeric column instead of string length
-        # Using tax_payment_2025 as per actual database schema
-        query_parts.append("ORDER BY COALESCE(tax_payment_2025, 0) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_payment_2025 DESC, Company ASC")
+        # 4. Optimized ORDER BY using length of tax_data_2025 (longer text = higher payment)
+        # Using tax_data_2025 as per actual database schema
+        query_parts.append("ORDER BY LENGTH(COALESCE(tax_data_2025, '')) DESC, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY LENGTH(tax_data_2025) DESC, Company ASC")
 
         # 5. Add pagination
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -86,6 +86,9 @@ class CompanyService:
         logging.info(f"[DB_SERVICE][SEARCH] Final query: {final_query}")
         
         try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
             result = self.db.execute(text(final_query), params)
             results = result.fetchall()
             logging.info(f"[DB_SERVICE][SEARCH] Query executed, returned {len(results)} results")
@@ -103,11 +106,11 @@ class CompanyService:
                     "size": row.Size,
                     "kato": row.KATO,
                     "krp": row.KRP,
-                    "tax_data_2023": row.tax_payment_2023,
-                    "tax_data_2024": row.tax_payment_2024,
-                    "tax_data_2025": row.tax_payment_2025,
-                    "contacts": row.phone or row.email,
-                    "website": row.location,  # Using location field as website for now
+                    "tax_data_2023": getattr(row, 'tax_data_2023', None),
+                    "tax_data_2024": getattr(row, 'tax_data_2024', None),
+                    "tax_data_2025": getattr(row, 'tax_data_2025', None),
+                    "contacts": getattr(row, 'phone', None) or getattr(row, 'email', None),
+                    "website": None,   # location column doesn't exist in actual DB
                 }
                 converted_results.append(company_dict)
             
@@ -137,35 +140,45 @@ class CompanyService:
     ) -> List[Dict[str, Any]]:
         """Fallback search using SQLAlchemy ORM if raw SQL fails"""
         logging.info(f"[DB_SERVICE][FALLBACK] Using ORM fallback search")
-        query = self.db.query(Company)
-        filters = []
-
-        if location:
-            translated_location = CityTranslationService.translate_city_name(location)
-            location_filter = Company.locality.ilike(f"%{translated_location}%")
-            filters.append(location_filter)
-
-        if company_name:
-            name_filter = Company.company_name.ilike(f"%{company_name}%")
-            filters.append(name_filter)
-
-        if activity_keywords and len(activity_keywords) > 0:
-            activity_filters = []
-            for keyword in activity_keywords:
-                activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
-            filters.append(or_(*activity_filters))
-
-        if filters:
-            query = query.filter(and_(*filters))
-
-        # Use tax_payment_2025 for sorting (as per actual database schema)
-        query = query.order_by(
-            func.coalesce(Company.tax_payment_2025, 0).desc().nullslast(), 
-            Company.company_name.asc()
-        )
-        results = query.offset(offset).limit(limit).all()
         
-        return [self._company_to_dict(c) for c in results]
+        try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
+            query = self.db.query(Company)
+            filters = []
+
+            if location:
+                translated_location = CityTranslationService.translate_city_name(location)
+                location_filter = Company.locality.ilike(f"%{translated_location}%")
+                filters.append(location_filter)
+
+            if company_name:
+                name_filter = Company.company_name.ilike(f"%{company_name}%")
+                filters.append(name_filter)
+
+            if activity_keywords and len(activity_keywords) > 0:
+                activity_filters = []
+                for keyword in activity_keywords:
+                    activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
+                filters.append(or_(*activity_filters))
+
+            if filters:
+                query = query.filter(and_(*filters))
+
+            # Use length of tax_data_2025 for sorting (longer text = higher payment)
+            query = query.order_by(
+                func.length(func.coalesce(Company.tax_data_2025, '')).desc().nullslast(), 
+                Company.company_name.asc()
+            )
+            results = query.offset(offset).limit(limit).all()
+            
+            return [self._company_to_dict(c) for c in results]
+            
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][FALLBACK] Error in fallback search: {e}")
+            # Return empty list if even fallback fails
+            return []
 
     def get_companies_by_location(
         self, 
@@ -191,11 +204,14 @@ class CompanyService:
         query = """
             SELECT * FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY COALESCE(tax_payment_2025, 0) DESC, "Company" ASC
+            ORDER BY LENGTH(COALESCE(tax_data_2025, '')) DESC, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         
         try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
             result = self.db.execute(text(query), {
                 "location": f"%{translated_location}%",
                 "limit": limit,
@@ -216,11 +232,11 @@ class CompanyService:
                     "size": row.Size,
                     "kato": row.KATO,
                     "krp": row.KRP,
-                    "tax_data_2023": row.tax_payment_2023,
-                    "tax_data_2024": row.tax_payment_2024,
-                    "tax_data_2025": row.tax_payment_2025,
-                    "contacts": row.phone or row.email,
-                    "website": row.location,
+                    "tax_data_2023": getattr(row, 'tax_data_2023', None),
+                    "tax_data_2024": getattr(row, 'tax_data_2024', None),
+                    "tax_data_2025": getattr(row, 'tax_data_2025', None),
+                    "contacts": getattr(row, 'phone', None) or getattr(row, 'email', None),
+                    "website": None,   # location column doesn't exist in actual DB
                 }
                 result_dicts.append(company_dict)
             
@@ -229,14 +245,19 @@ class CompanyService:
         except Exception as e:
             logging.error(f"[DB_SERVICE][BY_LOCATION] Error: {e}")
             # Fallback to ORM
-            query = self.db.query(Company).filter(
-                Company.locality.ilike(f'%{translated_location}%')
-            )
-            companies = query.order_by(
-                func.coalesce(Company.tax_payment_2025, 0).desc().nullslast(), 
-                Company.company_name.asc()
-            ).offset(offset).limit(limit).all()
-            return [self._company_to_dict(company) for company in companies]
+            try:
+                self.db.rollback()
+                query = self.db.query(Company).filter(
+                    Company.locality.ilike(f'%{translated_location}%')
+                )
+                companies = query.order_by(
+                    func.length(func.coalesce(Company.tax_data_2025, '')).desc().nullslast(), 
+                    Company.company_name.asc()
+                ).offset(offset).limit(limit).all()
+                return [self._company_to_dict(company) for company in companies]
+            except Exception as orm_error:
+                logging.error(f"[DB_SERVICE][BY_LOCATION] ORM fallback also failed: {orm_error}")
+                return []
 
     def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
         logging.info(f"[DB_SERVICE][DETAILS] company_id={company_id}")
@@ -250,6 +271,9 @@ class CompanyService:
             Company dictionary or None
         """
         try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
             company = self.db.query(Company).filter(
                 Company.bin_number == company_id
             ).first()
@@ -272,20 +296,27 @@ class CompanyService:
         Returns:
             List of location dictionaries with counts
         """
-        result = self.db.query(
-            Company.locality,
-            func.count(Company.bin_number).label('company_count')
-        ).group_by(Company.locality).order_by(
-            func.count(Company.bin_number).desc()
-        ).all()
-        logging.info(f"[DB_SERVICE][LOCATIONS] Query returned {len(result)} locations")
-        return [
-            {
-                'location': row.locality,
-                'company_count': row.company_count
-            }
-            for row in result
-        ]
+        try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
+            result = self.db.query(
+                Company.locality,
+                func.count(Company.bin_number).label('company_count')
+            ).group_by(Company.locality).order_by(
+                func.count(Company.bin_number).desc()
+            ).all()
+            logging.info(f"[DB_SERVICE][LOCATIONS] Query returned {len(result)} locations")
+            return [
+                {
+                    'location': row.locality,
+                    'company_count': row.company_count
+                }
+                for row in result
+            ]
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][LOCATIONS] Error: {e}")
+            return []
 
     def get_companies_by_region_keywords(
         self, 
@@ -302,18 +333,25 @@ class CompanyService:
         Returns:
             List of company dictionaries
         """
-        query = self.db.query(Company)
-        
-        # Build OR conditions for each keyword
-        conditions = []
-        for keyword in keywords:
-            conditions.append(Company.locality.ilike(f'%{keyword}%'))
-        
-        if conditions:
-            query = query.filter(or_(*conditions))
-        
-        companies = query.limit(limit).all()
-        return [self._company_to_dict(company) for company in companies]
+        try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            
+            query = self.db.query(Company)
+            
+            # Build OR conditions for each keyword
+            conditions = []
+            for keyword in keywords:
+                conditions.append(Company.locality.ilike(f'%{keyword}%'))
+            
+            if conditions:
+                query = query.filter(or_(*conditions))
+            
+            companies = query.limit(limit).all()
+            return [self._company_to_dict(company) for company in companies]
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][REGION_KEYWORDS] Error: {e}")
+            return []
 
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
         """Converts a Company SQLAlchemy object to a dictionary, always including all fields."""
@@ -327,13 +365,19 @@ class CompanyService:
             "oked": getattr(company, "oked_code", None),
             "kato": getattr(company, "kato_code", None),
             "krp": getattr(company, "krp_code", None),
-            "tax_data_2023": getattr(company, "tax_payment_2023", None),
-            "tax_data_2024": getattr(company, "tax_payment_2024", None),
-            "tax_data_2025": getattr(company, "tax_payment_2025", None),
+            "tax_data_2023": getattr(company, "tax_data_2023", None),
+            "tax_data_2024": getattr(company, "tax_data_2024", None),
+            "tax_data_2025": getattr(company, "tax_data_2025", None),
             "contacts": getattr(company, "phone", None) or getattr(company, "email", None),
-            "website": getattr(company, "location", None),
+            "website": None,   # location column doesn't exist in actual DB
         }
 
     def get_total_company_count(self) -> int:
         """Get the total number of companies in the database."""
-        return self.db.query(Company).count() 
+        try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            return self.db.query(Company).count()
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][COUNT] Error: {e}")
+            return 0 
