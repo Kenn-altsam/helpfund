@@ -91,12 +91,22 @@ def get_company_table_optimization_sql() -> str:
     -- Create additional performance indexes if needed
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
     ON companies (tax_payment_2025) 
-    WHERE tax_payment_2025 > 0;
+    WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 0;
     
-    -- Create index for charity-related queries (if you add charity fields later)
-    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_charity_interest 
-    -- ON companies (charity_interest_score) 
-    -- WHERE charity_interest_score > 0;
+    -- Create index for companies with contact information
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
+    ON companies (phone, email) 
+    WHERE phone IS NOT NULL OR email IS NOT NULL;
+    
+    -- Create index for companies by size category
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
+    ON companies (Size) 
+    WHERE Size LIKE '%Крупн%';
+    
+    -- Create index for companies with high tax payment
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
+    ON companies (tax_payment_2025) 
+    WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 1000000;
     
     -- Create index for website/social media presence
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_website 

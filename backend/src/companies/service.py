@@ -41,7 +41,7 @@ class CompanyService:
         if location:
             translated_location = CityTranslationService.translate_city_name(location)
             param_count += 1
-            query_parts.append(f"AND \"Locality\" ILIKE %(loc_{param_count})s")
+            query_parts.append(f"AND \"Locality\" ILIKE :loc_{param_count}")
             params[f"loc_{param_count}"] = f"%{translated_location}%"
             logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
 
@@ -50,13 +50,13 @@ class CompanyService:
             if len(company_name.split()) > 1:
                 # Use full-text search for multi-word queries
                 param_count += 1
-                query_parts.append(f"AND to_tsvector('russian', \"Company\") @@ plainto_tsquery('russian', %(name_{param_count})s)")
+                query_parts.append(f"AND to_tsvector('russian', \"Company\") @@ plainto_tsquery('russian', :name_{param_count})")
                 params[f"name_{param_count}"] = company_name
                 logging.info(f"[DB_SERVICE][SEARCH] Added full-text name filter for: {company_name}")
             else:
                 # Use ILIKE for single word queries
                 param_count += 1
-                query_parts.append(f"AND \"Company\" ILIKE %(name_{param_count})s")
+                query_parts.append(f"AND \"Company\" ILIKE :name_{param_count}")
                 params[f"name_{param_count}"] = f"%{company_name}%"
                 logging.info(f"[DB_SERVICE][SEARCH] Added ILIKE name filter: Company ILIKE '%{company_name}%'")
 
@@ -65,17 +65,18 @@ class CompanyService:
             activity_conditions = []
             for i, keyword in enumerate(activity_keywords):
                 param_count += 1
-                activity_conditions.append(f"to_tsvector('russian', \"Activity\") @@ plainto_tsquery('russian', %(act_{param_count})s)")
+                activity_conditions.append(f"to_tsvector('russian', \"Activity\") @@ plainto_tsquery('russian', :act_{param_count})")
                 params[f"act_{param_count}"] = keyword
             query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
             logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
 
         # 4. Optimized ORDER BY using indexed numeric column instead of string length
+        # Using tax_payment_2025 as per actual database schema
         query_parts.append("ORDER BY COALESCE(tax_payment_2025, 0) DESC, \"Company\" ASC")
         logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_payment_2025 DESC, Company ASC")
 
         # 5. Add pagination
-        query_parts.append("LIMIT %(limit)s OFFSET %(offset)s")
+        query_parts.append("LIMIT :limit OFFSET :offset")
         params["limit"] = limit
         params["offset"] = offset
         logging.info(f"[DB_SERVICE][SEARCH] Applied LIMIT {limit} OFFSET {offset}")
@@ -157,8 +158,11 @@ class CompanyService:
         if filters:
             query = query.filter(and_(*filters))
 
-        # Use numeric tax_payment_2025 for sorting instead of string length
-        query = query.order_by(Company.tax_payment_2025.desc().nullslast(), Company.company_name.asc())
+        # Use tax_payment_2025 for sorting (as per actual database schema)
+        query = query.order_by(
+            func.coalesce(Company.tax_payment_2025, 0).desc().nullslast(), 
+            Company.company_name.asc()
+        )
         results = query.offset(offset).limit(limit).all()
         
         return [self._company_to_dict(c) for c in results]
@@ -186,9 +190,9 @@ class CompanyService:
         
         query = """
             SELECT * FROM companies 
-            WHERE "Locality" ILIKE %(location)s
+            WHERE "Locality" ILIKE :location
             ORDER BY COALESCE(tax_payment_2025, 0) DESC, "Company" ASC
-            LIMIT %(limit)s OFFSET %(offset)s
+            LIMIT :limit OFFSET :offset
         """
         
         try:
@@ -228,7 +232,10 @@ class CompanyService:
             query = self.db.query(Company).filter(
                 Company.locality.ilike(f'%{translated_location}%')
             )
-            companies = query.order_by(Company.tax_payment_2025.desc().nullslast(), Company.company_name.asc()).offset(offset).limit(limit).all()
+            companies = query.order_by(
+                func.coalesce(Company.tax_payment_2025, 0).desc().nullslast(), 
+                Company.company_name.asc()
+            ).offset(offset).limit(limit).all()
             return [self._company_to_dict(company) for company in companies]
 
     def get_company_by_id(self, company_id: str) -> Optional[Dict[str, Any]]:
