@@ -73,7 +73,17 @@ class Settings(BaseSettings):
             if origins is None or origins == "":
                 values['ALLOWED_ORIGINS'] = ["*"]
             elif isinstance(origins, str):
-                # Split comma-separated string
+                # Try to parse as JSON first (for ["url1", "url2"] format)
+                try:
+                    import json
+                    parsed_origins = json.loads(origins)
+                    if isinstance(parsed_origins, list):
+                        values['ALLOWED_ORIGINS'] = [origin.strip() for origin in parsed_origins if origin.strip()]
+                        return values
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                
+                # Fall back to comma-separated string parsing
                 values['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins.split(',') if origin.strip()]
         return values
 
