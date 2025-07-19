@@ -90,22 +90,28 @@ const generateId = () => `temp-id-${Math.random().toString(36).substr(2, 9)}`;
 
 // Companies API
 export const companiesApi = {
-  search: async (params: { location?: string; company_name?: string; limit?: number }) => {
+  search: async (params: { location?: string; company_name?: string; limit?: number; page?: number }) => {
     try {
       const response = await api.get('/companies/search', { params });
-      return response.data.data.map(transformCompanyData);
+      return {
+        companies: response.data.data.map(transformCompanyData),
+        pagination: response.data.metadata?.pagination
+      };
     } catch (error) {
       console.error('Failed to search companies:', error);
       throw error;
     }
   },
 
-  getByLocation: async (location: string, limit: number = 50) => {
+  getByLocation: async (location: string, limit: number = 50, page: number = 1) => {
     try {
       const response = await api.get(`/companies/by-location/${encodeURIComponent(location)}`, {
-        params: { limit }
+        params: { limit, page }
       });
-      return response.data.data.map(transformCompanyData);
+      return {
+        companies: response.data.data.map(transformCompanyData),
+        pagination: response.data.metadata?.pagination
+      };
     } catch (error) {
       console.error('Failed to get companies by location:', error);
       throw error;

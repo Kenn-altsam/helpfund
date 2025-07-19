@@ -101,10 +101,10 @@ class CharityFundAssistant:
                                         "description": "Maximum number of companies to return (defaults to 50 if not specified)",
                                         "default": 10
                                     },
-                                    "offset": {
+                                    "page": {
                                         "type": "integer",
-                                        "description": "Offset for pagination (number of companies to skip). Use 0 for first page, limit for second page, 2*limit for third page, etc.",
-                                        "default": 0
+                                        "description": "Page number for pagination (1-based). Use 1 for first page, 2 for second page, etc.",
+                                        "default": 1
                                     },
 
                                 },
@@ -218,26 +218,26 @@ class CharityFundAssistant:
                             try:
                                 company_service = CompanyService(db)
                                 limit = int(function_args.get("limit", 50))
-                                offset = function_args.get("offset")
-                                if offset is None:
-                                    # If AI didn't provide offset, calculate it based on chat history
+                                page = function_args.get("page")
+                                if page is None:
+                                    # If AI didn't provide page, calculate it based on chat history
                                     if chat_id:
                                         # Use the chat_id to count previous search requests
                                         from ..chats import service as chat_service
                                         prev_search_calls = chat_service.count_search_requests(db, chat_id)
-                                        # Calculate offset: (prev_search_calls - 1) * limit
-                                        # First search: prev_search_calls=1, offset=0
-                                        # Second search: prev_search_calls=2, offset=limit
-                                        # Third search: prev_search_calls=3, offset=2*limit
-                                        offset = max(0, (prev_search_calls - 1) * limit)
-                                        print(f"[Pagination] Calculated offset={offset} (prev_search_calls={prev_search_calls}, limit={limit})")
+                                        # Calculate page: (prev_search_calls - 1) + 1
+                                        # First search: prev_search_calls=1, page=1
+                                        # Second search: prev_search_calls=2, page=2
+                                        # Third search: prev_search_calls=3, page=3
+                                        page = max(1, (prev_search_calls - 1) + 1)
+                                        print(f"[Pagination] Calculated page={page} (prev_search_calls={prev_search_calls}, limit={limit})")
                                     else:
-                                        # Fallback to offset=0 if no chat_id available
-                                        offset = 0
-                                        print(f"[Pagination] Using default offset={offset} (no chat_id available)")
+                                        # Fallback to page=1 if no chat_id available
+                                        page = 1
+                                        print(f"[Pagination] Using default page={page} (no chat_id available)")
                                 else:
-                                    offset = int(offset)
-                                    print(f"[Pagination] Using AI-provided offset={offset}")
+                                    page = int(page)
+                                    print(f"[Pagination] Using AI-provided page={page}")
 
                                 
                                 companies = company_service.search_companies(
@@ -245,7 +245,7 @@ class CharityFundAssistant:
                                     company_name=function_args.get("company_name"),
                                     activity_keywords=function_args.get("activity_keywords"),
                                     limit=limit,
-                                    offset=offset
+                                    offset=(page - 1) * limit
                                 )
                                 formatted_companies = []
                                 for company_dict in companies:
@@ -268,7 +268,6 @@ class CharityFundAssistant:
                                     formatted_companies.append(formatted_company)
                                     companies_found_in_turn.append(formatted_company)
                                 
-                                page = (offset // limit) + 1 if limit and offset > 0 else 1
                                 result = {"companies": formatted_companies, "total_found": len(formatted_companies), "search_criteria": function_args, "page": page, "limit": limit}
                                 tool_outputs.append({"tool_call_id": tool_call.id, "output": json.dumps(result, ensure_ascii=False)})
                                 print(f"✅ Search completed: {len(formatted_companies)} companies found")

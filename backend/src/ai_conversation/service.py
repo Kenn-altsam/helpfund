@@ -582,6 +582,7 @@ class OpenAIService:
                 print(f"   location: {location}")
                 print(f"   activity_keywords: {activity_keywords}")
                 print(f"   limit: {search_limit}")
+                print(f"   page: {page}")
                 print(f"   offset: {offset}")
                 
                 company_service = CompanyService(db)

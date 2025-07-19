@@ -507,3 +507,16 @@ class CompanyService:
         except Exception as e:
             logging.error(f"[DB_SERVICE][COUNT] Error: {e}")
             return 0 
+
+    def get_total_company_count_by_location(self, location: str) -> int:
+        """Get the total number of companies in a specific location."""
+        try:
+            # Ensure we start with a clean transaction state
+            self.db.rollback()
+            translated_location = CityTranslationService.translate_city_name(location)
+            return self.db.query(Company).filter(
+                Company.locality.ilike(f"%{translated_location}%")
+            ).count()
+        except Exception as e:
+            logging.error(f"[DB_SERVICE][COUNT_BY_LOCATION] Error: {e}")
+            return 0 

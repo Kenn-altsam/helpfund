@@ -1,3 +1,17 @@
+export interface PaginationMetadata {
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T;
+  pagination?: PaginationMetadata;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -63,6 +77,9 @@ export interface ApiResponse<T> {
   data: T;
   message?: string;
   success: boolean;
+  metadata?: {
+    pagination?: PaginationMetadata;
+  };
 }
 
 export interface ChatRequest {
@@ -71,6 +88,7 @@ export interface ChatRequest {
   location?: string;
   assistant_id?: string;
   thread_id?: string;
+  page?: number;
 }
 
 export interface ChatResponse {
@@ -78,6 +96,7 @@ export interface ChatResponse {
   companies?: Company[];
   assistant_id?: string;
   thread_id?: string;
+  pagination?: PaginationMetadata;
 }
 
 export interface AuthCredentials {

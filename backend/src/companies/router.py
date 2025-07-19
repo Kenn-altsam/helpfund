@@ -58,7 +58,8 @@ async def search_companies(
             "or as a comma-separated string `?activity_keywords=oil,gas`."
         )
     ),
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of results"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of results per page"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -68,27 +69,46 @@ async def search_companies(
         location: Location filter (searches in Locality field).Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user."
         company_name: Company name filter
         activity_keywords: List of keywords to search in the company's activity/description field
-        limit: Maximum number of results
+        limit: Maximum number of results per page
+        page: Page number (1-based pagination)
         db: Database session
         
     Returns:
-        List of companies matching the criteria
+        List of companies matching the criteria with pagination metadata
     """
-    logging.info(f"[COMPANIES][SEARCH] Request: location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}")
+    logging.info(f"[COMPANIES][SEARCH] Request: location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}, page={page}")
     try:
+        # Calculate offset from page number
+        offset = (page - 1) * limit
+        logging.info(f"[COMPANIES][SEARCH] Calculated offset={offset} from page={page}, limit={limit}")
+        
         company_service = CompanyService(db)
         companies = await company_service.search_companies(
             location=location,
             company_name=company_name,
             activity_keywords=activity_keywords,
-            limit=limit
+            limit=limit,
+            offset=offset
         )
         logging.info(f"[COMPANIES][SEARCH] Found {len(companies)} companies")
+        
+        # Get total count for pagination metadata
+        total_count = company_service.get_total_company_count()
         
         return APIResponse(
             status="success",
             data=companies,
-            message=f"Found {len(companies)} companies"
+            message=f"Found {len(companies)} companies",
+            metadata={
+                "pagination": {
+                    "total": total_count,
+                    "page": page,
+                    "per_page": limit,
+                    "total_pages": (total_count + limit - 1) // limit,
+                    "has_next": page * limit < total_count,
+                    "has_prev": page > 1
+                }
+            }
         )
         
     except Exception as e:
@@ -107,8 +127,8 @@ async def search_companies(
 )
 async def get_companies_by_location(
     location: str,
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of results"),
-    offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of results per page"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -116,15 +136,19 @@ async def get_companies_by_location(
     
     Args:
         location: Location name (city, region, or area). English names are automatically translated to Russian.
-        limit: Maximum number of results
-        offset: Number of results to skip
+        limit: Maximum number of results per page
+        page: Page number (1-based pagination)
         db: Database session
         
     Returns:
-        List of companies in the specified location
+        List of companies in the specified location with pagination metadata
     """
-    logging.info(f"[COMPANIES][BY_LOCATION] Request: location={location}, limit={limit}, offset={offset}")
+    logging.info(f"[COMPANIES][BY_LOCATION] Request: location={location}, limit={limit}, page={page}")
     try:
+        # Calculate offset from page number
+        offset = (page - 1) * limit
+        logging.info(f"[COMPANIES][BY_LOCATION] Calculated offset={offset} from page={page}, limit={limit}")
+        
         company_service = CompanyService(db)
         companies = await company_service.get_companies_by_location(location, limit, offset)
         logging.info(f"[COMPANIES][BY_LOCATION] Found {len(companies)} companies in {location}")
@@ -135,11 +159,24 @@ async def get_companies_by_location(
                 status_code=404,
                 detail=f"No companies found in location: {location}"
             )
+        
+        # Get total count for this location
+        total_count = company_service.get_total_company_count_by_location(location)
             
         return APIResponse(
             status="success",
             data=companies,
-            message=f"Found {len(companies)} companies in {location}"
+            message=f"Found {len(companies)} companies in {location}",
+            metadata={
+                "pagination": {
+                    "total": total_count,
+                    "page": page,
+                    "per_page": limit,
+                    "total_pages": (total_count + limit - 1) // limit,
+                    "has_next": page * limit < total_count,
+                    "has_prev": page > 1
+                }
+            }
         )
         
     except HTTPException:

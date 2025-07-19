@@ -227,8 +227,8 @@ export function FinderPage() {
         history: previousMessages,
         assistant_id: assistantId || undefined,
         thread_id: threadId || undefined,
-        // Optionally, you can add page/quantity if your backend supports it directly
-        // page: nextPage,
+        // Add page parameter for pagination
+        page: isMore ? 2 : 1, // For 'more' requests, use page 2, otherwise page 1
       };
 
       console.log('[handleSendMessage] SENDING:', {
