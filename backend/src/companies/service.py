@@ -109,7 +109,7 @@ class CompanyService:
                     "tax_data_2023": getattr(row, 'tax_data_2023', None),
                     "tax_data_2024": getattr(row, 'tax_data_2024', None),
                     "tax_data_2025": getattr(row, 'tax_data_2025', None),
-                    "contacts": getattr(row, 'phone', None) or getattr(row, 'email', None),
+                    "contacts": None,  # phone and email columns don't exist in actual database
                     "website": None,   # location column doesn't exist in actual DB
                 }
                 converted_results.append(company_dict)
@@ -235,7 +235,7 @@ class CompanyService:
                     "tax_data_2023": getattr(row, 'tax_data_2023', None),
                     "tax_data_2024": getattr(row, 'tax_data_2024', None),
                     "tax_data_2025": getattr(row, 'tax_data_2025', None),
-                    "contacts": getattr(row, 'phone', None) or getattr(row, 'email', None),
+                    "contacts": None,  # phone and email columns don't exist in actual database
                     "website": None,   # location column doesn't exist in actual DB
                 }
                 result_dicts.append(company_dict)
@@ -368,7 +368,7 @@ class CompanyService:
             "tax_data_2023": getattr(company, "tax_data_2023", None),
             "tax_data_2024": getattr(company, "tax_data_2024", None),
             "tax_data_2025": getattr(company, "tax_data_2025", None),
-            "contacts": getattr(company, "phone", None) or getattr(company, "email", None),
+            "contacts": None,  # phone and email columns don't exist in actual database
             "website": None,   # location column doesn't exist in actual DB
         }
 

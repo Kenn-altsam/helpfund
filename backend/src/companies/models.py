@@ -32,9 +32,8 @@ class Company(Base):
     krp_code = Column("KRP", String(50))
     company_size = Column("Size", String(50), index=True)
     
-    # Additional fields from actual database (unquoted column names as per database schema)
-    phone = Column(Text)
-    email = Column(Text)
+    # Note: phone and email columns don't exist in actual database schema
+    # These fields are handled in the service layer using other available data
     # Note: These columns don't exist in the actual database schema
     # degreeofrisk = Column(Text)
     # executive = Column(Text)

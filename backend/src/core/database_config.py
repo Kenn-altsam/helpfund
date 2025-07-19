@@ -221,14 +221,8 @@ def create_indexes(engine) -> None:
             """
         ]
         
-        # Check if contact columns exist before adding contact indexes
-        contact_columns = [col[0] for col in columns if col[0] in ['phone', 'email']]
-        if len(contact_columns) >= 2:
-            indexes.append(f"""
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
-            ON companies ({', '.join(contact_columns)}) 
-            WHERE {' OR '.join(f'{col} IS NOT NULL' for col in contact_columns)};
-            """)
+        # Note: phone and email columns don't exist in actual database schema
+        # Skipping contact-related indexes
         
         indexes.extend(non_tax_indexes)
         
