@@ -71,9 +71,9 @@ class CompanyService:
             logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
 
         # 4. Optimized ORDER BY using indexed numeric column instead of string length
-        # Using tax_payment_2025 as per actual database schema
-        query_parts.append("ORDER BY COALESCE(tax_payment_2025, 0) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_payment_2025 DESC, Company ASC")
+        # Using tax_data_2025 as per actual database schema
+        query_parts.append("ORDER BY COALESCE(tax_data_2025, 0) DESC, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_data_2025 DESC, Company ASC")
 
         # 5. Add pagination
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -103,9 +103,9 @@ class CompanyService:
                     "size": row.Size,
                     "kato": row.KATO,
                     "krp": row.KRP,
-                    "tax_data_2023": row.tax_payment_2023,
-                    "tax_data_2024": row.tax_payment_2024,
-                    "tax_data_2025": row.tax_payment_2025,
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
                     "contacts": row.phone or row.email,
                     "website": row.location,  # Using location field as website for now
                 }
@@ -158,9 +158,9 @@ class CompanyService:
         if filters:
             query = query.filter(and_(*filters))
 
-        # Use tax_payment_2025 for sorting (as per actual database schema)
+        # Use tax_data_2025 for sorting (as per actual database schema)
         query = query.order_by(
-            func.coalesce(Company.tax_payment_2025, 0).desc().nullslast(), 
+            func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
             Company.company_name.asc()
         )
         results = query.offset(offset).limit(limit).all()
@@ -191,7 +191,7 @@ class CompanyService:
         query = """
             SELECT * FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY COALESCE(tax_payment_2025, 0) DESC, "Company" ASC
+            ORDER BY COALESCE(tax_data_2025, 0) DESC, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         

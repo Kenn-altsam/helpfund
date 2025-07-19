@@ -66,29 +66,84 @@ def apply_optimizations():
         
         print("✅ Connected to database successfully")
         
+        # 0. Check actual table schema first
+        print("\n🔍 Checking table schema...")
+        cursor.execute("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'companies' 
+            ORDER BY ordinal_position;
+        """)
+        columns = cursor.fetchall()
+        print("📋 Available columns in companies table:")
+        for col_name, col_type in columns:
+            print(f"  - {col_name}: {col_type}")
+        
+        # Check for tax_data columns
+        tax_columns = [col[0] for col in columns if col[0] in ['tax_data_2023', 'tax_data_2024', 'tax_data_2025']]
+        if tax_columns:
+            print(f"📊 Found tax columns: {tax_columns}")
+            # Use the most recent tax column (2025 if available, otherwise 2024, then 2023)
+            if 'tax_data_2025' in tax_columns:
+                tax_column = 'tax_data_2025'
+            elif 'tax_data_2024' in tax_columns:
+                tax_column = 'tax_data_2024'
+            else:
+                tax_column = 'tax_data_2023'
+            print(f"🎯 Using tax column: {tax_column}")
+        else:
+            print("❌ No tax_data columns found. Skipping tax-based indexes.")
+            tax_column = None
+        
         # 1. Create performance indexes
         print("\n📊 Creating performance indexes...")
         
-        indexes = [
-            # Composite index for location + tax payment queries
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
-            ON companies ("Locality", tax_payment_2025);
-            """,
-            
-            # Composite index for activity + tax payment queries
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
-            ON companies ("Activity", tax_payment_2025);
-            """,
-            
-            # Partial index for companies with tax data
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
-            ON companies (tax_payment_2025) 
-            WHERE tax_payment_2025 IS NOT NULL;
-            """,
-            
+        indexes = []
+        
+        # Only add tax-related indexes if tax column exists
+        if tax_column:
+            indexes.extend([
+                # Composite index for location + tax payment queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
+                ON companies ("Locality", {tax_column});
+                """,
+                
+                # Composite index for activity + tax payment queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
+                ON companies ("Activity", {tax_column});
+                """,
+                
+                # Partial index for companies with tax data
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
+                ON companies ({tax_column}) 
+                WHERE {tax_column} IS NOT NULL;
+                """,
+                
+                # Composite index for region + size + tax queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
+                ON companies ("Locality", "Size", {tax_column});
+                """,
+                
+                # Additional performance indexes
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
+                ON companies ({tax_column}) 
+                WHERE {tax_column} IS NOT NULL AND {tax_column} > 0;
+                """,
+                
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
+                ON companies ({tax_column}) 
+                WHERE {tax_column} IS NOT NULL AND {tax_column} > 1000000;
+                """
+            ])
+        
+        # Add non-tax indexes (check if columns exist first)
+        non_tax_indexes = [
             # Full-text search index for company names
             """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_name_gin 
@@ -107,43 +162,33 @@ def apply_optimizations():
             ON companies ("Size");
             """,
             
-            # Composite index for region + size + tax queries
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
-            ON companies ("Locality", "Size", tax_payment_2025);
-            """,
-            
-            # Additional performance indexes
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
-            ON companies (tax_payment_2025) 
-            WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 0;
-            """,
-            
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
-            ON companies (phone, email) 
-            WHERE phone IS NOT NULL OR email IS NOT NULL;
-            """,
-            
             """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
             ON companies ("Size") 
             WHERE "Size" LIKE '%Крупн%';
-            """,
-            
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
-            ON companies (tax_payment_2025) 
-            WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 1000000;
-            """,
-            
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_website 
-            ON companies (location) 
-            WHERE location IS NOT NULL AND location != '';
             """
         ]
+        
+        # Check if contact columns exist before adding contact indexes
+        contact_columns = [col[0] for col in columns if col[0] in ['phone', 'email']]
+        if len(contact_columns) >= 2:
+            indexes.append(f"""
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
+            ON companies ({', '.join(contact_columns)}) 
+            WHERE {' OR '.join(f'{col} IS NOT NULL' for col in contact_columns)};
+            """)
+        
+        # Check if location column exists
+        location_columns = [col[0] for col in columns if 'location' in col[0].lower() or 'website' in col[0].lower()]
+        if location_columns:
+            location_col = location_columns[0]
+            indexes.append(f"""
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_website 
+            ON companies ({location_col}) 
+            WHERE {location_col} IS NOT NULL AND {location_col} != '';
+            """)
+        
+        indexes.extend(non_tax_indexes)
         
         for i, index_sql in enumerate(indexes, 1):
             try:
@@ -165,12 +210,20 @@ def apply_optimizations():
         
         # 4. Test the optimized query
         print("\n🧪 Testing optimized query...")
-        test_query = """
-            SELECT COUNT(*) FROM companies 
-            WHERE "Locality" ILIKE %s
-            ORDER BY COALESCE(tax_payment_2025, 0) DESC, "Company" ASC
-            LIMIT 5;
-        """
+        if tax_column:
+            test_query = f"""
+                SELECT COUNT(*) FROM companies 
+                WHERE "Locality" ILIKE %s
+                ORDER BY COALESCE({tax_column}, 0) DESC, "Company" ASC
+                LIMIT 5;
+            """
+        else:
+            test_query = """
+                SELECT COUNT(*) FROM companies 
+                WHERE "Locality" ILIKE %s
+                ORDER BY "Company" ASC
+                LIMIT 5;
+            """
         
         cursor.execute(test_query, ("%Алматы%",))
         count = cursor.fetchone()[0]
