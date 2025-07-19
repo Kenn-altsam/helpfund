@@ -128,17 +128,11 @@ def apply_optimizations():
                 ON companies ("Locality", "Size", {tax_column});
                 """,
                 
-                # Additional performance indexes
+                # Index for companies with non-empty tax data
                 f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_empty 
                 ON companies ({tax_column}) 
-                WHERE {tax_column} IS NOT NULL AND {tax_column} > 0;
-                """,
-                
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
-                ON companies ({tax_column}) 
-                WHERE {tax_column} IS NOT NULL AND {tax_column} > 1000000;
+                WHERE {tax_column} IS NOT NULL AND {tax_column} != '';
                 """
             ])
         
@@ -214,7 +208,7 @@ def apply_optimizations():
             test_query = f"""
                 SELECT COUNT(*) FROM companies 
                 WHERE "Locality" ILIKE %s
-                ORDER BY COALESCE({tax_column}, 0) DESC, "Company" ASC
+                ORDER BY {tax_column} DESC NULLS LAST, "Company" ASC
                 LIMIT 5;
             """
         else:

@@ -70,10 +70,10 @@ class CompanyService:
             query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
             logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
 
-        # 4. Optimized ORDER BY using indexed numeric column instead of string length
-        # Using tax_data_2025 as per actual database schema
-        query_parts.append("ORDER BY COALESCE(tax_data_2025, 0) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_data_2025 DESC, Company ASC")
+        # 4. Optimized ORDER BY using indexed text column
+        # Using tax_data_2025 as per actual database schema (text type)
+        query_parts.append("ORDER BY tax_data_2025 DESC NULLS LAST, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY tax_data_2025 DESC NULLS LAST, Company ASC")
 
         # 5. Add pagination
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -160,7 +160,7 @@ class CompanyService:
 
         # Use tax_data_2025 for sorting (as per actual database schema)
         query = query.order_by(
-            func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
+            Company.tax_data_2025.desc().nullslast(), 
             Company.company_name.asc()
         )
         results = query.offset(offset).limit(limit).all()
@@ -191,7 +191,7 @@ class CompanyService:
         query = """
             SELECT * FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY COALESCE(tax_data_2025, 0) DESC, "Company" ASC
+            ORDER BY tax_data_2025 DESC NULLS LAST, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         
