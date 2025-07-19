@@ -91,8 +91,8 @@ def get_company_table_optimization_sql() -> str:
     
     -- Create additional performance indexes if needed
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_range 
-    ON companies (tax_payment_2025) 
-    WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 0;
+    ON companies (tax_data_2025) 
+    WHERE tax_data_2025 IS NOT NULL AND tax_data_2025 != '';
     
     -- Create index for companies with contact information
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
@@ -104,15 +104,12 @@ def get_company_table_optimization_sql() -> str:
     ON companies (Size) 
     WHERE Size LIKE '%Крупн%';
     
-    -- Create index for companies with high tax payment
+    -- Create index for companies with high tax payment (longer text = higher payment)
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
-    ON companies (tax_payment_2025) 
-    WHERE tax_payment_2025 IS NOT NULL AND tax_payment_2025 > 1000000;
+    ON companies (LENGTH(tax_data_2025)) 
+    WHERE tax_data_2025 IS NOT NULL AND LENGTH(tax_data_2025) > 10;
     
-    -- Create index for website/social media presence
-    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_website 
-    ON companies (location) 
-    WHERE location IS NOT NULL AND location != '';
+    -- Note: location column doesn't exist in actual schema, skipping website index
     """
 
 
@@ -127,16 +124,8 @@ def optimize_database_connection(engine) -> None:
         from sqlalchemy import text
         
         with engine.connect() as conn:
-            # Apply PostgreSQL optimizations
-            optimization_sql = get_postgresql_optimization_sql()
-            for statement in optimization_sql.split(';'):
-                if statement.strip():
-                    try:
-                        conn.execute(text(statement.strip()))
-                        conn.commit()
-                    except Exception as stmt_error:
-                        # Skip statements that fail (like ALTER SYSTEM which requires superuser)
-                        print(f"⚠️  Skipping optimization statement: {stmt_error}")
+            # Skip PostgreSQL system optimizations (require superuser privileges)
+            # Only apply table-specific optimizations that don't require elevated privileges
             
             # Apply table-specific optimizations
             table_optimization_sql = get_company_table_optimization_sql()
