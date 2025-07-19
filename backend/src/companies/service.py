@@ -71,8 +71,11 @@ class CompanyService:
     ) -> List[Dict[str, Any]]:
         logging.info(f"[DB_SERVICE][SEARCH] location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}, offset={offset}")
         
-        # Use raw SQL for optimal performance with proper indexing
-        query_parts = ["SELECT * FROM companies WHERE 1=1"]
+        # Optimized query construction - only select needed columns for better performance
+        query_parts = [
+            "SELECT id, \"Company\", \"BIN\", \"Activity\", \"Locality\", \"OKED\", \"Size\", \"KATO\", \"KRP\", tax_data_2023, tax_data_2024, tax_data_2025",
+            "FROM companies WHERE 1=1"
+        ]
         params = {}
         param_count = 0
         
@@ -84,35 +87,43 @@ class CompanyService:
             params[f"loc_{param_count}"] = f"%{translated_location}%"
             logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
 
-        # 2. Add company name filter if provided (using full-text search when possible)
+        # 2. Add company name filter if provided (optimized for single word vs multi-word)
         if company_name:
             if len(company_name.split()) > 1:
-                # Use full-text search for multi-word queries
+                # Use full-text search for multi-word queries (faster than ILIKE)
                 param_count += 1
                 query_parts.append(f"AND to_tsvector('russian', \"Company\") @@ plainto_tsquery('russian', :name_{param_count})")
                 params[f"name_{param_count}"] = company_name
                 logging.info(f"[DB_SERVICE][SEARCH] Added full-text name filter for: {company_name}")
             else:
-                # Use ILIKE for single word queries
+                # Use ILIKE for single word queries (faster for simple patterns)
                 param_count += 1
                 query_parts.append(f"AND \"Company\" ILIKE :name_{param_count}")
                 params[f"name_{param_count}"] = f"%{company_name}%"
                 logging.info(f"[DB_SERVICE][SEARCH] Added ILIKE name filter: Company ILIKE '%{company_name}%'")
 
-        # 3. Add activity filter if provided (using full-text search)
+        # 3. Add activity filter if provided (optimized full-text search)
         if activity_keywords and len(activity_keywords) > 0:
-            activity_conditions = []
-            for i, keyword in enumerate(activity_keywords):
+            if len(activity_keywords) == 1:
+                # Single keyword - use ILIKE for better performance
                 param_count += 1
-                activity_conditions.append(f"to_tsvector('russian', \"Activity\") @@ plainto_tsquery('russian', :act_{param_count})")
-                params[f"act_{param_count}"] = keyword
-            query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
-            logging.info(f"[DB_SERVICE][SEARCH] Added activity filters for keywords: {activity_keywords}")
+                query_parts.append(f"AND \"Activity\" ILIKE :act_{param_count}")
+                params[f"act_{param_count}"] = f"%{activity_keywords[0]}%"
+                logging.info(f"[DB_SERVICE][SEARCH] Added ILIKE activity filter: Activity ILIKE '%{activity_keywords[0]}%'")
+            else:
+                # Multiple keywords - use full-text search
+                activity_conditions = []
+                for i, keyword in enumerate(activity_keywords):
+                    param_count += 1
+                    activity_conditions.append(f"to_tsvector('russian', \"Activity\") @@ plainto_tsquery('russian', :act_{param_count})")
+                    params[f"act_{param_count}"] = keyword
+                query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
+                logging.info(f"[DB_SERVICE][SEARCH] Added full-text activity filters for keywords: {activity_keywords}")
 
-        # 4. Optimized ORDER BY using length of tax_data_2025 (longer text = higher payment)
-        # Using tax_data_2025 as per actual database schema
-        query_parts.append("ORDER BY LENGTH(COALESCE(tax_data_2025, '')) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied ORDER BY LENGTH(tax_data_2025) DESC, Company ASC")
+        # 4. Optimized ORDER BY - use indexed columns first, then expensive operations
+        # Start with indexed columns for better performance
+        query_parts.append("ORDER BY \"Locality\" ASC, LENGTH(COALESCE(tax_data_2025, '')) DESC, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied optimized ORDER BY")
 
         # 5. Add pagination - ALWAYS use both LIMIT and OFFSET
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -129,28 +140,12 @@ class CompanyService:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             
-            # Debug: Test parameter binding by executing a simple query first
-            test_query = "SELECT COUNT(*) as total FROM companies WHERE 1=1"
-            if location:
-                test_query += f" AND \"Locality\" ILIKE '%{CityTranslationService.translate_city_name(location)}%'"
-            test_result = self.db.execute(text(test_query))
-            total_count = test_result.fetchone()[0]
-            logging.info(f"[DB_SERVICE][SEARCH] Total matching companies: {total_count}")
-            
-            # Execute the main query
+            # Execute the main query directly - no need for test query
             result = self.db.execute(text(final_query), params)
             results = result.fetchall()
             logging.info(f"[DB_SERVICE][SEARCH] Query executed, returned {len(results)} results")
             
-            # Debug: Log the first few results to verify they're different
-            if results:
-                first_company = results[0].Company if hasattr(results[0], 'Company') else 'Unknown'
-                logging.info(f"[DB_SERVICE][SEARCH] First result: {first_company}")
-                if len(results) > 1:
-                    second_company = results[1].Company if hasattr(results[1], 'Company') else 'Unknown'
-                    logging.info(f"[DB_SERVICE][SEARCH] Second result: {second_company}")
-            
-            # Convert results to dictionaries
+            # Convert results to dictionaries efficiently
             converted_results = []
             for row in results:
                 company_dict = {
@@ -163,18 +158,21 @@ class CompanyService:
                     "size": row.Size,
                     "kato": row.KATO,
                     "krp": row.KRP,
-                    "tax_data_2023": getattr(row, 'tax_data_2023', None),
-                    "tax_data_2024": getattr(row, 'tax_data_2024', None),
-                    "tax_data_2025": getattr(row, 'tax_data_2025', None),
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
                     "contacts": None,  # phone and email columns don't exist in actual database
                     "website": None,   # location column doesn't exist in actual DB
                 }
                 converted_results.append(company_dict)
             
-            # Debug logging
+            # Minimal debug logging for performance
             if converted_results:
-                for i, result in enumerate(converted_results[:3]):
-                    logging.info(f"[DB_SERVICE][SEARCH] Result {i+1}: {result['name']} (BIN: {result['bin']})")
+                logging.info(f"[DB_SERVICE][SEARCH] First result: {converted_results[0]['name']} (BIN: {converted_results[0]['bin']})")
+                if len(converted_results) > 1:
+                    logging.info(f"[DB_SERVICE][SEARCH] Second result: {converted_results[1]['name']} (BIN: {converted_results[1]['bin']})")
+                if len(converted_results) > 2:
+                    logging.info(f"[DB_SERVICE][SEARCH] Third result: {converted_results[2]['name']} (BIN: {converted_results[2]['bin']})")
                 if len(converted_results) > 3:
                     logging.info(f"[DB_SERVICE][SEARCH] ... and {len(converted_results) - 3} more")
             else:
@@ -202,7 +200,11 @@ class CompanyService:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             
-            query = self.db.query(Company)
+            # Use select() for better performance - only select needed columns
+            from sqlalchemy import select
+            query = select(Company.id, Company.company_name, Company.bin_number, Company.activity, 
+                          Company.locality, Company.oked_code, Company.company_size, Company.kato_code, 
+                          Company.krp_code, Company.tax_data_2023, Company.tax_data_2024, Company.tax_data_2025)
             filters = []
 
             if location:
@@ -215,22 +217,52 @@ class CompanyService:
                 filters.append(name_filter)
 
             if activity_keywords and len(activity_keywords) > 0:
-                activity_filters = []
-                for keyword in activity_keywords:
-                    activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
-                filters.append(or_(*activity_filters))
+                if len(activity_keywords) == 1:
+                    # Single keyword - use ILIKE for better performance
+                    activity_filter = Company.activity.ilike(f"%{activity_keywords[0]}%")
+                    filters.append(activity_filter)
+                else:
+                    # Multiple keywords - use OR conditions
+                    activity_filters = []
+                    for keyword in activity_keywords:
+                        activity_filters.append(Company.activity.ilike(f"%{keyword}%"))
+                    filters.append(or_(*activity_filters))
 
             if filters:
-                query = query.filter(and_(*filters))
+                query = query.where(and_(*filters))
 
-            # Use length of tax_data_2025 for sorting (longer text = higher payment)
+            # Optimized ORDER BY - use indexed columns first
             query = query.order_by(
+                Company.locality.asc(),
                 func.length(func.coalesce(Company.tax_data_2025, '')).desc().nullslast(), 
                 Company.company_name.asc()
-            )
-            results = query.offset(offset).limit(limit).all()
+            ).offset(offset).limit(limit)
             
-            return [self._company_to_dict(c) for c in results]
+            result = self.db.execute(query)
+            rows = result.fetchall()
+            
+            # Convert to dictionaries efficiently
+            converted_results = []
+            for row in rows:
+                company_dict = {
+                    "id": row.id,
+                    "name": row.company_name,
+                    "bin": row.bin_number,
+                    "activity": row.activity,
+                    "locality": row.locality,
+                    "oked": row.oked_code,
+                    "size": row.company_size,
+                    "kato": row.kato_code,
+                    "krp": row.krp_code,
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
+                    "contacts": None,
+                    "website": None,
+                }
+                converted_results.append(company_dict)
+            
+            return converted_results
             
         except Exception as e:
             logging.error(f"[DB_SERVICE][FALLBACK] Error in fallback search: {e}")
@@ -255,13 +287,14 @@ class CompanyService:
         Returns:
             List of company dictionaries
         """
-        # Use optimized query with proper indexing
+        # Use optimized query with proper indexing - only select needed columns
         translated_location = CityTranslationService.translate_city_name(location)
         
         query = """
-            SELECT * FROM companies 
+            SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025
+            FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY LENGTH(COALESCE(tax_data_2025, '')) DESC, "Company" ASC
+            ORDER BY "Locality" ASC, LENGTH(COALESCE(tax_data_2025, '')) DESC, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         
@@ -289,9 +322,9 @@ class CompanyService:
                     "size": row.Size,
                     "kato": row.KATO,
                     "krp": row.KRP,
-                    "tax_data_2023": getattr(row, 'tax_data_2023', None),
-                    "tax_data_2024": getattr(row, 'tax_data_2024', None),
-                    "tax_data_2025": getattr(row, 'tax_data_2025', None),
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
                     "contacts": None,  # phone and email columns don't exist in actual database
                     "website": None,   # location column doesn't exist in actual DB
                 }
@@ -308,6 +341,7 @@ class CompanyService:
                     Company.locality.ilike(f'%{translated_location}%')
                 )
                 companies = query.order_by(
+                    Company.locality.asc(),
                     func.length(func.coalesce(Company.tax_data_2025, '')).desc().nullslast(), 
                     Company.company_name.asc()
                 ).offset(offset).limit(limit).all()
@@ -394,7 +428,11 @@ class CompanyService:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             
-            query = self.db.query(Company)
+            # Use select() for better performance - only select needed columns
+            from sqlalchemy import select
+            query = select(Company.id, Company.company_name, Company.bin_number, Company.activity, 
+                          Company.locality, Company.oked_code, Company.company_size, Company.kato_code, 
+                          Company.krp_code, Company.tax_data_2023, Company.tax_data_2024, Company.tax_data_2025)
             
             # Build OR conditions for each keyword
             conditions = []
@@ -402,10 +440,41 @@ class CompanyService:
                 conditions.append(Company.locality.ilike(f'%{keyword}%'))
             
             if conditions:
-                query = query.filter(or_(*conditions))
+                query = query.where(or_(*conditions))
             
-            companies = query.limit(limit).all()
-            return [self._company_to_dict(company) for company in companies]
+            # Optimized ORDER BY - use indexed columns first
+            query = query.order_by(
+                Company.locality.asc(),
+                func.length(func.coalesce(Company.tax_data_2025, '')).desc().nullslast(), 
+                Company.company_name.asc()
+            ).limit(limit)
+            
+            result = self.db.execute(query)
+            rows = result.fetchall()
+            
+            # Convert to dictionaries efficiently
+            converted_results = []
+            for row in rows:
+                company_dict = {
+                    "id": row.id,
+                    "name": row.company_name,
+                    "bin": row.bin_number,
+                    "activity": row.activity,
+                    "locality": row.locality,
+                    "oked": row.oked_code,
+                    "size": row.company_size,
+                    "kato": row.kato_code,
+                    "krp": row.krp_code,
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
+                    "contacts": None,
+                    "website": None,
+                }
+                converted_results.append(company_dict)
+            
+            return converted_results
+            
         except Exception as e:
             logging.error(f"[DB_SERVICE][REGION_KEYWORDS] Error: {e}")
             return []
