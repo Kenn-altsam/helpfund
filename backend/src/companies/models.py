@@ -6,7 +6,7 @@ SQLAlchemy models for companies
 Defines the database schema for company data.
 """
 
-from sqlalchemy import Column, String, Integer, Text, Float, DateTime, UUID
+from sqlalchemy import Column, String, Integer, Text, Float, DateTime, UUID, BigInteger
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.sql import func
 
@@ -39,10 +39,10 @@ class Company(Base):
     # executive = Column(Text)
     # location = Column(String(255))
     
-    # Tax data fields (matching actual database schema)
-    tax_data_2023 = Column("tax_data_2023", Text, nullable=True)
-    tax_data_2024 = Column("tax_data_2024", Text, nullable=True)
-    tax_data_2025 = Column("tax_data_2025", Text, nullable=True)
+    # Tax data fields (matching actual database schema) - now BIGINT
+    tax_data_2023 = Column("tax_data_2023", BigInteger, nullable=True)
+    tax_data_2024 = Column("tax_data_2024", BigInteger, nullable=True)
+    tax_data_2025 = Column("tax_data_2025", BigInteger, nullable=True)
     
     # Legacy fields for backward compatibility (these columns don't exist in actual DB)
     # contacts = Column("contacts", Text, nullable=True)
