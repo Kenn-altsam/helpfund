@@ -43,8 +43,9 @@ def get_database_connection():
         )
     else:
         # Use default values (you may need to adjust these)
+        # Force localhost for host since we're running outside Docker
         return psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
+            host='localhost',  # Always use localhost when running outside Docker
             port=os.getenv('DB_PORT', '5432'),
             database=os.getenv('DB_NAME', 'nFac_server'),
             user=os.getenv('DB_USER', 'postgres'),
