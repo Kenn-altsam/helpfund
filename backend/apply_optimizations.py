@@ -207,16 +207,12 @@ def apply_optimizations():
         if tax_column:
             test_query = f"""
                 SELECT COUNT(*) FROM companies 
-                WHERE "Locality" ILIKE %s
-                ORDER BY {tax_column} DESC NULLS LAST, "Company" ASC
-                LIMIT 5;
+                WHERE "Locality" ILIKE %s;
             """
         else:
             test_query = """
                 SELECT COUNT(*) FROM companies 
-                WHERE "Locality" ILIKE %s
-                ORDER BY "Company" ASC
-                LIMIT 5;
+                WHERE "Locality" ILIKE %s;
             """
         
         cursor.execute(test_query, ("%Алматы%",))
