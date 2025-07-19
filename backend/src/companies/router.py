@@ -6,6 +6,7 @@ Provides endpoints for searching and retrieving company data.
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import ORJSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import sys
@@ -43,7 +44,8 @@ logging.basicConfig(level=logging.INFO)
 @router.get(
     "/search",
     summary="Search Companies",
-    description="Search companies by location, name, or other criteria. Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user."
+    description="Search companies by location, name, or other criteria. Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user.",
+    response_class=ORJSONResponse
 )
 async def search_companies(
     location: Optional[str] = Query(
@@ -107,11 +109,15 @@ async def search_companies(
         
         # Measure response formation time
         response_start = time.time()
-        response = APIResponse(
-            status="success",
-            data=companies,
-            message=f"Found {len(companies)} companies",
-            metadata={
+        
+        # Convert companies to dict for faster serialization
+        companies_dict = [company.dict() if hasattr(company, 'dict') else company for company in companies]
+        
+        response_data = {
+            "status": "success",
+            "data": companies_dict,
+            "message": f"Found {len(companies)} companies",
+            "metadata": {
                 "pagination": {
                     "total": total_count,
                     "page": page,
@@ -121,14 +127,15 @@ async def search_companies(
                     "has_prev": page > 1
                 }
             }
-        )
+        }
+        
         response_time = time.time() - response_start
         total_time = time.time() - start_time
         
         logging.info(f"[DEBUG] Response formation time: {response_time:.2f}s")
         logging.info(f"[DEBUG] Total request time: {total_time:.2f}s")
         
-        return response
+        return ORJSONResponse(content=response_data)
         
     except Exception as e:
         logging.error(f"[COMPANIES][SEARCH] Error: {e}")
@@ -142,7 +149,8 @@ async def search_companies(
 @router.get(
     "/by-location/{location}",
     summary="Get Companies by Location",
-    description="Get all companies in a specific location. Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user."
+    description="Get all companies in a specific location. Location names in English or other languages are automatically translated to Russian. When responding to user, give location in the language of the user.",
+    response_class=ORJSONResponse
 )
 async def get_companies_by_location(
     location: str,
@@ -193,11 +201,15 @@ async def get_companies_by_location(
         
         # Measure response formation time
         response_start = time.time()
-        response = APIResponse(
-            status="success",
-            data=companies,
-            message=f"Found {len(companies)} companies in {location}",
-            metadata={
+        
+        # Convert companies to dict for faster serialization
+        companies_dict = [company.dict() if hasattr(company, 'dict') else company for company in companies]
+        
+        response_data = {
+            "status": "success",
+            "data": companies_dict,
+            "message": f"Found {len(companies)} companies in {location}",
+            "metadata": {
                 "pagination": {
                     "total": total_count,
                     "page": page,
@@ -207,14 +219,15 @@ async def get_companies_by_location(
                     "has_prev": page > 1
                 }
             }
-        )
+        }
+        
         response_time = time.time() - response_start
         total_time = time.time() - start_time
         
         logging.info(f"[DEBUG] Response formation time: {response_time:.2f}s")
         logging.info(f"[DEBUG] Total request time: {total_time:.2f}s")
         
-        return response
+        return ORJSONResponse(content=response_data)
         
     except HTTPException:
         raise
@@ -284,7 +297,8 @@ def remove_consideration(
 @router.get(
     "/{company_id}",
     summary="Get Company Details",
-    description="Get detailed information about a specific company"
+    description="Get detailed information about a specific company",
+    response_class=ORJSONResponse
 )
 async def get_company_details(
     company_id: str,
@@ -312,12 +326,15 @@ async def get_company_details(
                 detail=f"Company not found with ID: {company_id}"
             )
         logging.info(f"[COMPANIES][DETAILS] Company details retrieved for {company_id}")
+        
+        # Convert company to dict for faster serialization
+        company_dict = company.dict() if hasattr(company, 'dict') else company
             
-        return APIResponse(
-            status="success",
-            data=company,
-            message="Company details retrieved successfully"
-        )
+        return ORJSONResponse(content={
+            "status": "success",
+            "data": company_dict,
+            "message": "Company details retrieved successfully"
+        })
         
     except HTTPException:
         raise
@@ -333,7 +350,8 @@ async def get_company_details(
 @router.get(
     "/locations/list",
     summary="Get Available Locations",
-    description="Get list of all available locations with company counts"
+    description="Get list of all available locations with company counts",
+    response_class=ORJSONResponse
 )
 async def get_locations(
     db: Session = Depends(get_db)
@@ -353,11 +371,11 @@ async def get_locations(
         locations = company_service.get_all_locations()
         logging.info(f"[COMPANIES][LOCATIONS] Found {len(locations)} locations")
         
-        return APIResponse(
-            status="success",
-            data=locations,
-            message=f"Found {len(locations)} locations"
-        )
+        return ORJSONResponse(content={
+            "status": "success",
+            "data": locations,
+            "message": f"Found {len(locations)} locations"
+        })
         
     except Exception as e:
         logging.error(f"[COMPANIES][LOCATIONS] Error: {e}")
@@ -371,7 +389,8 @@ async def get_locations(
 @router.get(
     "/translations/supported-cities",
     summary="Get Supported City Translations",
-    description="Get list of English city names that are automatically translated to Russian"
+    description="Get list of English city names that are automatically translated to Russian",
+    response_class=ORJSONResponse
 )
 async def get_supported_city_translations():
     """
@@ -388,15 +407,15 @@ async def get_supported_city_translations():
         for city in supported_cities[:20]:  # Show first 20 as examples
             sample_translations[city] = CityTranslationService.translate_city_name(city)
         
-        return APIResponse(
-            status="success",
-            data={
+        return ORJSONResponse(content={
+            "status": "success",
+            "data": {
                 "total_supported": len(supported_cities),
                 "supported_cities": supported_cities,
                 "sample_translations": sample_translations
             },
-            message=f"Found {len(supported_cities)} supported city translations"
-        )
+            "message": f"Found {len(supported_cities)} supported city translations"
+        })
         
     except Exception as e:
         raise HTTPException(
@@ -408,7 +427,8 @@ async def get_supported_city_translations():
 @router.post(
     "/translations/translate-city",
     summary="Translate City Name",
-    description="Translate an English city name to Russian"
+    description="Translate an English city name to Russian",
+    response_class=ORJSONResponse
 )
 async def translate_city_name(
     city_name: str = Query(..., description="City name to translate")
@@ -426,16 +446,16 @@ async def translate_city_name(
         translated = CityTranslationService.translate_city_name(city_name)
         all_variations = CityTranslationService.get_all_possible_names(city_name)
         
-        return APIResponse(
-            status="success",
-            data={
+        return ORJSONResponse(content={
+            "status": "success",
+            "data": {
                 "original": city_name,
                 "translated": translated,
                 "was_translated": translated != city_name,
                 "all_search_variations": all_variations
             },
-            message="Translation completed successfully"
-        )
+            "message": "Translation completed successfully"
+        })
         
     except Exception as e:
         raise HTTPException(

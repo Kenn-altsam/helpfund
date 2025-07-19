@@ -1,6 +1,7 @@
 # --- FastAPI Core ---
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+orjson>=3.9.0
 
 # --- Configuration ---
 pydantic>=2.5.0

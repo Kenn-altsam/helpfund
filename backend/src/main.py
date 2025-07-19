@@ -10,6 +10,7 @@ from typing import List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 from dotenv import load_dotenv
 
 from .ai_conversation.router import router as ai_conversation_router
@@ -32,6 +33,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    default_response_class=ORJSONResponse,
 )
 
 @app.on_event("startup")
