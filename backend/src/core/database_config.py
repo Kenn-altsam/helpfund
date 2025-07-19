@@ -114,7 +114,13 @@ def optimize_database_connection(engine) -> None:
 
 def create_indexes(engine) -> None:
     """
-    Create database indexes manually (run this outside of application context)
+    Create optimized database indexes manually (run this outside of application context)
+    
+    Optimized strategy to avoid index conflicts and improve query performance:
+    1. Single composite index for main query pattern (Locality, tax_data_2025, Company)
+    2. GIN indexes for full-text search
+    3. Simple indexes for individual column filtering
+    4. Remove redundant composite indexes
     
     Args:
         engine: SQLAlchemy engine instance
@@ -153,49 +159,39 @@ def create_indexes(engine) -> None:
             print("❌ No tax_data columns found. Skipping tax-based indexes.")
             tax_column = None
         
-        # Create comprehensive performance indexes
-        print("📊 Creating performance indexes...")
+        # First, drop existing problematic composite indexes to avoid conflicts
+        print("🗑️  Dropping existing composite indexes to avoid conflicts...")
+        indexes_to_drop = [
+            "ix_companies_locality_tax_2025",
+            "ix_companies_activity_tax_2025", 
+            "ix_companies_locality_size_tax_2025",
+            "ix_companies_tax_2025_not_null",
+            "ix_companies_tax_2025_not_empty"
+        ]
+        
+        for index_name in indexes_to_drop:
+            try:
+                cursor.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {index_name};")
+                print(f"  ✅ Dropped index: {index_name}")
+            except Exception as e:
+                print(f"  ⚠️  Could not drop {index_name}: {e}")
+        
+        # Create optimized performance indexes
+        print("📊 Creating optimized performance indexes...")
         
         indexes = []
         
-        # Only add tax-related indexes if tax column exists
+        # 1. PRIMARY COMPOSITE INDEX - covers the main query pattern
+        # This single index handles: WHERE Locality + ORDER BY Locality, tax_data_2025 DESC, Company
         if tax_column:
-            indexes.extend([
-                # Composite index for location + tax payment queries
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
-                ON companies ("Locality", {tax_column});
-                """,
-                
-                # Composite index for activity + tax payment queries
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
-                ON companies ("Activity", {tax_column});
-                """,
-                
-                # Partial index for companies with tax data
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
-                ON companies ({tax_column}) 
-                WHERE {tax_column} IS NOT NULL;
-                """,
-                
-                # Composite index for region + size + tax queries
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
-                ON companies ("Locality", "Size", {tax_column});
-                """,
-                
-                # Index for companies with non-empty tax data
-                f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_empty 
-                ON companies ({tax_column}) 
-                WHERE {tax_column} IS NOT NULL AND {tax_column} != '';
-                """
-            ])
+            indexes.append(f"""
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_main_query 
+            ON companies ("Locality", {tax_column} DESC, "Company");
+            """)
+            print("  📋 Added main composite index for query optimization")
         
-        # Add non-tax indexes
-        non_tax_indexes = [
+        # 2. GIN INDEXES for full-text search (essential for performance)
+        indexes.extend([
             # Full-text search index for company names
             """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_name_gin 
@@ -206,29 +202,52 @@ def create_indexes(engine) -> None:
             """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_gin 
             ON companies USING gin(to_tsvector('russian', "Activity"));
-            """,
-            
+            """
+        ])
+        print("  📋 Added GIN indexes for full-text search")
+        
+        # 3. SIMPLE INDEXES for individual column filtering
+        simple_indexes = [
             # Index for company size filtering
             """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size 
             ON companies ("Size");
             """,
             
+            # Index for BIN lookups
             """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
-            ON companies ("Size") 
-            WHERE "Size" LIKE '%Крупн%';
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_bin 
+            ON companies ("BIN");
+            """,
+            
+            # Index for OKED code filtering
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_oked 
+            ON companies ("OKED");
+            """,
+            
+            # Index for KATO code filtering
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_kato 
+            ON companies ("KATO");
             """
         ]
         
-        # Note: phone and email columns don't exist in actual database schema
-        # Skipping contact-related indexes
+        indexes.extend(simple_indexes)
+        print("  📋 Added simple indexes for individual column filtering")
         
-        indexes.extend(non_tax_indexes)
+        # 4. PARTIAL INDEX for large companies (if needed)
+        indexes.append("""
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_large_companies 
+        ON companies ("Locality", "Size") 
+        WHERE "Size" LIKE '%Крупн%';
+        """)
+        print("  📋 Added partial index for large companies")
         
+        # Create all indexes
         for i, index_sql in enumerate(indexes, 1):
             try:
-                print(f"  Creating index {i}/{len(indexes)}...")
+                print(f"  Creating optimized index {i}/{len(indexes)}...")
                 cursor.execute(index_sql)
                 print(f"  ✅ Index {i} created successfully")
             except Exception as e:
@@ -247,7 +266,12 @@ def create_indexes(engine) -> None:
         cursor.close()
         raw_conn.close()
                     
-        print("✅ Database indexes created successfully")
+        print("✅ Optimized database indexes created successfully")
+        print("💡 Benefits of this optimization:")
+        print("   - Reduced index conflicts and bloat")
+        print("   - Improved query planner efficiency")
+        print("   - Better coverage of main query patterns")
+        print("   - Lower maintenance overhead")
         
     except Exception as e:
         print(f"❌ Database index creation failed: {e}")
