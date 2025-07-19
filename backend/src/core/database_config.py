@@ -108,8 +108,6 @@ def get_company_table_optimization_sql() -> str:
     CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_high_tax 
     ON companies (LENGTH(tax_data_2025)) 
     WHERE tax_data_2025 IS NOT NULL AND LENGTH(tax_data_2025) > 10;
-    
-    -- Note: location column doesn't exist in actual schema, skipping website index
     """
 
 
@@ -123,17 +121,19 @@ def optimize_database_connection(engine) -> None:
     try:
         from sqlalchemy import text
         
+        # Use autocommit mode for commands that can't run in transactions
         with engine.connect() as conn:
-            # Skip PostgreSQL system optimizations (require superuser privileges)
-            # Only apply table-specific optimizations that don't require elevated privileges
+            # Set autocommit to True for VACUUM and CREATE INDEX CONCURRENTLY
+            conn.autocommit = True
             
             # Apply table-specific optimizations
             table_optimization_sql = get_company_table_optimization_sql()
             for statement in table_optimization_sql.split(';'):
-                if statement.strip():
+                statement = statement.strip()
+                if statement and not statement.startswith('--'):
                     try:
-                        conn.execute(text(statement.strip()))
-                        conn.commit()
+                        conn.execute(text(statement))
+                        print(f"✅ Executed: {statement[:50]}...")
                     except Exception as stmt_error:
                         # Skip statements that fail (like CREATE INDEX CONCURRENTLY which might already exist)
                         print(f"⚠️  Skipping table optimization statement: {stmt_error}")
