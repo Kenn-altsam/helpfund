@@ -42,151 +42,155 @@ def optimize_database_connection(engine) -> None:
     """
     try:
         from sqlalchemy import text
+        import psycopg2
         
-        # Use autocommit mode for commands that can't run in transactions
-        with engine.connect() as conn:
-            # Set autocommit to True for VACUUM and CREATE INDEX CONCURRENTLY
-            conn.autocommit = True
-            
-            print("🔍 Checking table schema...")
-            # Check actual table schema first
-            result = conn.execute(text("""
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = 'companies' 
-                ORDER BY ordinal_position;
-            """))
-            columns = result.fetchall()
-            
-            # Check for tax_data columns (actual database schema)
-            tax_columns = [col[0] for col in columns if col[0] in ['tax_data_2023', 'tax_data_2024', 'tax_data_2025']]
-            if tax_columns:
-                print(f"📊 Found tax data columns: {tax_columns}")
-                # Use the most recent tax data column (2025 if available, otherwise 2024, then 2023)
-                if 'tax_data_2025' in tax_columns:
-                    tax_column = 'tax_data_2025'
-                elif 'tax_data_2024' in tax_columns:
-                    tax_column = 'tax_data_2024'
-                else:
-                    tax_column = 'tax_data_2023'
-                print(f"🎯 Using tax data column: {tax_column}")
+        # Get the raw psycopg2 connection to avoid transaction issues
+        raw_conn = engine.raw_connection()
+        raw_conn.autocommit = True
+        cursor = raw_conn.cursor()
+        
+        print("🔍 Checking table schema...")
+        # Check actual table schema first
+        cursor.execute("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'companies' 
+            ORDER BY ordinal_position;
+        """)
+        columns = cursor.fetchall()
+        
+        # Check for tax_data columns (actual database schema)
+        tax_columns = [col[0] for col in columns if col[0] in ['tax_data_2023', 'tax_data_2024', 'tax_data_2025']]
+        if tax_columns:
+            print(f"📊 Found tax data columns: {tax_columns}")
+            # Use the most recent tax data column (2025 if available, otherwise 2024, then 2023)
+            if 'tax_data_2025' in tax_columns:
+                tax_column = 'tax_data_2025'
+            elif 'tax_data_2024' in tax_columns:
+                tax_column = 'tax_data_2024'
             else:
-                print("❌ No tax_data columns found. Skipping tax-based indexes.")
-                tax_column = None
-            
-            # Create comprehensive performance indexes
-            print("📊 Creating performance indexes...")
-            
-            indexes = []
-            
-            # Only add tax-related indexes if tax column exists
-            if tax_column:
-                indexes.extend([
-                    # Composite index for location + tax payment queries
-                    f"""
-                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
-                    ON companies ("Locality", {tax_column});
-                    """,
-                    
-                    # Composite index for activity + tax payment queries
-                    f"""
-                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
-                    ON companies ("Activity", {tax_column});
-                    """,
-                    
-                    # Partial index for companies with tax data
-                    f"""
-                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
-                    ON companies ({tax_column}) 
-                    WHERE {tax_column} IS NOT NULL;
-                    """,
-                    
-                    # Composite index for region + size + tax queries
-                    f"""
-                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
-                    ON companies ("Locality", "Size", {tax_column});
-                    """,
-                    
-                    # Index for companies with non-empty tax data
-                    f"""
-                    CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_empty 
-                    ON companies ({tax_column}) 
-                    WHERE {tax_column} IS NOT NULL AND {tax_column} != '';
-                    """
-                ])
-            
-            # Add non-tax indexes
-            non_tax_indexes = [
-                # Full-text search index for company names
-                """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_name_gin 
-                ON companies USING gin(to_tsvector('russian', "Company"));
+                tax_column = 'tax_data_2023'
+            print(f"🎯 Using tax data column: {tax_column}")
+        else:
+            print("❌ No tax_data columns found. Skipping tax-based indexes.")
+            tax_column = None
+        
+        # Create comprehensive performance indexes
+        print("📊 Creating performance indexes...")
+        
+        indexes = []
+        
+        # Only add tax-related indexes if tax column exists
+        if tax_column:
+            indexes.extend([
+                # Composite index for location + tax payment queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_tax_2025 
+                ON companies ("Locality", {tax_column});
                 """,
                 
-                # Full-text search index for activities
-                """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_gin 
-                ON companies USING gin(to_tsvector('russian', "Activity"));
+                # Composite index for activity + tax payment queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_tax_2025 
+                ON companies ("Activity", {tax_column});
                 """,
                 
-                # Index for company size filtering
-                """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size 
-                ON companies ("Size");
+                # Partial index for companies with tax data
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_null 
+                ON companies ({tax_column}) 
+                WHERE {tax_column} IS NOT NULL;
                 """,
                 
+                # Composite index for region + size + tax queries
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_locality_size_tax_2025 
+                ON companies ("Locality", "Size", {tax_column});
+                """,
+                
+                # Index for companies with non-empty tax data
+                f"""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_tax_2025_not_empty 
+                ON companies ({tax_column}) 
+                WHERE {tax_column} IS NOT NULL AND {tax_column} != '';
                 """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
-                ON companies ("Size") 
-                WHERE "Size" LIKE '%Крупн%';
-                """
-            ]
+            ])
+        
+        # Add non-tax indexes
+        non_tax_indexes = [
+            # Full-text search index for company names
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_name_gin 
+            ON companies USING gin(to_tsvector('russian', "Company"));
+            """,
             
-            # Check if contact columns exist before adding contact indexes
-            contact_columns = [col[0] for col in columns if col[0] in ['phone', 'email']]
-            if len(contact_columns) >= 2:
-                indexes.append(f"""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
-                ON companies ({', '.join(contact_columns)}) 
-                WHERE {' OR '.join(f'{col} IS NOT NULL' for col in contact_columns)};
-                """)
+            # Full-text search index for activities
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_activity_gin 
+            ON companies USING gin(to_tsvector('russian', "Activity"));
+            """,
             
-            indexes.extend(non_tax_indexes)
+            # Index for company size filtering
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size 
+            ON companies ("Size");
+            """,
             
-            for i, index_sql in enumerate(indexes, 1):
-                try:
-                    print(f"  Creating index {i}/{len(indexes)}...")
-                    conn.execute(text(index_sql))
-                    print(f"  ✅ Index {i} created successfully")
-                except Exception as e:
-                    print(f"  ⚠️  Index {i} failed (may already exist): {e}")
-            
-            # Update table statistics
-            print("📈 Updating table statistics...")
-            conn.execute(text("ANALYZE companies;"))
-            print("✅ Table statistics updated")
-            
-            # Vacuum the table
-            print("🧹 Vacuuming table...")
-            conn.execute(text("VACUUM ANALYZE companies;"))
-            print("✅ Table vacuumed and analyzed")
-            
-            # Test the optimized query
-            print("🧪 Testing optimized query...")
-            if tax_column:
-                test_query = f"""
-                    SELECT COUNT(*) FROM companies 
-                    WHERE "Locality" ILIKE %s;
-                """
-            else:
-                test_query = """
-                    SELECT COUNT(*) FROM companies 
-                    WHERE "Locality" ILIKE %s;
-                """
-            
-            result = conn.execute(text(test_query), ("%Алматы%",))
-            count = result.fetchone()[0]
-            print(f"✅ Test query successful! Found {count} companies in Алматы")
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_size_category 
+            ON companies ("Size") 
+            WHERE "Size" LIKE '%Крупн%';
+            """
+        ]
+        
+        # Check if contact columns exist before adding contact indexes
+        contact_columns = [col[0] for col in columns if col[0] in ['phone', 'email']]
+        if len(contact_columns) >= 2:
+            indexes.append(f"""
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_companies_has_contacts 
+            ON companies ({', '.join(contact_columns)}) 
+            WHERE {' OR '.join(f'{col} IS NOT NULL' for col in contact_columns)};
+            """)
+        
+        indexes.extend(non_tax_indexes)
+        
+        for i, index_sql in enumerate(indexes, 1):
+            try:
+                print(f"  Creating index {i}/{len(indexes)}...")
+                cursor.execute(index_sql)
+                print(f"  ✅ Index {i} created successfully")
+            except Exception as e:
+                print(f"  ⚠️  Index {i} failed (may already exist): {e}")
+        
+        # Update table statistics
+        print("📈 Updating table statistics...")
+        cursor.execute("ANALYZE companies;")
+        print("✅ Table statistics updated")
+        
+        # Vacuum the table
+        print("🧹 Vacuuming table...")
+        cursor.execute("VACUUM ANALYZE companies;")
+        print("✅ Table vacuumed and analyzed")
+        
+        # Test the optimized query
+        print("🧪 Testing optimized query...")
+        if tax_column:
+            test_query = f"""
+                SELECT COUNT(*) FROM companies 
+                WHERE "Locality" ILIKE %s;
+            """
+        else:
+            test_query = """
+                SELECT COUNT(*) FROM companies 
+                WHERE "Locality" ILIKE %s;
+            """
+        
+        cursor.execute(test_query, ("%Алматы%",))
+        count = cursor.fetchone()[0]
+        print(f"✅ Test query successful! Found {count} companies in Алматы")
+        
+        cursor.close()
+        raw_conn.close()
                     
         print("✅ Database optimizations applied successfully")
         
