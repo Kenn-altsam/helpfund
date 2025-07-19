@@ -6,10 +6,29 @@ Apply database optimizations directly
 import psycopg2
 import os
 from urllib.parse import urlparse
+from pathlib import Path
 
+
+def load_env_from_parent():
+    """Load environment variables from parent directory's .env file"""
+    parent_env = Path(__file__).parent.parent / '.env'
+    if parent_env.exists():
+        print(f"📁 Loading environment from: {parent_env}")
+        with open(parent_env, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+        print("✅ Environment variables loaded from .env file")
+    else:
+        print(f"⚠️  .env file not found at: {parent_env}")
 
 def get_database_connection():
     """Get database connection from environment or use defaults"""
+    # Load environment variables from parent .env file
+    load_env_from_parent()
+    
     # Try to get from environment
     database_url = os.getenv('DATABASE_URL')
     
