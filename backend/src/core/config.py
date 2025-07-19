@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # Example: "https://example.com,https://myapp.com"
     # The custom validator is removed to rely on default behavior.
     # ------------------------------------------------------------------
-    ALLOWED_ORIGINS: List[str] = []
+    ALLOWED_ORIGINS: List[str] = Field(default_factory=list)
 
     # ------------------------------------------------------------------
     # OpenAI - UPDATED FOR AZURE
