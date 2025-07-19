@@ -41,9 +41,9 @@ class Company(Base):
     location = Column("location", String(255))
     
     # Legacy fields for backward compatibility
-    tax_data_2023 = Column("tax_data_2023", Text, nullable=True)
-    tax_data_2024 = Column("tax_data_2024", Text, nullable=True)
-    tax_data_2025 = Column("tax_data_2025", Text, nullable=True)
+    tax_data_2023 = Column("tax_payment_2023", Text, nullable=True)
+    tax_data_2024 = Column("tax_payment_2024", Text, nullable=True)
+    tax_data_2025 = Column("tax_payment_2025", Text, nullable=True)
     contacts = Column("contacts", Text, nullable=True)
     website = Column("website", Text, nullable=True)
     
