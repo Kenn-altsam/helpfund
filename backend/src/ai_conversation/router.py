@@ -124,7 +124,7 @@ async def get_company_charity_info(
             )
         
         # Search for charity information about the company
-        query = f"{request.company_name} благотворительность OR charity OR спонсорство OR donation"
+        query = f"{request.company_name} благотворительность OR charity OR спонсорство OR donation site:facebook.com OR site:instagram.com OR site:x.com"
         search_url = (
             f"https://www.googleapis.com/customsearch/v1?q={query}"
             f"&key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}"
@@ -185,11 +185,14 @@ async def get_company_charity_info(
         Найденные ссылки:
         {chr(10).join(links)}
 
+        ВАЖНО: Если есть ссылки на посты в соцсетях — обязательно учти их при анализе. Примеры: Instagram, Facebook, Twitter, LinkedIn, VK, Telegram.
+
         Предоставь краткий и структурированный анализ:
         1. Участвует ли компания в благотворительности (да/нет/неизвестно)
         2. Какие конкретные благотворительные проекты или инициативы были найдены
         3. Регулярность участия (постоянно/периодически/разово)
         4. Сферы помощи (образование, здравоохранение, спорт, культура и т.д.)
+        5. Если найдены посты в соцсетях — укажи какие платформы и краткое содержание
 
         ВАЖНО: Если в найденных результатах поиска нет конкретной информации о благотворительной деятельности компании, используй один из следующих fallback ответов:
 
