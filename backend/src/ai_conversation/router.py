@@ -116,11 +116,20 @@ async def get_company_charity_info(
         
         print(f"🔑 [CHARITY_RESEARCH] API keys status - Google: {'✓' if GOOGLE_API_KEY else '✗'}, Search Engine: {'✓' if SEARCH_ENGINE_ID else '✗'}, Gemini: {'✓' if GEMINI_API_KEY else '✗'}")
         
+        # Проверка API ключей
         if not all([GOOGLE_API_KEY, SEARCH_ENGINE_ID, GEMINI_API_KEY]):
             print(f"❌ [CHARITY_RESEARCH] Missing API keys - cannot proceed")
             return CompanyCharityResponse(
                 status="error",
                 answer="Сервис временно недоступен. Пожалуйста, попробуйте позже или обратитесь к администратору."
+            )
+        
+        # Дополнительная проверка Gemini API ключа
+        if not GEMINI_API_KEY or len(GEMINI_API_KEY.strip()) < 10:
+            print(f"❌ [CHARITY_RESEARCH] Invalid Gemini API key format")
+            return CompanyCharityResponse(
+                status="error",
+                answer="Проблема с конфигурацией AI сервиса. Обратитесь к администратору."
             )
         
         # Search for charity information about the company
@@ -194,6 +203,23 @@ async def get_company_charity_info(
         
         print(f"🧹 [CHARITY_RESEARCH] Cleaned text summary: {len(text_summary_clean)} characters (was {len(text_summary)})")
         
+        # Дополнительная очистка и валидация данных
+        if not text_summary_clean or len(text_summary_clean.strip()) < 10:
+            print(f"⚠️ [CHARITY_RESEARCH] Cleaned text summary is too short or empty")
+            return CompanyCharityResponse(
+                status="warning",
+                answer=f"Недостаточно данных для анализа благотворительной деятельности компании '{request.company_name}'."
+            )
+        
+        # Проверяем, что у нас есть хотя бы одна ссылка
+        valid_links = [link for link in links_clean if link and link.startswith('http')]
+        if not valid_links:
+            print(f"⚠️ [CHARITY_RESEARCH] No valid links found")
+            return CompanyCharityResponse(
+                status="warning",
+                answer=f"Не найдено достоверных источников информации о компании '{request.company_name}'."
+            )
+        
         # Create prompt for Gemini
         prompt = f"""
         Проанализируй участие компании «{request.company_name}» в благотворительности на основе данных ниже.
@@ -242,8 +268,28 @@ async def get_company_charity_info(
             "contents": [{"parts": [{"text": prompt}]}]
         }
         
+        # Валидация payload перед отправкой
+        if not prompt or len(prompt.strip()) < 50:
+            print(f"❌ [CHARITY_RESEARCH] Invalid prompt - too short or empty")
+            return CompanyCharityResponse(
+                status="error",
+                answer="Ошибка подготовки запроса к AI сервису."
+            )
+        
+        # Проверяем размер payload (Gemini имеет лимиты)
+        payload_size = len(str(gemini_payload))
+        if payload_size > 30000:  # Примерный лимит для Gemini
+            print(f"⚠️ [CHARITY_RESEARCH] Payload too large: {payload_size} characters")
+            # Обрезаем промпт если он слишком большой
+            prompt = prompt[:2000] + "..."
+            gemini_payload = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            print(f"📝 [CHARITY_RESEARCH] Truncated prompt to {len(prompt)} characters")
+        
         print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini 2.0 Flash API...")
         print(f"📊 [CHARITY_RESEARCH] Prompt length: {len(prompt)} characters")
+        print(f"📦 [CHARITY_RESEARCH] Payload size: {payload_size} characters")
 
         async with httpx.AsyncClient() as client:
             try:
@@ -255,7 +301,14 @@ async def get_company_charity_info(
                     status_code = gemini_res.status_code
                     error_text = gemini_res.text
                     
-                    print(f"❌ [CHARITY_RESEARCH] Gemini response error: {status_code} - {error_text}")
+                    print(f"❌ [CHARITY_RESEARCH] Gemini API error: {status_code} - {error_text}")
+                    
+                    # Попытка получить детали ошибки из JSON ответа
+                    try:
+                        error_json = gemini_res.json()
+                        print(f"🔍 [CHARITY_RESEARCH] Gemini error details: {error_json}")
+                    except:
+                        print(f"🔍 [CHARITY_RESEARCH] Could not parse error response as JSON")
                     
                     # Обработка конкретных ошибок Gemini API
                     if status_code == 400:
@@ -290,6 +343,14 @@ async def get_company_charity_info(
                 
                 g_data = gemini_res.json()
                 print(f"✅ [CHARITY_RESEARCH] Gemini API response received in {gemini_duration:.2f}s")
+                print(f"📊 [CHARITY_RESEARCH] Response status: {gemini_res.status_code}")
+                print(f"📄 [CHARITY_RESEARCH] Response size: {len(gemini_res.text)} characters")
+                
+                # Логируем структуру ответа для отладки
+                if "candidates" in g_data:
+                    print(f"✅ [CHARITY_RESEARCH] Response contains {len(g_data['candidates'])} candidates")
+                else:
+                    print(f"⚠️ [CHARITY_RESEARCH] Response structure: {list(g_data.keys())}")
             except httpx.RequestError as e:
                 print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
                 return CompanyCharityResponse(
