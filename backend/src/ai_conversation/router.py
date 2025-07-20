@@ -293,7 +293,7 @@ async def get_company_charity_info(
         print(f"🔍 [CHARITY_RESEARCH] Prompt preview: {prompt[:200]}...")
 
         # Send request to Gemini API
-        gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={GEMINI_API_KEY}"
 
         # Формируем корректный payload
         gemini_payload = {
@@ -339,7 +339,7 @@ async def get_company_charity_info(
             }
             print(f"📝 [CHARITY_RESEARCH] Truncated prompt to {len(prompt)} characters")
         
-        print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini 2.0 Flash API...")
+        print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini 2.5 Pro API...")
         print(f"📊 [CHARITY_RESEARCH] Prompt length: {len(prompt)} characters")
         print(f"📦 [CHARITY_RESEARCH] Payload size: {payload_size} characters")
 
@@ -430,6 +430,17 @@ async def get_company_charity_info(
                     status="warning",
                     answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
                 )
+            
+            # Добавляем список ссылок в конец ответа
+            final_answer = answer.strip()
+            if valid_links:
+                final_answer += "\n\nИсточники:\n"
+                for i, link in enumerate(valid_links):
+                    final_answer += f"{i+1}. {link}\n"
+                print(f"🔗 [CHARITY_RESEARCH] Added {len(valid_links)} source links to response")
+            else:
+                final_answer = answer.strip()
+                print(f"⚠️ [CHARITY_RESEARCH] No valid links to add to response")
                 
         except (KeyError, IndexError) as e:
             print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
@@ -440,11 +451,11 @@ async def get_company_charity_info(
 
         total_duration = time.time() - start_time
         print(f"✅ [CHARITY_RESEARCH] Successfully completed analysis for '{request.company_name}' in {total_duration:.2f}s")
-        print(f"📊 [CHARITY_RESEARCH] Final response size: {len(answer)} characters")
+        print(f"📊 [CHARITY_RESEARCH] Final response size: {len(final_answer)} characters")
         
         return CompanyCharityResponse(
             status="success",
-            answer=answer
+            answer=final_answer
         )
 
     except Exception as e:
