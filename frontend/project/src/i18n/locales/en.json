@@ -120,7 +120,14 @@
     "tax_2024_missing": "Tax 2024 missing",
     "tax_2025_missing": "Tax 2025 missing",
     "contacts_missing": "Contacts missing",
-    "website_missing": "Website missing"
+    "website_missing": "Website missing",
+    "charity": {
+      "button": "Charity Information",
+      "loading": "Analyzing charity...",
+      "error": "Error getting charity data. Please try again later.",
+      "noData": "No charity data found",
+      "noReliableSources": "Company may have participated in charity, but no reliable sources found"
+    }
   },
   "consideration": {
     "title": "Consideration List",

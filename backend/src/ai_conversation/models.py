@@ -334,8 +334,27 @@ class CompanyCharityRequest(BaseModel):
 class CompanyCharityResponse(BaseModel):
     """Response model for company charity research"""
     
-    status: str = Field(description="Status of the request")
+    status: str = Field(
+        description="Status of the request (success/error/warning)"
+    )
     answer: str = Field(description="AI analysis of company's charity involvement")
+    
+    @validator('status', pre=True, always=True)
+    def validate_status(cls, v):
+        """Ensure status is one of the allowed values"""
+        allowed_statuses = ['success', 'error', 'warning']
+        if v not in allowed_statuses:
+            print(f"⚠️ [MODELS] Invalid status '{v}', using 'error'")
+            return 'error'
+        return v
+    
+    @validator('answer', pre=True, always=True)
+    def validate_answer(cls, v):
+        """Ensure answer is always a non-empty string"""
+        if not v or not isinstance(v, str):
+            print("⚠️ [MODELS] Invalid answer, using fallback")
+            return "Произошла ошибка при обработке запроса."
+        return v.strip()
     
     class Config:
         json_schema_extra = {

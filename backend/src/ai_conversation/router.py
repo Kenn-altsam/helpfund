@@ -30,17 +30,28 @@ def handle_chat_with_assistant(
     - Manages chat history and OpenAI thread context via the database.
     - Saves the new conversation turn to the database.
     """
+    import time
+    start_time = time.time()
+    
+    print(f"💬 [CHAT_ASSISTANT] New chat request from user {current_user.id}")
+    print(f"📝 [CHAT_ASSISTANT] Input length: {len(request.user_input)} characters")
+    
     if not request.user_input.strip():
+        print(f"❌ [CHAT_ASSISTANT] Empty input rejected")
         raise HTTPException(status_code=400, detail="User input cannot be empty")
     
     db_chat_id: Optional[uuid.UUID] = None
     if request.chat_id:
         try:
             db_chat_id = uuid.UUID(request.chat_id)
+            print(f"🔗 [CHAT_ASSISTANT] Using existing chat ID: {db_chat_id}")
         except ValueError:
+            print(f"❌ [CHAT_ASSISTANT] Invalid chat_id format: {request.chat_id}")
             raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
+    else:
+        print(f"🆕 [CHAT_ASSISTANT] Creating new chat session")
 
-    print(f"✅ [ROUTER] Starting chat for user {current_user.id} with chat_id: {db_chat_id}")
+    print(f"🚀 [CHAT_ASSISTANT] Starting conversation processing for user {current_user.id}")
 
     try:
         response_data = handle_conversation_with_context(
@@ -52,7 +63,15 @@ def handle_chat_with_assistant(
         )
 
         if "error" in response_data:
-             raise HTTPException(status_code=500, detail=response_data.get("details", "An unknown error occurred in the AI handler."))
+            print(f"❌ [CHAT_ASSISTANT] AI handler returned error: {response_data.get('details', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=response_data.get("details", "An unknown error occurred in the AI handler."))
+
+        companies_count = len(response_data.get("companies_found", []))
+        total_duration = time.time() - start_time
+        
+        print(f"✅ [CHAT_ASSISTANT] Successfully processed chat in {total_duration:.2f}s")
+        print(f"🏢 [CHAT_ASSISTANT] Found {companies_count} companies in response")
+        print(f"💭 [CHAT_ASSISTANT] Chat ID: {response_data.get('chat_id')}, Thread ID: {response_data.get('thread_id')}")
 
         return ChatResponse(
             message=response_data.get("response"),
@@ -63,11 +82,15 @@ def handle_chat_with_assistant(
         )
         
     except Exception as e:
-        print(f"❌ [ROUTER] Error in chat endpoint: {str(e)}")
+        total_duration = time.time() - start_time
+        print(f"❌ [CHAT_ASSISTANT] Error in chat endpoint after {total_duration:.2f}s: {str(e)}")
         traceback.print_exc()
         if isinstance(e, HTTPException):
             raise
-        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+        raise HTTPException(
+            status_code=500, 
+            detail="Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
+        )
 
 
 @router.post("/charity-research", response_model=CompanyCharityResponse)
@@ -79,16 +102,25 @@ async def get_company_charity_info(
     Research company's charity involvement using Google Search and Gemini AI.
     Searches for information about company's charitable activities without storing in database.
     """
+    import time
+    start_time = time.time()
+    
+    print(f"🔍 [CHARITY_RESEARCH] Starting research for company: '{request.company_name}'")
+    print(f"👤 [CHARITY_RESEARCH] Requested by user ID: {current_user.id}")
+    
     try:
         # Get API keys from environment
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
         SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
         GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         
+        print(f"🔑 [CHARITY_RESEARCH] API keys status - Google: {'✓' if GOOGLE_API_KEY else '✗'}, Search Engine: {'✓' if SEARCH_ENGINE_ID else '✗'}, Gemini: {'✓' if GEMINI_API_KEY else '✗'}")
+        
         if not all([GOOGLE_API_KEY, SEARCH_ENGINE_ID, GEMINI_API_KEY]):
-            raise HTTPException(
-                status_code=500, 
-                detail="API keys not configured. Please contact administrator."
+            print(f"❌ [CHARITY_RESEARCH] Missing API keys - cannot proceed")
+            return CompanyCharityResponse(
+                status="error",
+                answer="Сервис временно недоступен. Пожалуйста, попробуйте позже или обратитесь к администратору."
             )
         
         # Search for charity information about the company
@@ -97,22 +129,52 @@ async def get_company_charity_info(
             f"https://www.googleapis.com/customsearch/v1?q={query}"
             f"&key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}"
         )
+        
+        print(f"🔍 [CHARITY_RESEARCH] Google search query: '{query}'")
+        print(f"🌐 [CHARITY_RESEARCH] Sending request to Google Custom Search API...")
 
         async with httpx.AsyncClient() as client:
             try:
+                google_start_time = time.time()
                 g_res = await client.get(search_url)
                 g_res.raise_for_status()
                 search_data = g_res.json()
                 items = search_data.get("items", [])[:5]
+                google_duration = time.time() - google_start_time
+                print(f"✅ [CHARITY_RESEARCH] Google Search completed in {google_duration:.2f}s - found {len(items)} results")
             except httpx.RequestError as e:
-                raise HTTPException(status_code=500, detail=f"Google Search API error: {str(e)}")
+                print(f"❌ [CHARITY_RESEARCH] Google Search API error: {str(e)}")
+                return CompanyCharityResponse(
+                    status="error",
+                    answer="Не удалось найти информацию о компании в интернете. Возможно, проблема с подключением к поисковой системе."
+                )
+            except httpx.HTTPStatusError as e:
+                print(f"❌ [CHARITY_RESEARCH] Google Search HTTP error {e.response.status_code}: {str(e)}")
+                return CompanyCharityResponse(
+                    status="error",
+                    answer="Поисковая система временно недоступна. Пожалуйста, попробуйте позже."
+                )
 
         # Extract links and snippets
         links = [item.get("link", "") for item in items]
         snippets = [item.get("snippet", "") for item in items]
+        
+        print(f"📋 [CHARITY_RESEARCH] Extracted {len(links)} links and {len(snippets)} snippets")
+        if links:
+            print(f"🔗 [CHARITY_RESEARCH] Top search results domains: {', '.join([link.split('/')[2] if '/' in link else link for link in links[:3]])}")
+
+        # Check if we have enough data to proceed
+        if not snippets or not any(snippets):
+            print(f"⚠️ [CHARITY_RESEARCH] No search results found for company '{request.company_name}'")
+            return CompanyCharityResponse(
+                status="warning",
+                answer=f"Данных о благотворительной деятельности компании '{request.company_name}' не найдено в открытых источниках."
+            )
 
         # Create summary text for Gemini
         text_summary = "\n".join(snippets)
+        summary_length = len(text_summary)
+        print(f"📝 [CHARITY_RESEARCH] Created summary text with {summary_length} characters for Gemini analysis")
         
         # Create prompt for Gemini
         prompt = f"""
@@ -129,39 +191,81 @@ async def get_company_charity_info(
         3. Регулярность участия (постоянно/периодически/разово)
         4. Сферы помощи (образование, здравоохранение, спорт, культура и т.д.)
 
-        Ответь кратко, четко и на русском языке. Если информации недостаточно, так и укажи.
+        ВАЖНО: Если в найденных результатах поиска нет конкретной информации о благотворительной деятельности компании, используй один из следующих fallback ответов:
+
+        - "Данных о благотворительной деятельности компании '{request.company_name}' не найдено в открытых источниках."
+        - "Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
+        - "Информация о благотворительной активности компании '{request.company_name}' отсутствует в найденных источниках."
+
+        Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ.
         """
 
         # Send request to Gemini API
-        gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+        gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+
         gemini_payload = {
             "contents": [{"parts": [{"text": prompt}]}]
         }
+        
+        print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini 2.0 Flash API...")
+        print(f"📊 [CHARITY_RESEARCH] Prompt length: {len(prompt)} characters")
 
         async with httpx.AsyncClient() as client:
             try:
+                gemini_start_time = time.time()
                 gemini_res = await client.post(gemini_url, json=gemini_payload)
                 gemini_res.raise_for_status()
                 g_data = gemini_res.json()
+                gemini_duration = time.time() - gemini_start_time
+                print(f"✅ [CHARITY_RESEARCH] Gemini API response received in {gemini_duration:.2f}s")
             except httpx.RequestError as e:
-                raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
+                print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
+                return CompanyCharityResponse(
+                    status="error",
+                    answer="Не удалось проанализировать найденную информацию. Проблема с подключением к AI сервису."
+                )
+            except httpx.HTTPStatusError as e:
+                print(f"❌ [CHARITY_RESEARCH] Gemini API HTTP error {e.response.status_code}: {str(e)}")
+                return CompanyCharityResponse(
+                    status="error",
+                    answer="AI сервис временно недоступен. Пожалуйста, попробуйте позже."
+                )
 
         # Extract answer from Gemini response
         try:
             answer = g_data["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError):
-            answer = "Не удалось получить анализ от AI. Попробуйте позже."
+            answer_length = len(answer)
+            print(f"📝 [CHARITY_RESEARCH] Gemini analysis extracted - length: {answer_length} characters")
+            
+            # Validate that we got a meaningful response
+            if not answer or len(answer.strip()) < 10:
+                print(f"⚠️ [CHARITY_RESEARCH] Gemini returned empty or too short response")
+                return CompanyCharityResponse(
+                    status="warning",
+                    answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
+                )
+                
+        except (KeyError, IndexError) as e:
+            print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
+            return CompanyCharityResponse(
+                status="error",
+                answer="Не удалось обработать ответ от AI. Пожалуйста, попробуйте позже."
+            )
 
-        print(f"✅ [CHARITY_RESEARCH] Successfully analyzed charity info for {request.company_name}")
+        total_duration = time.time() - start_time
+        print(f"✅ [CHARITY_RESEARCH] Successfully completed analysis for '{request.company_name}' in {total_duration:.2f}s")
+        print(f"📊 [CHARITY_RESEARCH] Final response size: {len(answer)} characters")
         
         return CompanyCharityResponse(
             status="success",
             answer=answer
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"❌ [CHARITY_RESEARCH] Error analyzing charity info: {str(e)}")
+        total_duration = time.time() - start_time
+        print(f"❌ [CHARITY_RESEARCH] Unexpected error analyzing charity info for '{request.company_name}' after {total_duration:.2f}s: {str(e)}")
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during charity research.") 
+        return CompanyCharityResponse(
+            status="error",
+            answer="Произошла непредвиденная ошибка при анализе. Пожалуйста, попробуйте позже или обратитесь к администратору."
+        ) 

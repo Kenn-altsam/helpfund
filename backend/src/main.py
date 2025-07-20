@@ -39,24 +39,30 @@ app = FastAPI(
 @app.on_event("startup")
 def on_startup():
     """Synchronous startup event handler."""
-    print("✅ Ayala Foundation Backend API starting up")
-    print("✅ Database schema is managed by Alembic.")
+    print("🚀 [STARTUP] Ayala Foundation Backend API starting up")
+    print("📋 [STARTUP] Available endpoints:")
+    print("   • POST /api/v1/ai/chat-assistant - AI Chat Assistant")
+    print("   • POST /api/v1/ai/charity-research - Company Charity Research")
+    print("   • /api/v1/auth/* - Authentication endpoints")
+    print("   • /api/v1/companies/* - Company search endpoints")
+    print("   • /api/v1/funds/* - Fund management endpoints")
+    print("✅ [STARTUP] Database schema is managed by Alembic")
     
     # Apply database optimizations automatically on startup
     try:
         from .core.database import engine
         from .core.database_config import optimize_database_connection
-        print("🔧 Applying database optimizations...")
+        print("🔧 [STARTUP] Applying database optimizations...")
         optimize_database_connection(engine)
-        print("✅ Database optimizations completed")
+        print("✅ [STARTUP] Database optimizations completed")
     except Exception as e:
-        print(f"⚠️  Database optimization failed (non-critical): {e}")
-        print("Database will still work, but may not be fully optimized")
+        print(f"⚠️ [STARTUP] Database optimization failed (non-critical): {e}")
+        print("⚠️ [STARTUP] Database will still work, but may not be fully optimized")
 
 @app.on_event("shutdown")
 def on_shutdown():
     """Synchronous shutdown event handler."""
-    print("✅ Ayala Foundation Backend API shutting down")
+    print("🛑 [SHUTDOWN] Ayala Foundation Backend API shutting down gracefully")
 
 # Configure CORS for mobile development
 # Very permissive settings to ensure iPhone/Android apps can connect
@@ -84,6 +90,7 @@ app.include_router(chats_router, prefix="/api/v1")
 @app.get("/")
 def root():
     """Root endpoint - API health check"""
+    print("🏠 [ROOT] Root endpoint accessed")
     return {
         "status": "success",
         "message": "Ayala Foundation Backend API is running",
@@ -93,18 +100,48 @@ def root():
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
+    print("❤️ [HEALTH] Health check endpoint accessed")
+    
+    # Check critical services
+    health_status = "success"
+    health_message = "API is healthy"
+    health_data = {
+        "service": "ayala-foundation-backend",
+        "version": "1.0.0",
+        "checks": {}
+    }
+    
+    # Check database connection
+    try:
+        from .core.database import engine
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        health_data["checks"]["database"] = "healthy"
+    except Exception as e:
+        health_data["checks"]["database"] = f"unhealthy: {str(e)}"
+        health_status = "warning"
+        health_message = "API is running but some services are degraded"
+    
+    # Check environment variables
+    required_env_vars = ["DATABASE_URL", "SECRET_KEY"]
+    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+    if missing_vars:
+        health_data["checks"]["environment"] = f"missing: {', '.join(missing_vars)}"
+        health_status = "warning"
+        health_message = "API is running but some configuration is missing"
+    else:
+        health_data["checks"]["environment"] = "healthy"
+    
     return {
-        "status": "success",
-        "message": "API is healthy",
-        "data": {
-            "service": "ayala-foundation-backend",
-            "version": "1.0.0"
-        }
+        "status": health_status,
+        "message": health_message,
+        "data": health_data
     }
 
 @app.get("/network-test")
 def network_test():
     """Network connectivity test endpoint for mobile debugging"""
+    print("🌐 [NETWORK] Network test endpoint accessed - checking mobile connectivity")
     return {
         "status": "success",
         "message": "Network connection working!",
@@ -123,6 +160,7 @@ def network_test():
 @app.get("/test")
 def simple_test():
     """Simple test endpoint for iOS app connectivity"""
+    print("📱 [TEST] Simple test endpoint accessed - iOS app connectivity check")
     return {
         "message": "Backend is working!",
         "server_ip": "192.168.58.253",

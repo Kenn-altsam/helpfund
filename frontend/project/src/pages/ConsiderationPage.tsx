@@ -2,7 +2,7 @@ import { BookmarkCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { CompanyCard } from '@/components/CompanyCard';
+import { ConsiderationCompanyCard } from '@/components/ConsiderationCompanyCard';
 import { useGlobalContext } from '@/context/GlobalContext';
 import { toast } from 'sonner';
 import React from 'react';
@@ -91,7 +91,7 @@ export function ConsiderationPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {considerationList.map((company) => (
           <div key={company.bin} className="relative">
-            <CompanyCard company={company} />
+            <ConsiderationCompanyCard company={company} />
             <Button
               variant="destructive"
               size="sm"
