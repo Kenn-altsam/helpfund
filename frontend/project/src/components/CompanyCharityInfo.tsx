@@ -19,11 +19,19 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<'success' | 'error' | 'warning' | null>(null);
 
-  const linkify = (text: string) =>
-    text.replace(
-      /(https?:\/\/[^\s]+)/g,
-      (url) => `<a href="${url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${url}</a>`
-    );
+  const linkify = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    return text.replace(urlRegex, (url) => {
+      try {
+        const urlObj = new URL(url);
+        const shortText = `${urlObj.hostname}${urlObj.pathname.length > 30 ? "/..." : urlObj.pathname}`;
+        return `<a href="${url}" target="_blank" class="text-blue-600 underline">${shortText}</a>`;
+      } catch {
+        return url;
+      }
+    });
+  };
 
   const fetchInfo = async () => {
     setLoading(true);
