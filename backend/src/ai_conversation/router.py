@@ -176,15 +176,33 @@ async def get_company_charity_info(
         summary_length = len(text_summary)
         print(f"📝 [CHARITY_RESEARCH] Created summary text with {summary_length} characters for Gemini analysis")
         
+        # Clean text and links before creating prompt
+        import re
+
+        # Очистка текста от лишних символов (например, emoji, HTML, спецзнаков)
+        def clean_text(text):
+            text = re.sub(r"<[^>]+>", "", text)  # удаление HTML-тегов
+            text = re.sub(r"[^\x00-\x7Fа-яА-ЯёЁ\s.,:;!?()/-]", "", text)  # только допустимые символы
+            return text.strip()
+
+        text_summary_clean = clean_text(text_summary)
+        links_clean = [link.strip() for link in links]
+        
+        # Ограничиваем длину summary
+        if len(text_summary_clean) > 1000:
+            text_summary_clean = text_summary_clean[:1000] + "..."
+        
+        print(f"🧹 [CHARITY_RESEARCH] Cleaned text summary: {len(text_summary_clean)} characters (was {len(text_summary)})")
+        
         # Create prompt for Gemini
         prompt = f"""
         Проанализируй участие компании «{request.company_name}» в благотворительности на основе данных ниже.
 
         🔹 Описание:
-        {text_summary}
+        {text_summary_clean}
 
         🔹 Ссылки:
-        {chr(10).join(links)}
+        {chr(10).join(links_clean)}
 
         Если среди ссылок есть соцсети (Facebook, Instagram и т.д.) — учти содержание.
 
@@ -231,9 +249,46 @@ async def get_company_charity_info(
             try:
                 gemini_start_time = time.time()
                 gemini_res = await client.post(gemini_url, json=gemini_payload)
-                gemini_res.raise_for_status()
-                g_data = gemini_res.json()
                 gemini_duration = time.time() - gemini_start_time
+                
+                if not gemini_res.is_success:
+                    status_code = gemini_res.status_code
+                    error_text = gemini_res.text
+                    
+                    print(f"❌ [CHARITY_RESEARCH] Gemini response error: {status_code} - {error_text}")
+                    
+                    # Обработка конкретных ошибок Gemini API
+                    if status_code == 400:
+                        print(f"🔍 [CHARITY_RESEARCH] Bad request - возможно, слишком длинный промпт или некорректные токены")
+                        return CompanyCharityResponse(
+                            status="error",
+                            answer="Ошибка в запросе к AI сервису. Возможно, слишком много данных для анализа."
+                        )
+                    elif status_code == 403:
+                        print(f"🔑 [CHARITY_RESEARCH] Forbidden - неверный или истёкший API-ключ")
+                        return CompanyCharityResponse(
+                            status="error",
+                            answer="Проблема с доступом к AI сервису. Обратитесь к администратору."
+                        )
+                    elif status_code == 429:
+                        print(f"⏱️ [CHARITY_RESEARCH] Rate limit exceeded - превышен лимит запросов")
+                        return CompanyCharityResponse(
+                            status="error",
+                            answer="Превышен лимит запросов к AI сервису. Попробуйте позже."
+                        )
+                    elif status_code >= 500:
+                        print(f"🚨 [CHARITY_RESEARCH] Server error - ошибка на стороне Gemini")
+                        return CompanyCharityResponse(
+                            status="error",
+                            answer="Временная ошибка AI сервиса. Попробуйте позже."
+                        )
+                    else:
+                        return CompanyCharityResponse(
+                            status="error",
+                            answer="AI сервис временно недоступен. Пожалуйста, попробуйте позже."
+                        )
+                
+                g_data = gemini_res.json()
                 print(f"✅ [CHARITY_RESEARCH] Gemini API response received in {gemini_duration:.2f}s")
             except httpx.RequestError as e:
                 print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
