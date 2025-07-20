@@ -133,7 +133,7 @@ async def get_company_charity_info(
         """
 
         # Send request to Gemini API
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+        gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
         gemini_payload = {
             "contents": [{"parts": [{"text": prompt}]}]
         }
