@@ -4,8 +4,7 @@ import traceback
 import uuid
 import httpx
 import os
-import asyncio
-from typing import Optional, List
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,73 +17,6 @@ from ..auth.dependencies import get_current_user
 from ..chats import service as chat_service
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
-
-
-async def filter_valid_links(links: List[str], timeout: float = 5.0) -> List[str]:
-    """
-    Проверяет доступность ссылок с помощью HEAD-запросов.
-    Возвращает только те ссылки, которые отвечают успешно.
-    
-    Args:
-        links: Список URL для проверки
-        timeout: Таймаут для каждого запроса в секундах
-        
-    Returns:
-        Список доступных ссылок
-    """
-    if not links:
-        return []
-    
-    print(f"🔍 [LINK_VALIDATION] Checking {len(links)} links for availability...")
-    
-    async def check_link(url: str) -> tuple[str, bool]:
-        """Проверяет одну ссылку и возвращает (url, is_valid)"""
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                # Используем HEAD запрос для экономии трафика
-                response = await client.head(url, follow_redirects=True)
-                is_valid = response.status_code < 400  # 2xx и 3xx считаем валидными
-                if is_valid:
-                    print(f"✅ [LINK_VALIDATION] {url} - Status: {response.status_code}")
-                else:
-                    print(f"❌ [LINK_VALIDATION] {url} - Status: {response.status_code}")
-                return url, is_valid
-        except httpx.TimeoutException:
-            print(f"⏰ [LINK_VALIDATION] {url} - Timeout after {timeout}s")
-            return url, False
-        except httpx.RequestError as e:
-            print(f"🌐 [LINK_VALIDATION] {url} - Request error: {str(e)}")
-            return url, False
-        except Exception as e:
-            print(f"⚠️ [LINK_VALIDATION] {url} - Unexpected error: {str(e)}")
-            return url, False
-    
-    try:
-        # Проверяем все ссылки параллельно
-        tasks = [check_link(url) for url in links]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Фильтруем валидные ссылки
-        valid_links = []
-        for result in results:
-            if isinstance(result, tuple):
-                url, is_valid = result
-                if is_valid:
-                    valid_links.append(url)
-            elif isinstance(result, Exception):
-                print(f"⚠️ [LINK_VALIDATION] Task failed with exception: {str(result)}")
-        
-        print(f"✅ [LINK_VALIDATION] Found {len(valid_links)} valid links out of {len(links)}")
-        if valid_links:
-            print(f"🔗 [LINK_VALIDATION] Valid domains: {', '.join([link.split('/')[2] if '/' in link else link for link in valid_links[:3]])}")
-        
-        return valid_links
-        
-    except Exception as e:
-        print(f"❌ [LINK_VALIDATION] Critical error during link validation: {str(e)}")
-        # В случае критической ошибки возвращаем все ссылки как валидные
-        print(f"🔄 [LINK_VALIDATION] Falling back to using all links without validation")
-        return links
 
 
 @router.post("/chat-assistant", response_model=ChatResponse)
@@ -239,46 +171,33 @@ async def get_company_charity_info(
                 answer=f"Данных о благотворительной деятельности компании '{request.company_name}' не найдено в открытых источниках."
             )
 
-        # Validate links before sending to Gemini
-        valid_links = await filter_valid_links(links)
-        print(f"🔗 [CHARITY_RESEARCH] Using {len(valid_links)} valid links out of {len(links)} total links for Gemini analysis")
-        
         # Create summary text for Gemini
         text_summary = "\n".join(snippets)
         summary_length = len(text_summary)
         print(f"📝 [CHARITY_RESEARCH] Created summary text with {summary_length} characters for Gemini analysis")
         
-        # Create search links for sources using only valid links
-        search_links = "\n".join(f"- {url}" for url in valid_links)
-        
-        # Check if we have valid links for Gemini
-        if not valid_links:
-            print(f"⚠️ [CHARITY_RESEARCH] No valid links found after validation - proceeding with snippets only")
-            search_links = "ВАЖНО: Доступные источники не найдены. Отвечай ТОЛЬКО на основе описаний выше."
-        
         # Create prompt for Gemini
         prompt = f"""
-        Компания: {request.company_name}
+        Исходя из следующих результатов поиска, проанализируй участие компании '{request.company_name}' в благотворительной деятельности:
 
-        ВАЖНО: Отвечай ТОЛЬКО на основе достоверной информации из предоставленных ссылок и описаний.
-        
-        Задача: Найди информацию об участии этой компании в благотворительности, спонсорстве или пожертвованиях.
-
-        Описание из результатов поиска:
         {text_summary}
 
-        Ссылки на источники:
-        {search_links}
+        Найденные ссылки:
+        {chr(10).join(links)}
 
-        ПРАВИЛА ОТВЕТА:
-        1. Отвечай ТОЛЬКО на основе информации из ссылок и описаний выше
-        2. Если ни в одной из ссылок не упоминается благотворительность — напиши, что такой информации не найдено
-        3. НЕ ВЫДУМЫВАЙ информацию, которой нет в источниках
-        4. Если информация есть — обязательно процитируй источник с URL
-        5. Будь кратким и точным
-        6. Если информации недостаточно для однозначного ответа — так и скажи
+        Предоставь краткий и структурированный анализ:
+        1. Участвует ли компания в благотворительности (да/нет/неизвестно)
+        2. Какие конкретные благотворительные проекты или инициативы были найдены
+        3. Регулярность участия (постоянно/периодически/разово)
+        4. Сферы помощи (образование, здравоохранение, спорт, культура и т.д.)
 
-        Ответь строго по этим правилам.
+        ВАЖНО: Если в найденных результатах поиска нет конкретной информации о благотворительной деятельности компании, используй один из следующих fallback ответов:
+
+        - "Данных о благотворительной деятельности компании '{request.company_name}' не найдено в открытых источниках."
+        - "Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
+        - "Информация о благотворительной активности компании '{request.company_name}' отсутствует в найденных источниках."
+
+        Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ.
         """
 
         # Send request to Gemini API
@@ -323,17 +242,8 @@ async def get_company_charity_info(
                 print(f"⚠️ [CHARITY_RESEARCH] Gemini returned empty or too short response")
                 return CompanyCharityResponse(
                     status="warning",
-                    answer=f"Информации о благотворительной деятельности компании '{request.company_name}' в открытых источниках не найдено."
+                    answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
                 )
-            
-            # Additional validation to ensure answer doesn't contain fabricated information
-            answer_lower = answer.lower()
-            if "не найдено" in answer_lower or "не найдена" in answer_lower or "информации нет" in answer_lower:
-                print(f"✅ [CHARITY_RESEARCH] Gemini correctly reported no information found")
-            elif "http" in answer_lower and any(domain in answer_lower for domain in [link.split('/')[2] if '/' in link else link for link in valid_links]):
-                print(f"✅ [CHARITY_RESEARCH] Gemini provided response with source citations")
-            else:
-                print(f"⚠️ [CHARITY_RESEARCH] Gemini response may lack proper source citations")
                 
         except (KeyError, IndexError) as e:
             print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
