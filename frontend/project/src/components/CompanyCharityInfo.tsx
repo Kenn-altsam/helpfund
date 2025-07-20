@@ -19,6 +19,12 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<'success' | 'error' | 'warning' | null>(null);
 
+  const linkify = (text: string) =>
+    text.replace(
+      /(https?:\/\/[^\s]+)/g,
+      (url) => `<a href="${url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${url}</a>`
+    );
+
   const fetchInfo = async () => {
     setLoading(true);
     setInfo(null);
@@ -116,9 +122,10 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
         <div className={`mt-2 p-3 rounded-md border text-xs whitespace-pre-wrap transition-all duration-300 ease-in-out ${getStatusColor()}`}>
           <div className="flex items-start gap-2">
             {getStatusIcon()}
-            <div className="flex-1">
-              {info}
-            </div>
+            <div 
+              className="flex-1"
+              dangerouslySetInnerHTML={{ __html: linkify(info) }}
+            />
           </div>
         </div>
       )}
