@@ -23,8 +23,14 @@ python-multipart>=0.0.6
 openai>=1.0.0
 langdetect>=1.0.9
 
+# --- Google Gemini and Search Services ---
+google-generativeai>=0.8.0
+langchain>=0.3.0
+google-search-results>=2.4.0
+
 # --- KGD Parser and its Dependencies ---
 requests>=2.31.0
+httpx>=0.25.0
 2captcha-python>=1.1.3
 pytesseract>=0.3.10
 pillow>=10.0.0

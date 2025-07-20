@@ -313,6 +313,39 @@ class APIResponse(BaseModel):
         }
 
 
+class CompanyCharityRequest(BaseModel):
+    """Request model for company charity research"""
+    
+    company_name: str = Field(
+        ..., 
+        min_length=1, 
+        max_length=200,
+        description="Name of the company to research charity involvement"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "company_name": "КазМунайГаз"
+            }
+        }
+
+
+class CompanyCharityResponse(BaseModel):
+    """Response model for company charity research"""
+    
+    status: str = Field(description="Status of the request")
+    answer: str = Field(description="AI analysis of company's charity involvement")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "success",
+                "answer": "Компания КазМунайГаз активно участвует в благотворительной деятельности..."
+            }
+        }
+
+
 # ---------------------------------------------------------------------------
 # Resolve forward references
 # ---------------------------------------------------------------------------
