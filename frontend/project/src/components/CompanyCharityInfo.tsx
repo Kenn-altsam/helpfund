@@ -26,7 +26,7 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
       try {
         const urlObj = new URL(url);
         const shortText = `${urlObj.hostname}${urlObj.pathname.length > 30 ? "/..." : urlObj.pathname}`;
-        return `<a href="${url}" target="_blank" class="text-blue-600 underline">${shortText}</a>`;
+        return `<a href="${url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">[${shortText}]</a>`;
       } catch {
         return url;
       }
@@ -131,7 +131,7 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
           <div className="flex items-start gap-2">
             {getStatusIcon()}
             <div 
-              className="flex-1"
+              className="flex-1 bg-gray-100 p-3 rounded text-sm"
               dangerouslySetInnerHTML={{ __html: linkify(info) }}
             />
           </div>
