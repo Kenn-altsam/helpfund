@@ -298,7 +298,7 @@ export const historyApi = {
     try {
       // MODIFIED: Point to the new, correct endpoint and use the new payload structure.
       await api.post('/chats/history', {
-        id: item.id, // The chat ID, which might be an existing one to update
+        // id: item.id, // УДАЛЕНО: backend требует только chat_id
         user_prompt: item.userPrompt,
         raw_ai_response: item.rawAiResponse,
         created_at: item.created_at,

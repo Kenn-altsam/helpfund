@@ -311,7 +311,7 @@ export function FinderPage() {
 
         // Persist full history item in backend
         const payload: any = {
-          id: effectiveChatId, // ✅ ВСЕГДА устанавливаем chat_id как id для правильной синхронизации
+          // id: effectiveChatId, // УДАЛЕНО: backend требует только chat_id
           userPrompt: currentInput,
           rawAiResponse: response.rawCompanies || [],
           created_at: new Date().toISOString(),
