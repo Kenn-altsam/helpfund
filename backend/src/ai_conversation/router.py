@@ -10,11 +10,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .models import ChatRequest, ChatResponse, CompanyCharityRequest, CompanyCharityResponse
-from .assistant_creator import handle_conversation_with_context
+from .service import ai_service
 from ..core.database import get_db
 from ..auth.models import User
 from ..auth.dependencies import get_current_user
 from ..chats import service as chat_service
+from ..gemini_client import get_gemini_response
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
@@ -54,31 +55,31 @@ def handle_chat_with_assistant(
     print(f"🚀 [CHAT_ASSISTANT] Starting conversation processing for user {current_user.id}")
 
     try:
-        response_data = handle_conversation_with_context(
+        result = ai_service.handle_conversation_turn(
             user_input=request.user_input,
+            history=request.history,
             db=db,
-            user=current_user,
-            chat_id=db_chat_id,
-            assistant_id=request.assistant_id,
+            conversation_id=str(db_chat_id) if db_chat_id else None
         )
 
-        if "error" in response_data:
-            print(f"❌ [CHAT_ASSISTANT] AI handler returned error: {response_data.get('details', 'Unknown error')}")
-            raise HTTPException(status_code=500, detail=response_data.get("details", "An unknown error occurred in the AI handler."))
-
-        companies_count = len(response_data.get("companies_found", []))
+        companies_count = len(result.get("companies", []))
         total_duration = time.time() - start_time
         
         print(f"✅ [CHAT_ASSISTANT] Successfully processed chat in {total_duration:.2f}s")
         print(f"🏢 [CHAT_ASSISTANT] Found {companies_count} companies in response")
-        print(f"💭 [CHAT_ASSISTANT] Chat ID: {response_data.get('chat_id')}, Thread ID: {response_data.get('thread_id')}")
 
         return ChatResponse(
-            message=response_data.get("response"),
-            companies=response_data.get("companies_found", []),
-            assistant_id=response_data.get('assistant_id'),
-            chat_id=response_data.get('chat_id'),
-            openai_thread_id=response_data.get("thread_id")
+            message=result["message"],
+            companies=result["companies"],
+            updated_history=result["updated_history"],
+            intent=result["intent"],
+            location=result["location_detected"],
+            activity_keywords=result["activity_keywords_detected"],
+            quantity=result["quantity_detected"],
+            page_number=result["page_number"],
+            companies_found=result["companies_found"],
+            has_more_companies=result["has_more_companies"],
+            reasoning=result["reasoning"]
         )
         
     except Exception as e:

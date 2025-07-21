@@ -187,6 +187,38 @@ class ChatResponse(BaseModel):
         None,
         description="OpenAI Thread ID used for this response"
     )
+    intent: Optional[str] = Field(
+        None,
+        description="Detected intent from user input"
+    )
+    location_detected: Optional[str] = Field(
+        None,
+        description="Location detected from user input"
+    )
+    activity_keywords_detected: Optional[List[str]] = Field(
+        None,
+        description="Activity keywords detected from user input"
+    )
+    quantity_detected: Optional[int] = Field(
+        None,
+        description="Quantity of companies requested"
+    )
+    page_number: Optional[int] = Field(
+        None,
+        description="Current page number for pagination"
+    )
+    companies_found: Optional[int] = Field(
+        None,
+        description="Number of companies found"
+    )
+    has_more_companies: Optional[bool] = Field(
+        None,
+        description="Whether there are more companies available"
+    )
+    reasoning: Optional[str] = Field(
+        None,
+        description="AI reasoning for the response"
+    )
     
     @validator('message', pre=True, always=True)
     def validate_message(cls, v):

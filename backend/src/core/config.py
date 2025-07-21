@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = "2024-02-15" # Specify your API version
 
     # ------------------------------------------------------------------
+    # Gemini AI
+    # ------------------------------------------------------------------
+    GEMINI_API_KEY: str = ""
+
+    # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
     # ------------------------------------------------------------------
     HOST: str = "0.0.0.0"
@@ -171,5 +176,6 @@ def get_settings() -> Settings:
     print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
     print(f"  - Azure Deployment Loaded: {settings.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
     print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
+    print(f"  - Gemini Key Loaded: {'Yes' if settings.GEMINI_API_KEY else 'No'}")
     
     return settings

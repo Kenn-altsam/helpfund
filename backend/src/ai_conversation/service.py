@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..core.config import get_settings
 from ..companies.service import CompanyService
 from .location_service import get_canonical_location_from_text
+from ..gemini_client import get_gemini_response
 
 # Language detection helper (use langdetect if installed)
 try:
@@ -31,8 +32,8 @@ except ImportError:  # Fallback – default to Russian
         return "ru"
 
 
-class OpenAIService:
-    """Service for handling OpenAI API interactions with database integration"""
+class AIService:
+    """Service for handling AI API interactions with database integration"""
     
     def __init__(self):
         """Initializes the service and sets up the OpenAI client."""
@@ -148,19 +149,28 @@ class OpenAIService:
         """
         # --- PROMPT FIX ENDS HERE ---
         
-        messages_with_context = [{"role": "system", "content": system_prompt}] + history
+        # Формируем промпт для Gemini
+        user_messages = [msg for msg in history if msg.get('role') == 'user']
+        user_context = "\n".join([f"Пользователь: {msg.get('content', '')}" for msg in user_messages[-3:]])  # Последние 3 сообщения
+        
+        gemini_prompt = f"""
+        {system_prompt}
+
+        История диалога:
+        {user_context}
+
+        Последнее сообщение пользователя: {history[-1].get('content', '') if history else ''}
+
+        Ответь ТОЛЬКО валидным JSON-объектом без дополнительного текста.
+        """
 
         try:
-            print(f"🤖 [INTENT_PARSER] Calling OpenAI with {len(messages_with_context)} messages...")
+            print(f"🤖 [INTENT_PARSER] Calling Gemini with prompt length: {len(gemini_prompt)}...")
             
-            response = self.client.chat.completions.create(
-                model=self.settings.OPENAI_MODEL_NAME, # Use the standard model name
-                messages=messages_with_context,
-                response_format={"type": "json_object"},
-                temperature=0.0
-            )
+            gemini_response = get_gemini_response(gemini_prompt)
             
-            result = json.loads(response.choices[0].message.content)
+            # Извлекаем JSON из ответа Gemini
+            result = json.loads(gemini_response)
             
             # --- DEBUG: Log the parsed result ---
             print(f"✅ [INTENT_PARSER] OpenAI response:")
@@ -736,4 +746,4 @@ class OpenAIService:
 
 
 # Global service instance
-ai_service = OpenAIService()
+ai_service = AIService()
