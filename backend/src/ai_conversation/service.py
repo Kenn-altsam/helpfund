@@ -628,7 +628,7 @@ class AIService:
                 if db_companies:
                     print(f"🏢 [DATABASE] First few companies returned:")
                     for i, company in enumerate(db_companies[:3]):
-                        print(f"   {i+1}. {company.get('name', 'N/A')} (ID: {company.get('id', 'N/A')[:8]}...)")
+                        print(f"   {i+1}. {company.get('name', 'N/A')} (ID: {str(company.get('id', 'N/A'))[:8]}...)")
                     if len(db_companies) > 3:
                         print(f"   ... and {len(db_companies) - 3} more companies")
                 else:
