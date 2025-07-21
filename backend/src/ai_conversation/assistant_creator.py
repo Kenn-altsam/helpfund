@@ -658,23 +658,16 @@ def handle_conversation_with_context(
             db=db,
             user_id=user.id,
             name=user_input[:50],  # Use the first part of the message as the chat name
-            openai_assistant_id=assistant_id,
-            openai_thread_id=thread_id
+            assistant_id=assistant_id,  # ✅ Правильное имя аргумента
+            thread_id=thread_id         # ✅ Правильное имя аргумента
         )
     else:
         # Use existing IDs from the chat
-        assistant_id = current_chat.openai_assistant_id
-        thread_id = current_chat.openai_thread_id
+        assistant_id = current_chat.assistant_id  # ✅ Используем исходное имя поля
+        thread_id = current_chat.thread_id        # ✅ Используем исходное имя поля
 
-        # Make sure the assistant and thread still exist on OpenAI's side
-        try:
-            assistant_manager.client.beta.assistants.retrieve(assistant_id)
-            assistant_manager.client.beta.threads.retrieve(thread_id)
-        except Exception:
-            # If they don't exist, create new ones and update the chat
-            assistant_id = assistant_manager.create_assistant()
-            thread_id = assistant_manager.create_conversation_thread()
-            chat_service.update_chat_gemini_ids(db, current_chat.id, assistant_id, thread_id)  # ✅ Обновлено
+        # Для Gemini не нужно проверять существование на стороне API
+        # assistant_id и thread_id - это локальные UUID
             
     print(f"[handle_conversation_with_context] Using assistant_id={assistant_id}, thread_id={thread_id}, chat_id={getattr(current_chat, 'id', None)}")
     try:

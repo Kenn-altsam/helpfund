@@ -18,8 +18,8 @@ class ChatListItemSchema(BaseModel):
     id: uuid.UUID
     title: str
     updated_at: datetime
-    thread_id: Optional[str] = Field(None, alias="gemini_session_id")  # ✅ Мапится из gemini_session_id
-    assistant_id: Optional[str] = Field(None, alias="gemini_model_id")  # ✅ Мапится из gemini_model_id
+    thread_id: Optional[str] = Field(None, alias="thread_id")  # ✅ Мапится из thread_id
+    assistant_id: Optional[str] = Field(None, alias="assistant_id")  # ✅ Мапится из assistant_id
 
     class Config:
         from_attributes = True

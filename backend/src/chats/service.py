@@ -36,7 +36,7 @@ def save_chat_summary_to_db(
     """
     # Try to find an existing chat by thread_id for this user
     chat = db.query(models.Chat).filter(
-        models.Chat.gemini_session_id == thread_id,  # ✅ Обновлено
+        models.Chat.thread_id == thread_id,  # ✅ Используем исходное имя поля
         models.Chat.user_id == user_id
     ).first()
 
@@ -50,8 +50,8 @@ def save_chat_summary_to_db(
         chat = models.Chat(
             id=chat_id or uuid.uuid4(),
             user_id=user_id,
-            gemini_session_id=thread_id,    # ✅ Обновлено
-            gemini_model_id=assistant_id,   # ✅ Обновлено
+            thread_id=thread_id,      # ✅ Используем исходное имя поля
+            assistant_id=assistant_id, # ✅ Используем исходное имя поля
             title=user_prompt,
             # The 'created_at' from the request is a string, we parse it.
             # The database will set its own created_at, but we can set updated_at.
@@ -104,8 +104,8 @@ def create_chat(
     db: Session,
     user_id: uuid.UUID,
     name: str, # `assistant_creator.py` passes 'name', which should map to 'title' in your Chat model
-    gemini_model_id: Optional[str] = None,  # ✅ Обновлено
-    gemini_session_id: Optional[str] = None  # ✅ Обновлено
+    assistant_id: Optional[str] = None,  # ✅ Правильное имя аргумента
+    thread_id: Optional[str] = None      # ✅ Правильное имя аргумента
 ) -> models.Chat:
     """
     Creates a new chat session in the database.
@@ -113,8 +113,8 @@ def create_chat(
     db_chat = models.Chat(
         user_id=user_id,
         title=name, # Map the 'name' parameter to the 'title' field of your Chat model
-        gemini_model_id=gemini_model_id,    # ✅ Обновлено
-        gemini_session_id=gemini_session_id # ✅ Обновлено
+        assistant_id=assistant_id,  # ✅ Используем исходное имя поля
+        thread_id=thread_id         # ✅ Используем исходное имя поля
     )
     db.add(db_chat)
     db.commit()
@@ -122,22 +122,22 @@ def create_chat(
     print(f"✅ Created new chat in DB: {db_chat.id} with title: '{db_chat.title}'")
     return db_chat
 
-def update_chat_gemini_ids(  # ✅ Переименовано
+def update_chat_ids(  # ✅ Переименовано для ясности
     db: Session,
     chat_id: uuid.UUID,
-    new_model_id: str,      # ✅ Переименовано
-    new_session_id: str     # ✅ Переименовано
+    new_assistant_id: str,  # ✅ Правильное имя аргумента
+    new_thread_id: str      # ✅ Правильное имя аргумента
 ) -> Optional[models.Chat]:
     """
-    Updates the Gemini model_id and session_id for an existing chat.
+    Updates the assistant_id and thread_id for an existing chat.
     """
     chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
     if chat:
-        chat.gemini_model_id = new_model_id      # ✅ Обновлено
-        chat.gemini_session_id = new_session_id  # ✅ Обновлено
+        chat.assistant_id = new_assistant_id  # ✅ Используем исходное имя поля
+        chat.thread_id = new_thread_id        # ✅ Используем исходное имя поля
         db.commit()
         db.refresh(chat)
-        print(f"✅ Updated chat {chat_id} with new model_id: {new_model_id}, session_id: {new_session_id}")
+        print(f"✅ Updated chat {chat_id} with new assistant_id: {new_assistant_id}, thread_id: {new_thread_id}")
         return chat
     return None
 

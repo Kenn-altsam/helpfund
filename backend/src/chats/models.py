@@ -13,8 +13,8 @@ class Chat(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Локальная система контекста - не зависит от API
-    gemini_session_id = Column(String, nullable=True, index=True, unique=True)  # ✅ Переименовано из openai_thread_id
-    gemini_model_id = Column(String, nullable=True, index=True)  # ✅ Переименовано из openai_assistant_id (хранит ID модели)
+    thread_id = Column(String, nullable=True, index=True, unique=True)  # ✅ Локальная сессия
+    assistant_id = Column(String, nullable=True, index=True)            # ✅ ID модели (gemini-1.5-pro)
     
     title = Column(String(255), nullable=False)
     
