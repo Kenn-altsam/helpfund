@@ -169,6 +169,12 @@ class AIService:
             
             gemini_response = get_gemini_response(gemini_prompt)
             
+            print(f"🔁 Gemini raw response:\n{gemini_response}")
+            
+            # Валидация ответа Gemini
+            if not gemini_response.strip():
+                raise ValueError("Gemini вернул пустую строку")
+            
             # Извлекаем JSON из ответа Gemini
             result = json.loads(gemini_response)
             
