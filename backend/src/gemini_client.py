@@ -1,3 +1,4 @@
+import time
 import requests
 import json
 import os
@@ -9,13 +10,40 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
+
+def call_gemini_with_retry(payload: dict, max_attempts: int = 3, backoff: int = 2) -> dict:
+    url = f"{GEMINI_BASE_URL}/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            print(f"✅ Gemini responded on attempt {attempt}")
+            return response.json()
+        except requests.HTTPError as e:
+            status = e.response.status_code if e.response else None
+            if status == 429:
+                wait = backoff ** attempt
+                print(f"⚠️ Gemini 429 Too Many Requests. Retrying in {wait}s...")
+                time.sleep(wait)
+            elif status and 500 <= status < 600:
+                wait = backoff ** attempt
+                print(f"⚠️ Gemini {status} Server Error. Retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                print(f"❌ Gemini error: {e}")
+                raise
+        except Exception as e:
+            print(f"❌ Unexpected Gemini error: {e}")
+            raise
+    raise Exception("❌ Gemini API failed after max retries.")
+
+
 def get_gemini_response(prompt: str) -> str:
     """
-    Использует OpenAI-совместимый Gemini API эндпоинт
+    Использует OpenAI-совместимый Gemini API эндпоинт с retry-обёрткой
     """
     try:
-        url = f"{GEMINI_BASE_URL}/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
-        
         payload = {
             "contents": [
                 {
@@ -33,17 +61,7 @@ def get_gemini_response(prompt: str) -> str:
                 "maxOutputTokens": 2048,
             }
         }
-        
-        headers = {
-            "Content-Type": "application/json"
-        }
-        
-        print(f"🤖 [GEMINI] Calling OpenAI-compatible endpoint: {url}")
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        
+        data = call_gemini_with_retry(payload)
         # Извлекаем текст из ответа Gemini
         if "candidates" in data and len(data["candidates"]) > 0:
             candidate = data["candidates"][0]
@@ -51,17 +69,12 @@ def get_gemini_response(prompt: str) -> str:
                 parts = candidate["content"]["parts"]
                 if len(parts) > 0 and "text" in parts[0]:
                     response_text = parts[0]["text"]
-                    
-                    # Проверяем, что ответ не пустой
                     if not response_text or not response_text.strip():
                         print("⚠️ Gemini вернул пустой ответ")
                         raise ValueError("Empty response from Gemini")
-                        
                     return response_text
-        
         print("⚠️ Неожиданная структура ответа Gemini")
         raise ValueError("Unexpected Gemini response structure")
-        
     except Exception as e:
         print(f"❌ Gemini error: {e}")
         # Возвращаем валидный JSON-заглушку при любых ошибках
