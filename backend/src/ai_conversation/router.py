@@ -113,12 +113,11 @@ async def get_company_charity_info(
         # Get API keys from environment
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
         SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
-        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         
-        print(f"🔑 [CHARITY_RESEARCH] API keys status - Google: {'✓' if GOOGLE_API_KEY else '✗'}, Search Engine: {'✓' if SEARCH_ENGINE_ID else '✗'}, Gemini: {'✓' if GEMINI_API_KEY else '✗'}")
+        print(f"🔑 [CHARITY_RESEARCH] API keys status - Google: {'✓' if GOOGLE_API_KEY else '✗'}, Search Engine: {'✓' if SEARCH_ENGINE_ID else '✗'}")
         
-        if not all([GOOGLE_API_KEY, SEARCH_ENGINE_ID, GEMINI_API_KEY]):
-            print(f"❌ [CHARITY_RESEARCH] Missing API keys - cannot proceed")
+        if not all([GOOGLE_API_KEY, SEARCH_ENGINE_ID]):
+            print(f"❌ [CHARITY_RESEARCH] Missing Google API keys - cannot proceed")
             return CompanyCharityResponse(
                 status="error",
                 answer="Сервис временно недоступен. Пожалуйста, попробуйте позже или обратитесь к администратору."
@@ -207,40 +206,16 @@ async def get_company_charity_info(
         Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ.
         """
 
-        # Send request to Gemini API
-        gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-
-        gemini_payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
-        
-        print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini 2.0 Flash API...")
+        # Send request to Gemini API using the existing client
+        print(f"🤖 [CHARITY_RESEARCH] Sending analysis request to Gemini API...")
         print(f"📊 [CHARITY_RESEARCH] Prompt length: {len(prompt)} characters")
 
-        async with httpx.AsyncClient() as client:
-            try:
-                gemini_start_time = time.time()
-                gemini_res = await client.post(gemini_url, json=gemini_payload)
-                gemini_res.raise_for_status()
-                g_data = gemini_res.json()
-                gemini_duration = time.time() - gemini_start_time
-                print(f"✅ [CHARITY_RESEARCH] Gemini API response received in {gemini_duration:.2f}s")
-            except httpx.RequestError as e:
-                print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
-                return CompanyCharityResponse(
-                    status="error",
-                    answer="Не удалось проанализировать найденную информацию. Проблема с подключением к AI сервису."
-                )
-            except httpx.HTTPStatusError as e:
-                print(f"❌ [CHARITY_RESEARCH] Gemini API HTTP error {e.response.status_code}: {str(e)}")
-                return CompanyCharityResponse(
-                    status="error",
-                    answer="AI сервис временно недоступен. Пожалуйста, попробуйте позже."
-                )
-
-        # Extract answer from Gemini response
         try:
-            answer = g_data["candidates"][0]["content"]["parts"][0]["text"]
+            gemini_start_time = time.time()
+            answer = get_gemini_response(prompt)
+            gemini_duration = time.time() - gemini_start_time
+            print(f"✅ [CHARITY_RESEARCH] Gemini API response received in {gemini_duration:.2f}s")
+            
             answer_length = len(answer)
             print(f"📝 [CHARITY_RESEARCH] Gemini analysis extracted - length: {answer_length} characters")
             
@@ -266,11 +241,11 @@ async def get_company_charity_info(
                         sources_block += f"{i}. {link}\n"
                 final_answer += sources_block
             
-        except (KeyError, IndexError) as e:
-            print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
+        except Exception as e:
+            print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
             return CompanyCharityResponse(
                 status="error",
-                answer="Не удалось обработать ответ от AI. Пожалуйста, попробуйте позже."
+                answer="Не удалось проанализировать найденную информацию. AI сервис временно недоступен."
             )
 
         total_duration = time.time() - start_time
