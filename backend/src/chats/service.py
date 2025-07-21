@@ -65,7 +65,7 @@ def save_chat_summary_to_db(
     # This keeps the data associated with the turn.
     placeholder_message = models.Message(
         chat_id=chat.id,
-        role="assistant_summary", # A special role to distinguish it
+        role="summary", # Было: assistant_summary
         content="Placeholder for raw AI response from this turn.",
         data={"companies_found": raw_ai_response}
     )
