@@ -233,10 +233,9 @@ async def get_company_charity_info(
                 print(f"🔗 [CHARITY_RESEARCH] Adding {len(links)} source links to the response")
                 sources_block = "\n\nИсточники:\n"
                 for i, link in enumerate(links, 1):
-                    # Extract domain name for better readability
                     try:
                         domain = link.split('/')[2] if '/' in link else link
-                        sources_block += f"{i}. {domain} - {link}\n"
+                        sources_block += f"{i}. [{domain}]({link})\n"
                     except:
                         sources_block += f"{i}. {link}\n"
                 final_answer += sources_block
