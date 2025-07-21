@@ -696,8 +696,8 @@ class AIService:
                         db=db,
                         user_id=current_user.id,
                         name=user_input[:50],  # Use first 50 chars as chat name
-                        openai_assistant_id=None,  # We don't use OpenAI assistants in this flow
-                        openai_thread_id=None
+                        assistant_id=None,  # ✅ новое имя аргумента
+                        thread_id=None       # ✅ новое имя аргумента
                     )
                     chat_id = str(chat.id)
                     print(f"🆕 [SERVICE] Created new chat: {chat_id}")
