@@ -370,6 +370,10 @@ class CompanyCharityResponse(BaseModel):
         description="Status of the request (success/error/warning)"
     )
     answer: str = Field(description="AI analysis of company's charity involvement")
+    links: Optional[List[str]] = Field(
+        default_factory=list,
+        description="List of source URLs found during research"
+    )
     
     @validator('status', pre=True, always=True)
     def validate_status(cls, v):
@@ -392,7 +396,11 @@ class CompanyCharityResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "status": "success",
-                "answer": "Компания КазМунайГаз активно участвует в благотворительной деятельности..."
+                "answer": "Компания КазМунайГаз активно участвует в благотворительной деятельности...",
+                "links": [
+                    "https://example.com/source1",
+                    "https://example.com/source2"
+                ]
             }
         }
 

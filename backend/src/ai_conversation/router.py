@@ -198,7 +198,7 @@ async def get_company_charity_info(
         - "Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
         - "Информация о благотворительной активности компании '{request.company_name}' отсутствует в найденных источниках."
 
-        Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ.
+        Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ. В конце ответа, ПОСЛЕ основного анализа, добавь блок с заголовком "Источники:" и перечисли все найденные ссылки, каждую с новой строки.
         """
 
         # Send request to Gemini API
@@ -223,13 +223,15 @@ async def get_company_charity_info(
                 print(f"❌ [CHARITY_RESEARCH] Gemini API error: {str(e)}")
                 return CompanyCharityResponse(
                     status="error",
-                    answer="Не удалось проанализировать найденную информацию. Проблема с подключением к AI сервису."
+                    answer="Не удалось проанализировать найденную информацию. Проблема с подключением к AI сервису.",
+                    links=links
                 )
             except httpx.HTTPStatusError as e:
                 print(f"❌ [CHARITY_RESEARCH] Gemini API HTTP error {e.response.status_code}: {str(e)}")
                 return CompanyCharityResponse(
                     status="error",
-                    answer="AI сервис временно недоступен. Пожалуйста, попробуйте позже."
+                    answer="AI сервис временно недоступен. Пожалуйста, попробуйте позже.",
+                    links=links
                 )
 
         # Extract answer from Gemini response
@@ -243,14 +245,16 @@ async def get_company_charity_info(
                 print(f"⚠️ [CHARITY_RESEARCH] Gemini returned empty or too short response")
                 return CompanyCharityResponse(
                     status="warning",
-                    answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
+                    answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено.",
+                    links=links
                 )
                 
         except (KeyError, IndexError) as e:
             print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
             return CompanyCharityResponse(
                 status="error",
-                answer="Не удалось обработать ответ от AI. Пожалуйста, попробуйте позже."
+                answer="Не удалось обработать ответ от AI. Пожалуйста, попробуйте позже.",
+                links=links
             )
 
         total_duration = time.time() - start_time
@@ -259,7 +263,8 @@ async def get_company_charity_info(
         
         return CompanyCharityResponse(
             status="success",
-            answer=answer
+            answer=answer,
+            links=links
         )
 
     except Exception as e:

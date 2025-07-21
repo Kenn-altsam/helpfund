@@ -328,8 +328,9 @@ export function FinderPage() {
 
         // Persist full history item in backend
         const payload: any = {
+          id: existingChat?.id || effectiveThreadId, // Use existing chat ID or thread ID for synchronization
           userPrompt: currentInput,
-          rawAiResponse: response.rawCompanies || [],
+          aiResponse: response.companies || [],
           created_at: new Date().toISOString(),
           threadId: effectiveThreadId,
           assistantId: response.assistant_id || assistantId || '',
