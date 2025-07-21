@@ -1,7 +1,7 @@
 # backend/src/chats/router.py
 
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -13,11 +13,10 @@ from . import service as chat_service, schemas
 
 # Pydantic model for the incoming request to save/update a chat summary
 class ChatHistorySaveRequest(BaseModel):
-    id: Optional[str] = None
     user_prompt: str = Field(..., description="The last user prompt.")
     raw_ai_response: List[Any] = Field(default_factory=list, description="The raw AI response data (e.g., companies).")
     created_at: str = Field(..., description="ISO timestamp of the interaction.")
-    chat_id: Optional[str] = Field(None, description="Database Chat ID (UUID).")
+    chat_id: str = Field(..., description="Database Chat ID (UUID).")
     thread_id: str = Field(..., description="Thread ID for this conversation.")
     assistant_id: str = Field(..., description="Assistant ID for this conversation.")
 
@@ -36,32 +35,32 @@ def get_user_chats(
     return chats
 
 @router.post("/history", status_code=200)
-def save_chat_history_summary(
-    request: ChatHistorySaveRequest,
+async def save_chat_history_summary(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Saves or updates a chat history summary."""
+    body = await request.json()
+    print("📨 RAW incoming JSON:", body)
     try:
         # Use chat_id from request if provided, otherwise use id
-        chat_id_str = request.chat_id or request.id
+        chat_id_str = body.get("chat_id") or body.get("id")
         chat_id_uuid: Optional[uuid.UUID] = uuid.UUID(chat_id_str) if chat_id_str else None
-        
+        # Переиспользуем существующую логику, но с body вместо pydantic request
         chat_service.save_chat_summary_to_db(
             db=db,
             user_id=current_user.id,
             chat_id=chat_id_uuid,
-            user_prompt=request.user_prompt,
-            raw_ai_response=request.raw_ai_response,
-            created_at=request.created_at,
-            thread_id=request.thread_id,
-            assistant_id=request.assistant_id
+            user_prompt=body["user_prompt"],
+            raw_ai_response=body.get("raw_ai_response", []),
+            created_at=body["created_at"],
+            thread_id=body["thread_id"],
+            assistant_id=body["assistant_id"]
         )
         return {"message": "Chat summary saved successfully."}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Chat ID format. Must be a UUID.")
     except Exception as e:
-        # Log the exception for debugging
         print(f"Error saving chat summary: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save chat summary: {str(e)}")
 
