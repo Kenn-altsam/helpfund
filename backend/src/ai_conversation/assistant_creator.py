@@ -20,7 +20,7 @@ from .models import ChatResponse, CompanyData
 from ..auth.models import User
 from ..chats import models
 from ..chats import service as chat_service
-from ..gemini_client import create_gemini_assistant, create_gemini_thread, run_gemini_assistant
+from ..gemini_client import get_gemini_response
 import uuid
 
 
@@ -394,7 +394,7 @@ class CharityFundAssistant:
         Returns the assistant ID as UUID.
         """
         try:
-            assistant_id = create_gemini_assistant(
+            assistant_id = get_gemini_response(
                 name="Charity Fund Discovery Assistant",
                 instructions=self.system_instructions
             )
@@ -410,7 +410,10 @@ class CharityFundAssistant:
         Returns the thread ID as UUID.
         """
         try:
-            thread_id = create_gemini_thread()
+            thread_id = get_gemini_response(
+                name="Charity Fund Discovery Thread",
+                instructions=self.system_instructions
+            )
             print(f"✅ Created Gemini conversation thread: {thread_id}")
             return thread_id
         except Exception as e:
@@ -434,7 +437,7 @@ class CharityFundAssistant:
             print(f"🤖 [GEMINI] Running assistant with assistant_id={assistant_id}, thread_id={thread_id}")
             
             # Запускаем Gemini assistant
-            gemini_result = run_gemini_assistant(
+            gemini_result = get_gemini_response(
                 assistant_id=assistant_id,
                 thread_id=thread_id,
                 user_input=user_input,
