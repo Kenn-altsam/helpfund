@@ -139,3 +139,7 @@ fundhelp_key.pem
 
 
 docker-compose.yml
+db/
+alembic/
+alembic.ini
+backend/=3.9.0
