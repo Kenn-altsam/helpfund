@@ -24,8 +24,6 @@ from ..core.config import get_settings
 from ..companies.service import CompanyService
 from .location_service import get_canonical_location_from_text
 from ..gemini_client import get_gemini_response
-from ..chats import service as chat_service
-from ..auth.models import User
 
 
 def clean_json_block(text: str) -> str:
@@ -499,39 +497,21 @@ class AIService:
         user_input: str,
         history: List[Dict[str, str]],
         db: Session,
-        conversation_id: Optional[str] = None, # Added for persistence
-        current_user: Optional[User] = None # Added for user context
+        conversation_id: Optional[str] = None # Added for persistence
     ) -> Dict[str, Any]:
         """
         Main logic for handling a single turn in a conversation.
         - Parses intent
         - Searches database
         - Formulates a response
-        - Saves to chat database if user is provided
         """
         print(f"🔄 [SERVICE] Handling conversation turn for user input: {user_input[:100]}...")
 
         # Initialize default response values
         companies_data = []
         final_message = "Обрабатываю ваш запрос..."
-        chat_id = None
 
         try:
-            # --- CHAT MANAGEMENT ---
-            if current_user and conversation_id:
-                try:
-                    # Try to load existing chat by ID
-                    chat = chat_service.get_chat_by_id(db, conversation_id, current_user.id)
-                    if chat:
-                        chat_id = str(chat.id)
-                        print(f"📚 [SERVICE] Loaded existing chat: {chat_id}")
-                    else:
-                        print(f"⚠️ [SERVICE] Chat {conversation_id} not found, will create new one")
-                        chat_id = None
-                except Exception as e:
-                    print(f"⚠️ [SERVICE] Error loading chat {conversation_id}: {e}")
-                    chat_id = None
-
             # 1. Get canonical location
             canonical_location = get_canonical_location_from_text(user_input)
 
@@ -687,43 +667,8 @@ class AIService:
         history.append({"role": "assistant", "content": final_message})
         print(f"✅ Added AI response, final history length: {len(history)}")
 
-        # --- CHAT PERSISTENCE ---
-        if current_user:
-            try:
-                if not chat_id:
-                    # Create new chat
-                    chat = chat_service.create_chat(
-                        db=db,
-                        user_id=current_user.id,
-                        name=user_input[:50],  # Use first 50 chars as chat name
-                        assistant_id=None,  # ✅ новое имя аргумента
-                        thread_id=None       # ✅ новое имя аргумента
-                    )
-                    chat_id = str(chat.id)
-                    print(f"🆕 [SERVICE] Created new chat: {chat_id}")
-
-                # Save user message
-                chat_service.create_message(
-                    db=db,
-                    chat_id=chat_id,
-                    content=user_input,
-                    role="user"
-                )
-
-                # Save AI response with companies data
-                chat_service.create_message(
-                    db=db,
-                    chat_id=chat_id,
-                    content=final_message,
-                    role="assistant",
-                    metadata={"companies_found": companies_data}
-                )
-
-                print(f"💾 [SERVICE] Saved conversation turn to chat {chat_id}")
-
-            except Exception as chat_error:
-                print(f"⚠️ [SERVICE] Failed to save to chat database: {chat_error}")
-                # Don't fail the whole request if chat saving fails
+        # 7. Save updated history to the database (if implementation exists)
+        # if conversation_id and db: ...
 
         # 8. Prepare the final response object
         companies_found_count = len(companies_data)
@@ -741,9 +686,7 @@ class AIService:
             'companies_found': companies_found_count,
             'has_more_companies': has_more,
             'reasoning': parsed_intent.get('reasoning') if 'parsed_intent' in locals() else None,
-            'chat_id': chat_id,
-            'assistant_id': None,  # Для совместимости - не используем OpenAI assistants в этой логике
-            'thread_id': chat_id   # Для совместимости - используем chat_id как thread_id
+            # 'conversation_id': conversation_id
         }
 
     def handle_conversation_with_assistant_fallback(

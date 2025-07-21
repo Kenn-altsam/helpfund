@@ -40,17 +40,26 @@ def handle_chat_with_assistant(
     if not request.user_input.strip():
         print(f"❌ [CHAT_ASSISTANT] Empty input rejected")
         raise HTTPException(status_code=400, detail="User input cannot be empty")
+    
+    db_chat_id: Optional[uuid.UUID] = None
+    if request.chat_id:
+        try:
+            db_chat_id = uuid.UUID(request.chat_id)
+            print(f"🔗 [CHAT_ASSISTANT] Using existing chat ID: {db_chat_id}")
+        except ValueError:
+            print(f"❌ [CHAT_ASSISTANT] Invalid chat_id format: {request.chat_id}")
+            raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
+    else:
+        print(f"🆕 [CHAT_ASSISTANT] Creating new chat session")
 
     print(f"🚀 [CHAT_ASSISTANT] Starting conversation processing for user {current_user.id}")
-    print(f"🔗 [CHAT_ASSISTANT] Chat ID from request: {request.chat_id}")
 
     try:
         result = ai_service.handle_conversation_turn(
             user_input=request.user_input,
             history=request.history,
             db=db,
-            conversation_id=request.chat_id, # Используем chat_id из запроса
-            current_user=current_user
+            conversation_id=str(db_chat_id) if db_chat_id else None
         )
 
         companies_count = len(result.get("companies", []))
@@ -70,11 +79,7 @@ def handle_chat_with_assistant(
             page_number=result["page_number"],
             companies_found=result["companies_found"],
             has_more_companies=result["has_more_companies"],
-            reasoning=result["reasoning"],
-            chat_id=result.get("chat_id"),
-            assistant_id=result.get("assistant_id"),  # Для совместимости
-            thread_id=result.get("thread_id"),        # Для совместимости
-            openai_thread_id=result.get("thread_id")  # Для совместимости
+            reasoning=result["reasoning"]
         )
         
     except Exception as e:
