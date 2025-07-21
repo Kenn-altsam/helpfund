@@ -18,9 +18,14 @@ class ChatListItemSchema(BaseModel):
     id: uuid.UUID
     title: str
     updated_at: datetime
+    thread_id: Optional[str] = Field(None, alias="gemini_session_id")  # ✅ Мапится из gemini_session_id
+    assistant_id: Optional[str] = Field(None, alias="gemini_model_id")  # ✅ Мапится из gemini_model_id
 
     class Config:
         from_attributes = True
+        # Маппинг полей из модели в схему
+        alias_generator = None  # Отключаем автоматический camelCase
+        populate_by_name = True  # Позволяет использовать snake_case
 
 # Schema for returning the full history of a selected chat
 class ChatHistoryResponseSchema(BaseModel):

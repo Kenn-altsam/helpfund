@@ -183,6 +183,10 @@ class ChatResponse(BaseModel):
         None,
         description="Database Chat ID (UUID) for this conversation"
     )
+    thread_id: Optional[str] = Field(
+        None,
+        description="Thread ID for this conversation (for compatibility)"
+    )
     openai_thread_id: Optional[str] = Field(
         None,
         description="OpenAI Thread ID used for this response"

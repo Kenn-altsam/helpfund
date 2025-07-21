@@ -88,6 +88,7 @@ export interface ChatRequest {
   location?: string;
   assistant_id?: string;
   thread_id?: string;
+  chat_id?: string;
   page?: number;
 }
 
@@ -96,6 +97,19 @@ export interface ChatResponse {
   companies?: Company[];
   assistant_id?: string;
   thread_id?: string;
+  chat_id?: string;
+  openai_thread_id?: string;
+  // Дополнительные поля которые возвращает бэкенд
+  updated_history?: Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[] }>;
+  intent?: string;
+  location_detected?: string;
+  activity_keywords_detected?: string[];
+  quantity_detected?: number;
+  page_number?: number;
+  companies_found?: number;
+  has_more_companies?: boolean;
+  reasoning?: string;
+  // Поле которое ожидает фронтенд
   pagination?: PaginationMetadata;
 }
 

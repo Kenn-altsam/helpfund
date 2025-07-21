@@ -17,8 +17,9 @@ class ChatHistorySaveRequest(BaseModel):
     user_prompt: str = Field(..., description="The last user prompt.")
     raw_ai_response: List[Any] = Field(default_factory=list, description="The raw AI response data (e.g., companies).")
     created_at: str = Field(..., description="ISO timestamp of the interaction.")
-    thread_id: str = Field(..., description="OpenAI Thread ID.")
-    assistant_id: str = Field(..., description="OpenAI Assistant ID.")
+    chat_id: Optional[str] = Field(None, description="Database Chat ID (UUID).")
+    thread_id: str = Field(..., description="Thread ID for this conversation.")
+    assistant_id: str = Field(..., description="Assistant ID for this conversation.")
 
 
 router = APIRouter(prefix="/chats", tags=["Chats"])
@@ -42,7 +43,9 @@ def save_chat_history_summary(
 ):
     """Saves or updates a chat history summary."""
     try:
-        chat_id_uuid: Optional[uuid.UUID] = uuid.UUID(request.id) if request.id else None
+        # Use chat_id from request if provided, otherwise use id
+        chat_id_str = request.chat_id or request.id
+        chat_id_uuid: Optional[uuid.UUID] = uuid.UUID(chat_id_str) if chat_id_str else None
         
         chat_service.save_chat_summary_to_db(
             db=db,

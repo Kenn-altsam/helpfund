@@ -11,9 +11,10 @@ class Chat(Base):
     # This is the crucial link to your existing Users table.
     # Make sure 'users.id' matches the primary key of your User model.
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    openai_thread_id = Column(String, nullable=True, index=True, unique=True)
-
-    openai_assistant_id = Column(String, nullable=True, index=True) 
+    
+    # Локальная система контекста - не зависит от API
+    gemini_session_id = Column(String, nullable=True, index=True, unique=True)  # ✅ Переименовано из openai_thread_id
+    gemini_model_id = Column(String, nullable=True, index=True)  # ✅ Переименовано из openai_assistant_id (хранит ID модели)
     
     title = Column(String(255), nullable=False)
     

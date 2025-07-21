@@ -1,9 +1,11 @@
 """
 AI Assistant Creator for Charity Fund Discovery
 
-Creates and manages OpenAI assistants specifically designed for helping charity funds
+Creates and manages AI assistants specifically designed for helping charity funds
 discover potential corporate sponsors in Kazakhstan. This assistant integrates with
 the database to provide company information and maintains conversation history.
+
+Now supports both OpenAI and Gemini APIs with OpenAI-compatible interface.
 """
 
 import json
@@ -18,6 +20,7 @@ from .models import ChatResponse, CompanyData
 from ..auth.models import User
 from ..chats import models
 from ..chats import service as chat_service
+from ..gemini_client import create_gemini_assistant, create_gemini_thread, run_gemini_assistant
 import uuid
 
 
@@ -375,13 +378,99 @@ class CharityFundAssistant:
 
     def cleanup_assistant(self, assistant_id: str):
         """
-        Deletes the assistant from OpenAI to avoid clutter.
+        Clean up an assistant by deleting it.
         """
         try:
-            response = self.client.beta.assistants.delete(assistant_id)
-            print(f"✅ Deleted assistant {assistant_id}: {response}")
+            self.client.beta.assistants.delete(assistant_id)
+            print(f"✅ Deleted assistant: {assistant_id}")
         except Exception as e:
-            print(f"❌ Error deleting assistant {assistant_id}: {str(e)}")
+            print(f"❌ Error deleting assistant: {str(e)}")
+
+    # === GEMINI-СОВМЕСТИМЫЕ МЕТОДЫ ===
+    
+    def create_gemini_assistant(self) -> str:
+        """
+        Create a new Gemini assistant (эмулирует assistant_id).
+        Returns the assistant ID as UUID.
+        """
+        try:
+            assistant_id = create_gemini_assistant(
+                name="Charity Fund Discovery Assistant",
+                instructions=self.system_instructions
+            )
+            print(f"✅ Created Gemini assistant: {assistant_id}")
+            return assistant_id
+        except Exception as e:
+            print(f"❌ Error creating Gemini assistant: {str(e)}")
+            raise
+
+    def create_gemini_thread(self) -> str:
+        """
+        Create a new Gemini conversation thread (эмулирует thread_id).
+        Returns the thread ID as UUID.
+        """
+        try:
+            thread_id = create_gemini_thread()
+            print(f"✅ Created Gemini conversation thread: {thread_id}")
+            return thread_id
+        except Exception as e:
+            print(f"❌ Error creating Gemini thread: {str(e)}")
+            raise
+
+    def run_gemini_assistant_with_tools(
+        self,
+        assistant_id: str,
+        thread_id: str,
+        db: Session,
+        user_input: str,
+        history: Optional[List[Dict[str, Any]]] = None,
+        chat_id: Optional[uuid.UUID] = None
+    ) -> Dict[str, Any]:
+        """
+        Run Gemini assistant with tools integration.
+        assistant_id и thread_id - это локальные UUID для совместимости.
+        """
+        try:
+            print(f"🤖 [GEMINI] Running assistant with assistant_id={assistant_id}, thread_id={thread_id}")
+            
+            # Запускаем Gemini assistant
+            gemini_result = run_gemini_assistant(
+                assistant_id=assistant_id,
+                thread_id=thread_id,
+                user_input=user_input,
+                history=history
+            )
+            
+            if not gemini_result.get("success", False):
+                return {
+                    "response": gemini_result.get("response", "Ошибка обработки запроса"),
+                    "assistant_id": assistant_id,
+                    "thread_id": thread_id,
+                    "success": False
+                }
+            
+            # Получаем ответ от Gemini
+            gemini_response = gemini_result.get("response", "")
+            
+            # Здесь можно добавить дополнительную обработку ответа
+            # например, извлечение параметров поиска компаний
+            
+            return {
+                "response": gemini_response,
+                "assistant_id": assistant_id,
+                "thread_id": thread_id,
+                "success": True
+            }
+            
+        except Exception as e:
+            print(f"❌ Error running Gemini assistant: {str(e)}")
+            return {
+                "response": "Извините, произошла ошибка при обработке вашего запроса.",
+                "assistant_id": assistant_id,
+                "thread_id": thread_id,
+                "success": False,
+                "error": str(e)
+            }
 
 
 def create_charity_fund_assistant() -> str:
@@ -451,6 +540,98 @@ def continue_conversation(
     }
 
 
+def handle_conversation_with_gemini_context(
+    user_input: str,
+    db: Session,
+    user: User,
+    chat_id: Optional[uuid.UUID] = None,
+    assistant_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Handles a user's message using Gemini API, maintaining conversation context.
+    Эмулирует assistant_id и thread_id как UUID для совместимости.
+    """
+    assistant_manager = CharityFundAssistant()
+    
+    current_chat = None
+    if chat_id:
+        current_chat = chat_service.get_chat_by_id(db, chat_id, user.id)
+
+    # If no chat_id is provided or the chat doesn't exist, create a new one
+    if not current_chat:
+        assistant_id = assistant_manager.create_gemini_assistant()  # ✅ Используем Gemini
+        thread_id = assistant_manager.create_gemini_thread()       # ✅ Используем Gemini
+        current_chat = chat_service.create_chat(
+            db=db,
+            user_id=user.id,
+            name=user_input[:50],  # Use the first part of the message as the chat name
+            gemini_model_id=assistant_id,    # ✅ Обновлено
+            gemini_session_id=thread_id     # ✅ Обновлено
+        )
+    else:
+        # Use existing IDs from the chat
+        assistant_id = current_chat.gemini_model_id    # ✅ Обновлено
+        thread_id = current_chat.gemini_session_id     # ✅ Обновлено
+
+        # Для Gemini не нужно проверять существование на стороне API
+        # assistant_id и thread_id - это локальные UUID
+            
+    print(f"[handle_conversation_with_gemini_context] Using assistant_id={assistant_id}, thread_id={thread_id}, chat_id={getattr(current_chat, 'id', None)}")
+    
+    try:
+        # Save the user's message to the database first
+        chat_service.create_message(db, chat_id=current_chat.id, content=user_input, role="user")
+
+        # Получаем историю сообщений для контекста
+        messages = chat_service.get_chat_history(db, current_chat.id, user)
+        history = []
+        if messages and hasattr(messages, 'messages'):
+            history = [
+                {"role": msg.role, "content": msg.content}
+                for msg in messages.messages
+            ]
+
+        # Run the Gemini assistant
+        response = assistant_manager.run_gemini_assistant_with_tools(
+            assistant_id=assistant_id,
+            thread_id=thread_id,
+            db=db,
+            user_input=user_input,
+            history=history,
+            chat_id=current_chat.id
+        )
+
+        # Save the assistant's response to the database
+        if response.get("success", False):
+            chat_service.create_message(
+                db, 
+                chat_id=current_chat.id, 
+                content=response.get("response", ""), 
+                role="assistant"
+            )
+
+        return {
+            "message": response.get("response", "Ошибка обработки запроса"),
+            "companies": [],  # Gemini пока не интегрирован с поиском компаний
+            "assistant_id": assistant_id,
+            "thread_id": thread_id,
+            "chat_id": str(current_chat.id),
+            "success": response.get("success", False)
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in handle_conversation_with_gemini_context: {str(e)}")
+        return {
+            "message": "Извините, произошла ошибка при обработке вашего запроса.",
+            "companies": [],
+            "assistant_id": assistant_id,
+            "thread_id": thread_id,
+            "chat_id": str(current_chat.id) if current_chat else None,
+            "success": False,
+            "error": str(e)
+        }
+
+
 def handle_conversation_with_context(
     user_input: str,
     db: Session,
@@ -493,7 +674,7 @@ def handle_conversation_with_context(
             # If they don't exist, create new ones and update the chat
             assistant_id = assistant_manager.create_assistant()
             thread_id = assistant_manager.create_conversation_thread()
-            chat_service.update_chat_openai_ids(db, current_chat.id, assistant_id, thread_id)
+            chat_service.update_chat_gemini_ids(db, current_chat.id, assistant_id, thread_id)  # ✅ Обновлено
             
     print(f"[handle_conversation_with_context] Using assistant_id={assistant_id}, thread_id={thread_id}, chat_id={getattr(current_chat, 'id', None)}")
     try:

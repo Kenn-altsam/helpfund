@@ -36,7 +36,7 @@ def save_chat_summary_to_db(
     """
     # Try to find an existing chat by thread_id for this user
     chat = db.query(models.Chat).filter(
-        models.Chat.openai_thread_id == thread_id,
+        models.Chat.gemini_session_id == thread_id,  # ✅ Обновлено
         models.Chat.user_id == user_id
     ).first()
 
@@ -50,8 +50,8 @@ def save_chat_summary_to_db(
         chat = models.Chat(
             id=chat_id or uuid.uuid4(),
             user_id=user_id,
-            openai_thread_id=thread_id,
-            openai_assistant_id=assistant_id,
+            gemini_session_id=thread_id,    # ✅ Обновлено
+            gemini_model_id=assistant_id,   # ✅ Обновлено
             title=user_prompt,
             # The 'created_at' from the request is a string, we parse it.
             # The database will set its own created_at, but we can set updated_at.
@@ -104,8 +104,8 @@ def create_chat(
     db: Session,
     user_id: uuid.UUID,
     name: str, # `assistant_creator.py` passes 'name', which should map to 'title' in your Chat model
-    openai_assistant_id: Optional[str] = None,
-    openai_thread_id: Optional[str] = None
+    gemini_model_id: Optional[str] = None,  # ✅ Обновлено
+    gemini_session_id: Optional[str] = None  # ✅ Обновлено
 ) -> models.Chat:
     """
     Creates a new chat session in the database.
@@ -113,8 +113,8 @@ def create_chat(
     db_chat = models.Chat(
         user_id=user_id,
         title=name, # Map the 'name' parameter to the 'title' field of your Chat model
-        openai_assistant_id=openai_assistant_id,
-        openai_thread_id=openai_thread_id
+        gemini_model_id=gemini_model_id,    # ✅ Обновлено
+        gemini_session_id=gemini_session_id # ✅ Обновлено
     )
     db.add(db_chat)
     db.commit()
@@ -122,24 +122,24 @@ def create_chat(
     print(f"✅ Created new chat in DB: {db_chat.id} with title: '{db_chat.title}'")
     return db_chat
 
-def update_chat_openai_ids(
+def update_chat_gemini_ids(  # ✅ Переименовано
     db: Session,
     chat_id: uuid.UUID,
-    new_assistant_id: str,
-    new_thread_id: str
+    new_model_id: str,      # ✅ Переименовано
+    new_session_id: str     # ✅ Переименовано
 ) -> Optional[models.Chat]:
     """
-    Updates the OpenAI assistant and thread IDs for an existing chat.
+    Updates the Gemini model_id and session_id for an existing chat.
     """
-    db_chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
-    if db_chat:
-        db_chat.openai_assistant_id = new_assistant_id
-        db_chat.openai_thread_id = new_thread_id
-        db_chat.updated_at = datetime.now() # Ensure updated_at is updated, use datetime.now() for timezone-aware
+    chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
+    if chat:
+        chat.gemini_model_id = new_model_id      # ✅ Обновлено
+        chat.gemini_session_id = new_session_id  # ✅ Обновлено
         db.commit()
-        db.refresh(db_chat)
-        print(f"✅ Updated chat {chat_id} with new OpenAI IDs")
-    return db_chat
+        db.refresh(chat)
+        print(f"✅ Updated chat {chat_id} with new model_id: {new_model_id}, session_id: {new_session_id}")
+        return chat
+    return None
 
 def create_message(
     db: Session,

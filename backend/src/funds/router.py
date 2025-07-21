@@ -48,61 +48,17 @@ async def handle_chat(
     if not request.user_input.strip():
         raise HTTPException(status_code=400, detail="User input cannot be empty")
     
-    # Get or create fund profile for conversation state persistence
-    fund_profile = db.query(FundProfile).filter(
-        FundProfile.user_id == current_user.id
-    ).first()
+    # Use the new chat system instead of FundProfile.conversation_state
+    # The conversation history is now managed by the chat service
+    conversation_history = request.history or []
     
-    # Load conversation history from database if available
-    conversation_history = []
-    if fund_profile and fund_profile.conversation_state:
-        conversation_history = fund_profile.conversation_state.get('history', [])
-        print(f"📚 Loaded {len(conversation_history)} messages from database")
-    
-    # Merge with history from request (request history takes precedence)
-    if request.history:
-        print(f"📝 Using {len(request.history)} messages from request")
-        conversation_history = request.history
-    else:
-        print(f"📝 Using {len(conversation_history)} messages from database")
-    
-    # Handle the conversation
+    # Handle the conversation using the new chat system
     response_data = await ai_service.handle_conversation_turn(
         user_input=request.user_input,
         history=conversation_history,
         db=db,
-        conversation_id=str(fund_profile.id) if fund_profile else None
+        conversation_id=request.chat_id  # Use chat_id from request
     )
-    
-    # Save updated conversation history to database
-    if fund_profile:
-        # Update the conversation state in the database
-        updated_history = response_data.get('updated_history', [])
-        fund_profile.conversation_state = {
-            'history': updated_history,
-            'last_intent': response_data.get('intent'),
-            'last_location': response_data.get('location_detected'),
-            'last_activity_keywords': response_data.get('activity_keywords')
-        }
-        db.commit()
-        print(f"💾 Saved {len(updated_history)} messages to database")
-    else:
-        # Create fund profile if it doesn't exist
-        new_profile = FundProfile(
-            user_id=current_user.id,
-            fund_name=f"{current_user.full_name}'s Fund",
-            fund_description="Auto-created fund profile",
-            fund_email=current_user.email,
-            conversation_state={
-                'history': response_data.get('updated_history', []),
-                'last_intent': response_data.get('intent'),
-                'last_location': response_data.get('location_detected'),
-                'last_activity_keywords': response_data.get('activity_keywords')
-            }
-        )
-        db.add(new_profile)
-        db.commit()
-        print(f"✨ Created new fund profile with conversation state")
     
     return ChatResponse(**response_data)
 
@@ -114,19 +70,26 @@ async def get_chat_history(
 ):
     """
     Retrieve the chat history for the authenticated user.
+    Now uses the new chat system instead of FundProfile.conversation_state.
     """
     try:
-        fund_profile = db.query(FundProfile).filter(
-            FundProfile.user_id == current_user.id
-        ).first()
-
-        if fund_profile and fund_profile.conversation_state:
-            # Extract chat summaries (sidebar items)
-            summaries = fund_profile.conversation_state.get('chat_summaries', [])
-            return summaries
+        # Use the new chat service to get user's chats
+        from ..chats import service as chat_service
+        chats = chat_service.get_chats_for_user(db=db, user=current_user)
         
-        # If no profile or history, return an empty list
-        return []
+        # Convert to the expected format
+        chat_summaries = []
+        for chat in chats:
+            chat_summaries.append({
+                'id': str(chat.id),
+                'title': chat.title,
+                'created_at': chat.created_at.isoformat(),
+                'updated_at': chat.updated_at.isoformat(),
+                'thread_id': chat.openai_thread_id,
+                'assistant_id': chat.openai_assistant_id
+            })
+        
+        return chat_summaries
     except Exception as e:
         print(f"Error fetching chat history for user {current_user.id}: {e}")
         # In case of error, return empty list to avoid breaking frontend
@@ -138,24 +101,23 @@ async def reset_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Reset/clear conversation history for the current user"""
-    fund_profile = db.query(FundProfile).filter(
-        FundProfile.user_id == current_user.id
-    ).first()
-    
-    if fund_profile:
-        state = fund_profile.conversation_state or {}
-        state['history'] = []  # clear only detailed log
-        # Preserve existing chat_summaries if any
-        if 'chat_summaries' not in state:
-            state['chat_summaries'] = []
-
-        fund_profile.conversation_state = state
-        db.commit()
-        print(f"🔄 Reset conversation history for user: {current_user.email}")
+    """Reset/clear conversation history for the current user.
+    Now uses the new chat system instead of FundProfile.conversation_state.
+    """
+    try:
+        # Use the new chat service to delete user's chats
+        from ..chats import service as chat_service
+        chats = chat_service.get_chats_for_user(db=db, user=current_user)
+        
+        # Delete all user's chats
+        for chat in chats:
+            chat_service.delete_chat_from_db(db=db, chat_id=chat.id, user_id=current_user.id)
+        
+        print(f"Reset conversation history for user {current_user.id}")
         return {"message": "Conversation history reset successfully"}
-    else:
-        return {"message": "No conversation history found to reset"}
+    except Exception as e:
+        print(f"Error resetting conversation history for user {current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset conversation history")
 
 
 @router.post("/profile", response_model=FundProfileResponse)
