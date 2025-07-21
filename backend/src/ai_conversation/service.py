@@ -10,6 +10,7 @@ import re
 import traceback
 from typing import Optional, Dict, Any, List
 
+import re
 from openai import OpenAI
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -23,6 +24,14 @@ from ..core.config import get_settings
 from ..companies.service import CompanyService
 from .location_service import get_canonical_location_from_text
 from ..gemini_client import get_gemini_response
+
+
+def clean_json_block(text: str) -> str:
+    # Убираем Markdown-блоки вроде ```json ... ```
+    match = re.search(r"```(?:json)?\s*({.*?})\s*```", text, re.DOTALL)
+    if match:
+        return match.group(1)
+    return text.strip()
 
 # Language detection helper (use langdetect if installed)
 try:
@@ -175,8 +184,11 @@ class AIService:
             if not gemini_response.strip():
                 raise ValueError("Gemini вернул пустую строку")
             
+            # Очищаем Markdown-обёртку если есть
+            cleaned = clean_json_block(gemini_response)
+            
             # Извлекаем JSON из ответа Gemini
-            result = json.loads(gemini_response)
+            result = json.loads(cleaned)
             
             # --- DEBUG: Log the parsed result ---
             print(f"✅ [INTENT_PARSER] OpenAI response:")
