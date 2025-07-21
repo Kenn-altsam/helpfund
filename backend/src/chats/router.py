@@ -17,7 +17,7 @@ class ChatHistorySaveRequest(BaseModel):
     raw_ai_response: List[Any] = Field(default_factory=list, description="The raw AI response data (e.g., companies).")
     created_at: str = Field(..., description="ISO timestamp of the interaction.")
     chat_id: str = Field(..., description="Database Chat ID (UUID).")
-    thread_id: str = Field(..., description="Thread ID for this conversation.")
+    thread_id: str  = Field(..., description="Thread ID for this conversation.")
     assistant_id: str = Field(..., description="Assistant ID for this conversation.")
 
 
@@ -54,8 +54,8 @@ async def save_chat_history_summary(
             user_prompt=body["user_prompt"],
             raw_ai_response=body.get("raw_ai_response", []),
             created_at=body["created_at"],
-            thread_id=body["thread_id"],
-            assistant_id=body["assistant_id"]
+            thread_id=body.get("thread_id"),
+            assistant_id=body.get("assistant_id")
         )
         return {"message": "Chat summary saved successfully."}
     except ValueError:
