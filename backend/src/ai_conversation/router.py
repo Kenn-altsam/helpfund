@@ -198,6 +198,12 @@ async def get_company_charity_info(
         - "Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
         - "Информация о благотворительной активности компании '{request.company_name}' отсутствует в найденных источниках."
 
+        В конце ответа обязательно добавь блок "Источники:" со списком ссылок, если они есть. Формат:
+
+        Источники:
+        1. [название источника] - [ссылка]
+        2. [название источника] - [ссылка]
+
         Ответь кратко, четко и на русском языке. Если информации недостаточно, используй fallback ответ.
         """
 
@@ -245,7 +251,21 @@ async def get_company_charity_info(
                     status="warning",
                     answer=f"Компания '{request.company_name}' могла участвовать в благотворительности, но достоверных источников не найдено."
                 )
-                
+            
+            # Add sources to the answer if they weren't included by Gemini
+            final_answer = answer.strip()
+            if links and "Источники:" not in final_answer:
+                print(f"🔗 [CHARITY_RESEARCH] Adding {len(links)} source links to the response")
+                sources_block = "\n\nИсточники:\n"
+                for i, link in enumerate(links, 1):
+                    # Extract domain name for better readability
+                    try:
+                        domain = link.split('/')[2] if '/' in link else link
+                        sources_block += f"{i}. {domain} - {link}\n"
+                    except:
+                        sources_block += f"{i}. {link}\n"
+                final_answer += sources_block
+            
         except (KeyError, IndexError) as e:
             print(f"⚠️ [CHARITY_RESEARCH] Failed to extract answer from Gemini response: {str(e)}")
             return CompanyCharityResponse(
@@ -255,11 +275,11 @@ async def get_company_charity_info(
 
         total_duration = time.time() - start_time
         print(f"✅ [CHARITY_RESEARCH] Successfully completed analysis for '{request.company_name}' in {total_duration:.2f}s")
-        print(f"📊 [CHARITY_RESEARCH] Final response size: {len(answer)} characters")
+        print(f"📊 [CHARITY_RESEARCH] Final response size: {len(final_answer)} characters")
         
         return CompanyCharityResponse(
             status="success",
-            answer=answer
+            answer=final_answer
         )
 
     except Exception as e:
