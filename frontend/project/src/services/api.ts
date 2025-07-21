@@ -240,13 +240,7 @@ export const chatApi = {
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[]; created_at?: string }>> => {
     try {
       const response = await api.get(`/chats/${chatId}`);
-      console.log('Raw chat history response:', response.data);
-      
-      // The response should have a messages array
-      const messages = response.data.messages || [];
-      
-      return messages.map((msg: any) => ({
-        id: msg.id || generateId(),
+      return (response.data.messages || []).map((msg: any) => ({
         role: msg.role,
         content: msg.content,
         companies: (msg.data?.companies_found || []).map(transformCompanyData),
@@ -294,16 +288,15 @@ export const historyApi = {
     }
   },
 
-  saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[]; chat_id?: string }): Promise<void> => {
+  saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
     try {
       // MODIFIED: Point to the new, correct endpoint and use the new payload structure.
       await api.post('/chats/history', {
-        // id: item.id, // УДАЛЕНО: backend требует только chat_id
+        id: item.id, // The chat ID, which might be an existing one to update
         user_prompt: item.userPrompt,
         raw_ai_response: item.rawAiResponse,
         created_at: item.created_at,
-        chat_id: item.chat_id, // Явно передаем chat_id
-        thread_id: item.threadId, // Используем thread_id
+        thread_id: item.threadId,
         assistant_id: item.assistantId,
       });
     } catch (error) {

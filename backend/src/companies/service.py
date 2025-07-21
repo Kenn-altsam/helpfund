@@ -82,10 +82,26 @@ class CompanyService:
         # 1. Add location filter if provided (using indexed column)
         if location:
             translated_location = CityTranslationService.translate_city_name(location)
-            param_count += 1
-            query_parts.append(f"AND \"Locality\" ILIKE :loc_{param_count}")
-            params[f"loc_{param_count}"] = f"%{translated_location}%"
-            logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
+            
+            # Get all possible name variations for better matching
+            possible_names = CityTranslationService.get_all_possible_names(location)
+            
+            # Create OR conditions for all possible name variations
+            location_conditions = []
+            for name in possible_names:
+                param_count += 1
+                location_conditions.append(f"\"Locality\" ILIKE :loc_{param_count}")
+                params[f"loc_{param_count}"] = f"%{name}%"
+            
+            if location_conditions:
+                query_parts.append(f"AND ({' OR '.join(location_conditions)})")
+                logging.info(f"[DB_SERVICE][SEARCH] Added location filter for variations: {possible_names}")
+            else:
+                # Fallback to original logic if no variations found
+                param_count += 1
+                query_parts.append(f"AND \"Locality\" ILIKE :loc_{param_count}")
+                params[f"loc_{param_count}"] = f"%{translated_location}%"
+                logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
 
         # 2. Add company name filter if provided (optimized for single word vs multi-word)
         if company_name:
@@ -513,10 +529,24 @@ class CompanyService:
         try:
             # Ensure we start with a clean transaction state
             self.db.rollback()
-            translated_location = CityTranslationService.translate_city_name(location)
-            return self.db.query(Company).filter(
-                Company.locality.ilike(f"%{translated_location}%")
-            ).count()
+            
+            # Get all possible name variations for better matching
+            possible_names = CityTranslationService.get_all_possible_names(location)
+            
+            # Create OR conditions for all possible name variations
+            if possible_names:
+                from sqlalchemy import or_
+                location_conditions = []
+                for name in possible_names:
+                    location_conditions.append(Company.locality.ilike(f"%{name}%"))
+                
+                return self.db.query(Company).filter(or_(*location_conditions)).count()
+            else:
+                # Fallback to original logic
+                translated_location = CityTranslationService.translate_city_name(location)
+                return self.db.query(Company).filter(
+                    Company.locality.ilike(f"%{translated_location}%")
+                ).count()
         except Exception as e:
             logging.error(f"[DB_SERVICE][COUNT_BY_LOCATION] Error: {e}")
             return 0 

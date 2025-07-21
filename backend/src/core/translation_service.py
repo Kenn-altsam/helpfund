@@ -17,10 +17,13 @@ class CityTranslationService:
     CITY_TRANSLATIONS: Dict[str, str] = {
         # Major cities
         "almaty": "Алматы",
+        "алмате": "Алматы",  # Common misspelling/variant in Russian
+        "алматы": "Алматы",  # Already in Russian
         "astana": "Астана", 
         "nur-sultan": "Нур-Султан",
         "nursultan": "Нур-Султан",
         "shymkent": "Шымкент",
+        "актобе": "Актобе",  # Add Russian versions too
         "aktobe": "Актобе",
         "taraz": "Тараз",
         "pavlodar": "Павлодар", 

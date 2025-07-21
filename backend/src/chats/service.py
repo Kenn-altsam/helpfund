@@ -36,7 +36,7 @@ def save_chat_summary_to_db(
     """
     # Try to find an existing chat by thread_id for this user
     chat = db.query(models.Chat).filter(
-        models.Chat.thread_id == thread_id,  # ✅ Используем исходное имя поля
+        models.Chat.openai_thread_id == thread_id,
         models.Chat.user_id == user_id
     ).first()
 
@@ -50,8 +50,8 @@ def save_chat_summary_to_db(
         chat = models.Chat(
             id=chat_id or uuid.uuid4(),
             user_id=user_id,
-            thread_id=thread_id,      # ✅ Используем исходное имя поля
-            assistant_id=assistant_id, # ✅ Используем исходное имя поля
+            openai_thread_id=thread_id,
+            openai_assistant_id=assistant_id,
             title=user_prompt,
             # The 'created_at' from the request is a string, we parse it.
             # The database will set its own created_at, but we can set updated_at.
@@ -65,7 +65,7 @@ def save_chat_summary_to_db(
     # This keeps the data associated with the turn.
     placeholder_message = models.Message(
         chat_id=chat.id,
-        role="summary", # Было: assistant_summary
+        role="assistant_summary", # A special role to distinguish it
         content="Placeholder for raw AI response from this turn.",
         data={"companies_found": raw_ai_response}
     )
@@ -104,8 +104,8 @@ def create_chat(
     db: Session,
     user_id: uuid.UUID,
     name: str, # `assistant_creator.py` passes 'name', which should map to 'title' in your Chat model
-    assistant_id: Optional[str] = None,  # ✅ Правильное имя аргумента
-    thread_id: Optional[str] = None      # ✅ Правильное имя аргумента
+    openai_assistant_id: Optional[str] = None,
+    openai_thread_id: Optional[str] = None
 ) -> models.Chat:
     """
     Creates a new chat session in the database.
@@ -113,8 +113,8 @@ def create_chat(
     db_chat = models.Chat(
         user_id=user_id,
         title=name, # Map the 'name' parameter to the 'title' field of your Chat model
-        assistant_id=assistant_id,  # ✅ Используем исходное имя поля
-        thread_id=thread_id         # ✅ Используем исходное имя поля
+        openai_assistant_id=openai_assistant_id,
+        openai_thread_id=openai_thread_id
     )
     db.add(db_chat)
     db.commit()
@@ -122,24 +122,24 @@ def create_chat(
     print(f"✅ Created new chat in DB: {db_chat.id} with title: '{db_chat.title}'")
     return db_chat
 
-def update_chat_ids(  # ✅ Переименовано для ясности
+def update_chat_openai_ids(
     db: Session,
     chat_id: uuid.UUID,
-    new_assistant_id: str,  # ✅ Правильное имя аргумента
-    new_thread_id: str      # ✅ Правильное имя аргумента
+    new_assistant_id: str,
+    new_thread_id: str
 ) -> Optional[models.Chat]:
     """
-    Updates the assistant_id and thread_id for an existing chat.
+    Updates the OpenAI assistant and thread IDs for an existing chat.
     """
-    chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
-    if chat:
-        chat.assistant_id = new_assistant_id  # ✅ Используем исходное имя поля
-        chat.thread_id = new_thread_id        # ✅ Используем исходное имя поля
+    db_chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
+    if db_chat:
+        db_chat.openai_assistant_id = new_assistant_id
+        db_chat.openai_thread_id = new_thread_id
+        db_chat.updated_at = datetime.now() # Ensure updated_at is updated, use datetime.now() for timezone-aware
         db.commit()
-        db.refresh(chat)
-        print(f"✅ Updated chat {chat_id} with new assistant_id: {new_assistant_id}, thread_id: {new_thread_id}")
-        return chat
-    return None
+        db.refresh(db_chat)
+        print(f"✅ Updated chat {chat_id} with new OpenAI IDs")
+    return db_chat
 
 def create_message(
     db: Session,
