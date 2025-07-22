@@ -25,9 +25,9 @@ class GeminiFundAssistant:
                 "properties": {
                     "company_name": {"type": "string", "description": "Company name to search for"},
                     "location": {"type": "string", "description": "Location to search in"},
-                    "activity_keywords": {"type": "string", "description": "Keywords for company activity", "nullable": True},
-                    "limit": {"type": "integer", "default": 50, "description": "Max results to return"},
-                    "page": {"type": "integer", "default": 1, "description": "Page number for pagination"}
+                    "activity_keywords": {"type": "string", "description": "Keywords for company activity"},
+                    "limit": {"type": "integer", "description": "Max results to return"},
+                    "page": {"type": "integer", "description": "Page number for pagination"}
                 },
                 "required": ["company_name"]
             }
