@@ -134,6 +134,14 @@ def handle_conversation_with_context(
     Handles a user's message using Gemini, maintaining context.
     The `assistant_id` is kept for schema compatibility but is not used by Gemini.
     """
+    print(f"🧠 [DEBUG] Received DB session: {db}")
+    print(f"🧠 [DEBUG] Received user input: {user_input}")
+    print(f"🧠 [DEBUG] User ID: {user.id}")
+    if chat_id:
+        print(f"🧠 [DEBUG] Provided chat_id: {chat_id}")
+    else:
+        print(f"🧠 [DEBUG] No chat_id provided, will create new chat if needed.")
+
     assistant_manager = GeminiFundAssistant()
     
     current_chat = None
@@ -141,28 +149,33 @@ def handle_conversation_with_context(
         current_chat = chat_service.get_chat_by_id(db, chat_id, user.id)
 
     if not current_chat:
-        # We need a chat to save messages, create one.
-        # `thread_id` and `assistant_id` will be null but the columns exist.
+        print(f"🧠 [DEBUG] Creating new chat for user_id: {user.id} with name: {user_input[:50]}")
         current_chat = chat_service.create_chat(
             db=db,
             user_id=user.id,
             name=user_input[:50]
         )
+    else:
+        print(f"🧠 [DEBUG] Found existing chat: {current_chat.id}")
     
     chat_id = current_chat.id
 
     try:
         # Save user message to DB
+        print(f"🧠 [DEBUG] Saving user message to DB: {user_input}")
         chat_service.create_message(db, chat_id=chat_id, content=user_input, role="user")
 
         # Call Gemini
+        print(f"🧠 [DEBUG] Calling Gemini API with user input...")
         response = assistant_manager._call_model_with_backoff(user_input)
+        print(f"🧠 [DEBUG] Gemini API response received.")
 
         # The Python SDK does not support function_calls; just use response.text
         assistant_message_content = response.text
         companies_found = []
 
         # Save assistant response to DB
+        print(f"🧠 [DEBUG] Saving assistant response to DB: {assistant_message_content}")
         chat_service.create_message(
             db,
             chat_id=chat_id,
@@ -171,6 +184,7 @@ def handle_conversation_with_context(
             metadata={"companies_found": companies_found}
         )
 
+        print(f"🧠 [DEBUG] Returning response to client. Chat ID: {chat_id}")
         return {
             "chat_id": str(chat_id),
             "assistant_id": assistant_id,  # Keep for compatibility
