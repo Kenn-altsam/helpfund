@@ -1,7 +1,9 @@
+
 # Use version 3.8 or higher to ensure healthcheck features are fully supported
 version: "3.8"
 
 services:
+  # --- Database Service (PostgreSQL) ---
   db:
     image: postgres:15
     container_name: ayala_db
@@ -11,18 +13,27 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
+      # Expose port to the host machine for local development/debugging
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - ayala-net
+
     # --- ADDED HEALTHCHECK ---
     # This check will run inside the container to see if Postgres is ready.
+    # --- THIS IS THE FIRST KEY FIX ---
+    # This healthcheck ensures the backend waits until Postgres is truly ready.
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+
+
+  # --- Backend Service (FastAPI) ---
 
   backend:
     build:
@@ -43,6 +54,20 @@ services:
       # The hostname is 'db', which is the service name. Docker's internal DNS handles this.
       DATABASE_URL: "postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}" # Using asyncpg for FastAPI
       # Pass other necessary variables explicitly
+    # --- THIS IS THE SECOND KEY FIX ---
+    # This tells Docker to wait for the 'db' service to be 'healthy' before starting.
+    depends_on:
+      db:
+        condition: service_healthy
+    # --- THIS IS THE THIRD KEY FIX ---
+    # We explicitly define the environment variables the backend needs.
+    environment:
+      # The DATABASE_URL is now the single source of truth for the connection.
+      # It uses the correct driver ('psycopg2') and hostname ('db').
+      DATABASE_URL: "postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
+      
+      # Pass other required variables from your .env file
+
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
@@ -54,6 +79,7 @@ services:
     networks:
       - ayala-net
 
+  # --- Frontend Service (React/Vite + Nginx) ---
   frontend:
     build:
       context: ./frontend
@@ -69,6 +95,7 @@ services:
     networks:
       - ayala-net
 
+# --- Define top-level volumes and networks ---
 volumes:
   postgres_data:
 
