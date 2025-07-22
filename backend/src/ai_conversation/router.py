@@ -78,7 +78,7 @@ def handle_chat_with_assistant(
             companies=response_data.get("companies_found", []),
             assistant_id=response_data.get('assistant_id'),
             chat_id=response_data.get('chat_id'),
-            openai_thread_id=response_data.get("thread_id")
+            thread_id=response_data.get("thread_id")
         )
         
     except Exception as e:

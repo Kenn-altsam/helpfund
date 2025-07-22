@@ -183,7 +183,7 @@ class ChatResponse(BaseModel):
         None,
         description="Database Chat ID (UUID) for this conversation"
     )
-    openai_thread_id: Optional[str] = Field(
+    thread_id: Optional[str] = Field(
         None,
         description="OpenAI Thread ID used for this response"
     )
@@ -242,7 +242,7 @@ class ChatResponse(BaseModel):
                 ],
                 "assistant_id": "asst_abc123",
                 "chat_id": str(uuid.uuid4()),
-                "openai_thread_id": "thread_xyz789"
+                "thread_id": "thread_xyz789"
             }
         }
 
@@ -306,7 +306,7 @@ class APIResponse(BaseModel):
                     "updated_history": [],
                     "assistant_id": "asst_abc123",
                     "chat_id": "some-uuid-string-here",
-                    "openai_thread_id": "thread_xyz789"
+                    "thread_id": "thread_xyz789"
                 },
                 "message": "Request processed successfully"
             }

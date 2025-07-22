@@ -477,13 +477,13 @@ def handle_conversation_with_context(
             db=db,
             user_id=user.id,
             name=user_input[:50],  # Use the first part of the message as the chat name
-            openai_assistant_id=assistant_id,
-            openai_thread_id=thread_id
+            assistant_id=assistant_id,
+            thread_id=thread_id
         )
     else:
         # Use existing IDs from the chat
-        assistant_id = current_chat.openai_assistant_id
-        thread_id = current_chat.openai_thread_id
+        assistant_id = current_chat.assistant_id
+        thread_id = current_chat.thread_id
 
         # Make sure the assistant and thread still exist on OpenAI's side
         try:
