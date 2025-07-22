@@ -17,9 +17,7 @@ from ..ai_conversation.models import ChatRequest, ChatResponse
 from ..auth.router import get_current_user
 from ..auth.models import User
 from ..core.database import get_db
-from src.ai_conversation.service import ai_service
-# --- 💡 NEW: Import charity_assistant for thread interactions ---
-from ..ai_conversation.assistant_creator import charity_assistant
+from ..ai_conversation.assistant_creator import handle_conversation_with_context
 
 
 # Create router
@@ -48,62 +46,19 @@ async def handle_chat(
     if not request.user_input.strip():
         raise HTTPException(status_code=400, detail="User input cannot be empty")
     
-    # Get or create fund profile for conversation state persistence
-    fund_profile = db.query(FundProfile).filter(
-        FundProfile.user_id == current_user.id
-    ).first()
+    # The new `handle_conversation_with_context` will manage its own state.
+    # We no longer need to manually load or save the history here.
     
-    # Load conversation history from database if available
-    conversation_history = []
-    if fund_profile and fund_profile.conversation_state:
-        conversation_history = fund_profile.conversation_state.get('history', [])
-        print(f"📚 Loaded {len(conversation_history)} messages from database")
-    
-    # Merge with history from request (request history takes precedence)
-    if request.history:
-        print(f"📝 Using {len(request.history)} messages from request")
-        conversation_history = request.history
-    else:
-        print(f"📝 Using {len(conversation_history)} messages from database")
-    
-    # Handle the conversation
-    response_data = await ai_service.handle_conversation_turn(
+    response_data = handle_conversation_with_context(
         user_input=request.user_input,
-        history=conversation_history,
         db=db,
-        conversation_id=str(fund_profile.id) if fund_profile else None
+        user=current_user,
+        chat_id=request.chat_id,
+        assistant_id=request.assistant_id
     )
     
-    # Save updated conversation history to database
-    if fund_profile:
-        # Update the conversation state in the database
-        updated_history = response_data.get('updated_history', [])
-        fund_profile.conversation_state = {
-            'history': updated_history,
-            'last_intent': response_data.get('intent'),
-            'last_location': response_data.get('location_detected'),
-            'last_activity_keywords': response_data.get('activity_keywords')
-        }
-        db.commit()
-        print(f"💾 Saved {len(updated_history)} messages to database")
-    else:
-        # Create fund profile if it doesn't exist
-        new_profile = FundProfile(
-            user_id=current_user.id,
-            fund_name=f"{current_user.full_name}'s Fund",
-            fund_description="Auto-created fund profile",
-            fund_email=current_user.email,
-            conversation_state={
-                'history': response_data.get('updated_history', []),
-                'last_intent': response_data.get('intent'),
-                'last_location': response_data.get('location_detected'),
-                'last_activity_keywords': response_data.get('activity_keywords')
-            }
-        )
-        db.add(new_profile)
-        db.commit()
-        print(f"✨ Created new fund profile with conversation state")
-    
+    # The new function returns a dictionary that is already compatible
+    # with the ChatResponse model.
     return ChatResponse(**response_data)
 
 
@@ -260,9 +215,6 @@ async def get_thread_history(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve the full conversation history from an OpenAI thread."""
-    try:
-        history = await charity_assistant.get_conversation_history(thread_id)
-        return history
-    except Exception as e:
-        print(f"Error fetching thread history for user {current_user.id}: {e}")
-        raise HTTPException(status_code=404, detail="Thread history not found or an error occurred.") 
+    # This functionality might be deprecated if Gemini doesn't use threads.
+    # For now, we raise a NotImplementedError.
+    raise HTTPException(status_code=501, detail="Thread history is not available with the current AI service.") 
