@@ -8,7 +8,7 @@ This service helps charity funds discover companies and sponsorship opportunitie
 import os
 from typing import List
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -41,7 +41,7 @@ app.add_middleware(
 
 # Часто роутеры регистрируют с общим префиксом /api/v1
 # Проверьте, как это сделано у вас
-api_v1_router = FastAPI()
+api_v1_router = APIRouter()
 
 print("[INIT] Registering routers...")
 api_v1_router.include_router(ai_router)
