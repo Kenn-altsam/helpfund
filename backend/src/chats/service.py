@@ -103,18 +103,19 @@ def get_chat_by_id(db: Session, chat_id: uuid.UUID, user_id: uuid.UUID) -> Optio
 def create_chat(
     db: Session,
     user_id: uuid.UUID,
-    name: str, # `assistant_creator.py` passes 'name', which should map to 'title' in your Chat model
-    openai_assistant_id: Optional[str] = None,
-    openai_thread_id: Optional[str] = None
+    name: str, 
+    assistant_id: Optional[str] = None,
+    thread_id: Optional[str] = None
 ) -> models.Chat:
     """
     Creates a new chat session in the database.
+    Now correctly maps arguments to the model fields.
     """
     db_chat = models.Chat(
         user_id=user_id,
-        title=name, # Map the 'name' parameter to the 'title' field of your Chat model
-        openai_assistant_id=openai_assistant_id,
-        openai_thread_id=openai_thread_id
+        title=name,         # Предполагаем, что поле называется title
+        assistant_id=assistant_id, # <--- ПРАВИЛЬНОЕ ИМЯ
+        thread_id=thread_id        # <--- ПРАВИЛЬНОЕ ИМЯ
     )
     db.add(db_chat)
     db.commit()

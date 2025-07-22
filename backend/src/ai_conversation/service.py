@@ -186,13 +186,19 @@ class GeminiService:
         elif intent == "find_companies" and not location:
             final_message = "Чтобы найти компании, мне нужно знать, в каком городе вы хотите искать. Пожалуйста, укажите местоположение."
 
-        history.append({"role": "assistant", "content": final_message, "companies": companies_data})
+        assistant_response_for_history = {
+            "role": "assistant",
+            "content": final_message,
+            "metadata": {"companies": companies_data}
+        }
+        history.append(assistant_response_for_history)
 
         return {
             'message': final_message,
             'companies': companies_data,
             'updated_history': history,
-            'reasoning': parsed_intent.get('reasoning')
+            'reasoning': parsed_intent.get('reasoning'),
+            'metadata': {"companies": companies_data}
         }
 
 # Global service instance

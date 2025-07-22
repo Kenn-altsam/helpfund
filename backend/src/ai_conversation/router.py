@@ -66,11 +66,25 @@ async def handle_chat_with_database_search(
         last_assistant_message = next((msg for msg in reversed(response_data['updated_history']) if msg['role'] == 'assistant'), None)
 
         if last_user_message:
-            chat_service.create_message(db, chat_id=db_chat_id, content=last_user_message['content'], role='user')
+            # Для сообщения пользователя метаданные не нужны
+            chat_service.create_message(
+                db=db,
+                chat_id=db_chat_id,
+                content=last_user_message['content'],
+                role='user',
+                metadata=None # Явно указываем, что их нет
+            )
+
         if last_assistant_message:
-            # Прикрепляем найденные компании к сообщению ассистента при сохранении
-            companies_for_db = response_data.get('companies', [])
-            chat_service.create_message(db, chat_id=db_chat_id, content=last_assistant_message['content'], role='assistant', companies=companies_for_db)
+            # Для сообщения ассистента извлекаем компании и передаем как metadata
+            companies_data = response_data.get('companies', [])
+            chat_service.create_message(
+                db=db,
+                chat_id=db_chat_id,
+                content=last_assistant_message['content'],
+                role='assistant',
+                metadata={"companies": companies_data}
+            )
 
         # 4. Формируем и возвращаем финальный ответ для фронтенда
         final_response = ChatResponse(
