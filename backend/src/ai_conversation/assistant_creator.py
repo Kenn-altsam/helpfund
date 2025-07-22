@@ -2,10 +2,11 @@
 import json
 import time
 import uuid
-from typing import Dict, List, Optional, Any
-import google.generativeai as genai
+from typing import Dict, Optional, Any
 from sqlalchemy.orm import Session
-from google.generativeai.types import FunctionDeclaration
+
+import google.generativeai as genai
+from google.generativeai import types
 
 from ..core.config import get_settings
 from ..companies.service import CompanyService
@@ -16,184 +17,140 @@ from ..chats import service as chat_service
 class GeminiFundAssistant:
     def __init__(self):
         self.settings = get_settings()
-        genai.configure(api_key=self.settings.GEMINI_API_KEY)
-        search_companies_tool = FunctionDeclaration(
+        # TODO: Consider instantiating the genai Client once at application startup to avoid repeated auth overhead
+        self.client = genai.Client(api_key=self.settings.GEMINI_API_KEY)
+
+        # Using JSON schema declarations; parameters_json_schema ensures strict validation
+        search_fn = types.FunctionDeclaration(
             name="search_companies",
             description="Searches for companies by name and location",
-            parameters={
+            parameters_json_schema={
                 "type": "object",
                 "properties": {
                     "company_name": {"type": "string", "description": "Company name to search for"},
                     "location": {"type": "string", "description": "Location to search in"},
                     "activity_keywords": {"type": "string", "description": "Keywords for company activity"},
-                    "limit": {"type": "integer", "description": "Max results to return"},
-                    "page": {"type": "integer", "description": "Page number for pagination"}
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 50},
+                    "page": {"type": "integer", "description": "Page number for pagination", "default": 1},
                 },
-                "required": ["company_name"]
-            }
+                "required": ["company_name"],
+            },
         )
-        get_company_details_tool = FunctionDeclaration(
+
+        details_fn = types.FunctionDeclaration(
             name="get_company_details",
             description="Get details for a company by ID",
-            parameters={
+            parameters_json_schema={
                 "type": "object",
                 "properties": {
-                    "company_id": {"type": "string", "description": "ID of the company"}
+                    "company_id": {"type": "string", "description": "ID of the company"},
                 },
-                "required": ["company_id"]
-            }
-        )
-        self.model = genai.GenerativeModel(
-            model_name=self.settings.GEMINI_MODEL_NAME,
-            tools=[search_companies_tool, get_company_details_tool]
+                "required": ["company_id"],
+            },
         )
 
-    def _call_model_with_backoff(self, prompt: str, is_json_output: bool = False):
-        """Calls the Gemini API with exponential backoff."""
+        # TODO: Extract chat_config to a constant or config file if reused across multiple assistants
+        self.chat_config = types.GenerateContentConfig(
+            tools=[types.Tool(function_declarations=[search_fn, details_fn])],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        )
+
+    def _call_model_with_backoff(self, prompt: str) -> types.GenerateContentResponse:
+        """Calls the Gemini API with simple backoff; consider using a retry library for exponential backoff"""
         time.sleep(1)
-        # Simplified for brevity, in production use a library like `tenacity`
-        try:
-            chat_session = self.model.start_chat(
-                enable_automatic_function_calling=True
-            )
-            response = chat_session.send_message(prompt)
-            return response
-        except Exception as e:
-            print(f"Error calling Gemini API: {e}")
-            raise
+        # FIXME: Creating a new chat per request may add latency; consider reusing chat sessions for context
+        chat = self.client.chats.create(
+            model=self.settings.GEMINI_MODEL_NAME,
+            config=self.chat_config,
+        )
+        return chat.send_message(prompt)
 
-    def handle_tool_call(self, tool_call, db: Session, chat_id: Optional[uuid.UUID]):
-        """Executes the appropriate function based on the tool call."""
-        function_name = tool_call.name
-        function_args = tool_call.args
-        print(f"Executing function: {function_name} with args: {function_args}")
+    def handle_tool_call(self, tool_call: types.FunctionCall, db: Session, chat_id: Optional[uuid.UUID]) -> Dict[str, Any]:
+        name = tool_call.name
+        args = tool_call.args or {}
+        # Consider mapping function names to handlers via a dict to avoid if/elif chains
+        if name == "search_companies":
+            return self.search_companies_tool(args, db, chat_id)
+        if name == "get_company_details":
+            return self.get_company_details_tool(args, db)
+        return {"error": f"Unknown tool: {name}"}
 
-        if function_name == "search_companies":
-            return self.search_companies_tool(function_args, db, chat_id)
-        elif function_name == "get_company_details":
-            return self.get_company_details_tool(function_args, db)
-        else:
-            return {"error": f"Unknown tool: {function_name}"}
+    def search_companies_tool(self, args: Dict[str, Any], db: Session, chat_id: Optional[uuid.UUID]) -> Dict[str, Any]:
+        # Validation: ensure args contain required keys; pydantic could simplify this
+        service = CompanyService(db)
+        limit = int(args.get("limit", 50))
+        page = self._calculate_page(args, db, chat_id)
+        items = service.search_companies(
+            location=args.get("location"),
+            company_name=args.get("company_name"),
+            activity_keywords=args.get("activity_keywords"),
+            limit=limit,
+            offset=(page - 1) * limit,
+        )
+        return {
+            "companies": items,
+            "total_found": len(items),
+            "search_criteria": args,
+            "page": page,
+            "limit": limit,
+        }
 
-    def search_companies_tool(self, args: Dict, db: Session, chat_id: Optional[uuid.UUID]) -> Dict:
-        """Handles the search_companies tool call."""
-        try:
-            company_service = CompanyService(db)
-            limit = int(args.get("limit", 50))
-            page = self._calculate_page(args, db, chat_id)
+    def get_company_details_tool(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        service = CompanyService(db)
+        company = service.get_company_by_id(args.get("company_id"))
+        return company or {"error": "Company not found."}
 
-            companies = company_service.search_companies(
-                location=args.get("location"),
-                company_name=args.get("company_name"),
-                activity_keywords=args.get("activity_keywords"),
-                limit=limit,
-                offset=(page - 1) * limit
-            )
-            
-            # Here, we assume `companies` is a list of dictionaries with the correct keys
-            return {
-                "companies": companies,
-                "total_found": len(companies),
-                "search_criteria": args,
-                "page": page,
-                "limit": limit
-            }
-        except Exception as e:
-            return {"error": str(e)}
-
-    def get_company_details_tool(self, args: Dict, db: Session) -> Dict:
-        """Handles the get_company_details tool call."""
-        try:
-            company_service = CompanyService(db)
-            company_id = args.get("company_id")
-            company_dict = company_service.get_company_by_id(company_id)
-            return company_dict if company_dict else {"error": "Company not found."}
-        except Exception as e:
-            return {"error": str(e)}
-
-    def _calculate_page(self, args: Dict, db: Session, chat_id: Optional[uuid.UUID]) -> int:
-        """Calculates the pagination page number."""
-        page = args.get("page")
-        if page is not None:
-            return int(page)
-        
+    def _calculate_page(self, args: Dict[str, Any], db: Session, chat_id: Optional[uuid.UUID]) -> int:
+        # Simplify pagination logic by defaulting page to 1; chat history dependency might leak context
+        if args.get("page") is not None:
+            return int(args["page"])
         if chat_id:
-            prev_search_calls = chat_service.count_search_requests(db, chat_id)
-            return max(1, prev_search_calls)
-        
+            prev = chat_service.count_search_requests(db, chat_id)
+            return max(1, prev)
         return 1
+
 
 def handle_conversation_with_context(
     user_input: str,
     db: Session,
     user: User,
     chat_id: Optional[uuid.UUID] = None,
-    assistant_id: Optional[str] = None
+    assistant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Handles a user's message using Gemini, maintaining context.
-    The `assistant_id` is kept for schema compatibility but is not used by Gemini.
-    """
-    assistant_manager = GeminiFundAssistant()
-    
-    current_chat = None
-    if chat_id:
-        current_chat = chat_service.get_chat_by_id(db, chat_id, user.id)
+    assistant = GeminiFundAssistant()
+    chat = chat_service.get_chat_by_id(db, chat_id, user.id) if chat_id else None
+    if not chat:
+        # Consider unifying chat creation logic to avoid duplication
+        chat = chat_service.create_chat(db=db, user_id=user.id, name=user_input[:50])
+    chat_service.create_message(db, chat_id=chat.id, content=user_input, role="user")
 
-    if not current_chat:
-        # We need a chat to save messages, create one.
-        # `thread_id` and `assistant_id` will be null but the columns exist.
-        current_chat = chat_service.create_chat(
-            db=db,
-            user_id=user.id,
-            name=user_input[:50]
+    resp = assistant._call_model_with_backoff(user_input)
+    if getattr(resp, "function_calls", None):
+        tool_call = resp.function_calls[0]
+        result = assistant.handle_tool_call(tool_call, db, chat.id)
+        # TODO: Handle errors from tool_call and provide fallback messages
+        final = assistant.client.chats.send_message(
+            f"Tool response: {json.dumps(result)}",
+            chat_id=resp.chat_id,
         )
-    
-    chat_id = current_chat.id
+        text = final.text
+        companies = result.get("companies", [])
+    else:
+        text = resp.text
+        companies = []
 
-    try:
-        # Save user message to DB
-        chat_service.create_message(db, chat_id=chat_id, content=user_input, role="user")
-
-        # Call Gemini
-        response = assistant_manager._call_model_with_backoff(user_input)
-        
-        # Check for tool calls
-        if response.function_calls:
-            tool_call = response.function_calls[0]
-            tool_response = assistant_manager.handle_tool_call(tool_call, db, chat_id)
-            
-            # Send tool response back to Gemini
-            final_response_obj = assistant_manager.model.send_message(
-                f"Tool response: {json.dumps(tool_response)}",
-                tool_response=tool_response
-            )
-            assistant_message_content = final_response_obj.text
-            companies_found = tool_response.get("companies", [])
-        else:
-            assistant_message_content = response.text
-            companies_found = []
-
-        # Save assistant response to DB
-        chat_service.create_message(
-            db,
-            chat_id=chat_id,
-            content=assistant_message_content,
-            role="assistant",
-            metadata={"companies_found": companies_found}
-        )
-
-        return {
-            "chat_id": str(chat_id),
-            "assistant_id": assistant_id,  # Keep for compatibility
-            "thread_id": None,  # Keep for compatibility
-            "response": assistant_message_content,
-            "companies_found": companies_found
-        }
-
-    except Exception as e:
-        print(f"Error in Gemini conversation handling: {str(e)}")
-        return {
-            "error": "An unexpected error occurred while processing your request.",
-            "details": str(e)
-        } 
+    # Persist assistant response; consider batching DB writes for performance
+    chat_service.create_message(
+        db,
+        chat_id=chat.id,
+        content=text,
+        role="assistant",
+        metadata={"companies_found": companies},
+    )
+    return {
+        "chat_id": str(chat.id),
+        "assistant_id": assistant_id,
+        "thread_id": None,
+        "response": text,
+        "companies_found": companies,
+    } 
