@@ -88,16 +88,10 @@ class Settings(BaseSettings):
         return values
 
     # ------------------------------------------------------------------
-    # OpenAI - UPDATED FOR AZURE
+    # Gemini AI
     # ------------------------------------------------------------------
-    OPENAI_API_KEY: str = ""
-    OPENAI_MODEL_NAME: str = "gpt-4-turbo"  # Default model
-
-    # Azure OpenAI specific settings
-    AZURE_OPENAI_KEY: Optional[str] = None
-    AZURE_OPENAI_ENDPOINT: Optional[str] = None
-    AZURE_OPENAI_DEPLOYMENT_NAME: Optional[str] = None
-    AZURE_OPENAI_API_VERSION: str = "2024-02-15" # Specify your API version
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL_NAME: str = "gemini-1.5-flash"  # Default model
 
     # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
@@ -133,15 +127,15 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must be set in the environment.")
         if not self.SECRET_KEY:
             raise ValueError("SECRET_KEY must be set in the environment.")
-        if not self.OPENAI_API_KEY and not self.AZURE_OPENAI_KEY:
-            print("⚠️  Warning: Neither OPENAI_API_KEY nor AZURE_OPENAI_KEY is set. OpenAI functionality might be limited.")
+        if not self.GEMINI_API_KEY:
+            print("⚠️  Warning: GEMINI_API_KEY is not set. AI functionality might be limited.")
 
 
     def print_settings(self):
         """Prints loaded settings for verification."""
         settings_to_print = self.model_dump()
         # Mask sensitive keys
-        sensitive_keys = ["DATABASE_URL", "SECRET_KEY", "OPENAI_API_KEY", "AZURE_OPENAI_KEY"]
+        sensitive_keys = ["DATABASE_URL", "SECRET_KEY", "GEMINI_API_KEY"]
         for key in sensitive_keys:
             if key in settings_to_print and settings_to_print[key]:
                 settings_to_print[key] = f"***{settings_to_print[key][-4:]}"
@@ -155,10 +149,7 @@ class Settings(BaseSettings):
         print("Key Loading Status:")
         print(f"  - Database URL Loaded: {'Yes' if self.DATABASE_URL else 'No'}")
         print(f"  - Secret Key Loaded: {'Yes' if self.SECRET_KEY else 'No'}")
-        print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if self.OPENAI_API_KEY else 'No'}")
-        print(f"  - Azure Key Loaded: {'Yes' if self.AZURE_OPENAI_KEY else 'No'}")
-        print(f"  - Azure Endpoint Loaded: {self.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
-        print(f"  - Azure Deployment Loaded: {self.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
+        print(f"  - Gemini Key Loaded: {'Yes' if self.GEMINI_API_KEY else 'No'}")
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -166,10 +157,7 @@ def get_settings() -> Settings:
     print("⚙️  Loading settings...")
     settings = Settings()
     
-    # --- Add detailed logging for Azure settings ---
-    print(f"  - Azure Key Loaded: {'Yes' if settings.AZURE_OPENAI_KEY else 'No'}")
-    print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
-    print(f"  - Azure Deployment Loaded: {settings.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
-    print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
+    # --- Add detailed logging for Gemini settings ---
+    print(f"  - Gemini Key Loaded: {'Yes' if settings.GEMINI_API_KEY else 'No'}")
     
     return settings
