@@ -36,7 +36,7 @@ def save_chat_summary_to_db(
     """
     # Try to find an existing chat by thread_id for this user
     chat = db.query(models.Chat).filter(
-        models.Chat.thread_id == thread_id,
+        models.Chat.openai_thread_id == thread_id,
         models.Chat.user_id == user_id
     ).first()
 
@@ -50,8 +50,8 @@ def save_chat_summary_to_db(
         chat = models.Chat(
             id=chat_id or uuid.uuid4(),
             user_id=user_id,
-            thread_id=thread_id,
-            assistant_id=assistant_id,
+            openai_thread_id=thread_id,
+            openai_assistant_id=assistant_id,
             title=user_prompt,
             # The 'created_at' from the request is a string, we parse it.
             # The database will set its own created_at, but we can set updated_at.
@@ -104,8 +104,8 @@ def create_chat(
     db: Session,
     user_id: uuid.UUID,
     name: str, # `assistant_creator.py` passes 'name', which should map to 'title' in your Chat model
-    assistant_id: Optional[str] = None,
-    thread_id: Optional[str] = None
+    openai_assistant_id: Optional[str] = None,
+    openai_thread_id: Optional[str] = None
 ) -> models.Chat:
     """
     Creates a new chat session in the database.
@@ -113,8 +113,8 @@ def create_chat(
     db_chat = models.Chat(
         user_id=user_id,
         title=name, # Map the 'name' parameter to the 'title' field of your Chat model
-        assistant_id=assistant_id,
-        thread_id=thread_id
+        openai_assistant_id=openai_assistant_id,
+        openai_thread_id=openai_thread_id
     )
     db.add(db_chat)
     db.commit()
@@ -133,8 +133,8 @@ def update_chat_openai_ids(
     """
     db_chat = db.query(models.Chat).filter(models.Chat.id == chat_id).first()
     if db_chat:
-        db_chat.assistant_id = new_assistant_id
-        db_chat.thread_id = new_thread_id
+        db_chat.openai_assistant_id = new_assistant_id
+        db_chat.openai_thread_id = new_thread_id
         db_chat.updated_at = datetime.now() # Ensure updated_at is updated, use datetime.now() for timezone-aware
         db.commit()
         db.refresh(db_chat)

@@ -41,10 +41,25 @@ services:
       dockerfile: Dockerfile
     container_name: ayala_backend
     restart: unless-stopped
+    # --- MODIFIED depends_on ---
+    # Now, it waits for the 'db' service to be 'service_healthy'
+    depends_on:
+      db:
+        condition: service_healthy
+    # --- CLEANED UP ENVIRONMENT ---
+    # We pass only the variables the application actually needs.
+    # This is much cleaner than using env_file here.
+    environment:
+      # The connection string is the single source of truth for the DB connection.
+      # The hostname is 'db', which is the service name. Docker's internal DNS handles this.
+      DATABASE_URL: "postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}" # Using asyncpg for FastAPI
+      # Pass other necessary variables explicitly
+    # --- THIS IS THE SECOND KEY FIX ---
     # This tells Docker to wait for the 'db' service to be 'healthy' before starting.
     depends_on:
       db:
         condition: service_healthy
+    # --- THIS IS THE THIRD KEY FIX ---
     # We explicitly define the environment variables the backend needs.
     environment:
       # The DATABASE_URL is now the single source of truth for the connection.
@@ -52,16 +67,13 @@ services:
       DATABASE_URL: "postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
       
       # Pass other required variables from your .env file
+
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       DEBUG: ${DEBUG}
-      
-      # --- ADDED: Keys for Google and Gemini services ---
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      GOOGLE_SEARCH_ENGINE_ID: ${GOOGLE_SEARCH_ENGINE_ID}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
       - "8000:8000"
     networks:

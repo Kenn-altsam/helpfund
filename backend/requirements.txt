@@ -10,31 +10,41 @@ python-dotenv>=1.0.0
 
 # --- Database (Synchronous Setup) ---
 sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0   # sync driver
+psycopg2-binary>=2.9.0  # The synchronous driver for PostgreSQL
 alembic>=1.12.0
 
 # --- Authentication ---
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
-bcrypt==3.2.0            # фикс под passlib
+bcrypt==3.2.0           # <<< FIX: Pinned to a compatible version for passlib
 python-multipart>=0.0.6
 
-# --- Google Gemini and Search Services ---
-google-generativeai>=0.8.0       # основной SDK
-google-search-results>=2.4.0     # SerpAPI
-langchain>=0.3.0                 # если нужен RAG / цепочки
-
-# --- NLP / утилиты ---
+# --- OpenAI and AI Services ---
+openai>=1.0.0
 langdetect>=1.0.9
-beautifulsoup4>=4.12.2
+
+# --- Google Gemini and Search Services ---
+google-generativeai>=0.8.0
+langchain>=0.3.0
+google-search-results>=2.4.0
+
+# --- KGD Parser and its Dependencies ---
 requests>=2.31.0
 httpx>=0.25.0
-email-validator>=2.0.0
-
-# --- KGD Parser и OCR ---
+2captcha-python>=1.1.3
 pytesseract>=0.3.10
 pillow>=10.0.0
 
+# --- Pydantic Helpers ---
+email-validator>=2.0.0
+
+# --- REMOVED ASYNC DEPENDENCIES ---
+# asyncpg (conflicts with psycopg2-binary in a sync app)
+# aiohttp (async http client, not needed)
+
 # --- OPTIONAL HEAVY DEPENDENCIES ---
+# Consider if these are truly needed in the backend container
 # playwright>=1.40.0
 # pandas>=2.0.0
+
+beautifulsoup4>=4.12.2

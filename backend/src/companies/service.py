@@ -71,10 +71,9 @@ class CompanyService:
     ) -> List[Dict[str, Any]]:
         logging.info(f"[DB_SERVICE][SEARCH] location={location}, company_name={company_name}, activity_keywords={activity_keywords}, limit={limit}, offset={offset}")
         
-        # Optimized query construction with aliases matching the Pydantic model
+        # Optimized query construction - only select needed columns for better performance
         query_parts = [
-            'SELECT id, "Company" AS name, "BIN" AS bin, "Activity" AS activity, "Locality" AS locality, '
-            '"OKED" AS oked, "Size" AS size, "KATO" AS kato, "KRP" AS krp, tax_data_2023, tax_data_2024, tax_data_2025',
+            "SELECT id, \"Company\", \"BIN\", \"Activity\", \"Locality\", \"OKED\", \"Size\", \"KATO\", \"KRP\", tax_data_2023, tax_data_2024, tax_data_2025",
             "FROM companies WHERE 1=1"
         ]
         params = {}
@@ -141,14 +140,31 @@ class CompanyService:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             
-            # Execute the main query and get results as dictionaries directly
+            # Execute the main query directly - no need for test query
             result = self.db.execute(text(final_query), params)
-            results = result.mappings().all()
+            results = result.fetchall()
             logging.info(f"[DB_SERVICE][SEARCH] Query executed, returned {len(results)} results")
             
-            # The keys from .mappings().all() now match the Pydantic model thanks to aliases
-            # We just need to convert the list of RowMappings to a list of dicts
-            converted_results = [dict(row) for row in results]
+            # Convert results to dictionaries efficiently
+            converted_results = []
+            for row in results:
+                company_dict = {
+                    "id": row.id,
+                    "name": row.Company,
+                    "bin": row.BIN,
+                    "activity": row.Activity,
+                    "locality": row.Locality,
+                    "oked": row.OKED,
+                    "size": row.Size,
+                    "kato": row.KATO,
+                    "krp": row.KRP,
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
+                    "contacts": None,  # phone and email columns don't exist in actual database
+                    "website": None,   # location column doesn't exist in actual DB
+                }
+                converted_results.append(company_dict)
             
             # Minimal debug logging for performance
             if converted_results:
@@ -275,9 +291,7 @@ class CompanyService:
         translated_location = CityTranslationService.translate_city_name(location)
         
         query = """
-            SELECT id, "Company" AS name, "BIN" AS bin, "Activity" AS activity, "Locality" AS locality,
-                   "OKED" AS oked, "Size" AS size, "KATO" AS kato, "KRP" AS krp,
-                   tax_data_2023, tax_data_2024, tax_data_2025
+            SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025
             FROM companies 
             WHERE "Locality" ILIKE :location
             ORDER BY "Locality" ASC, COALESCE(tax_data_2025, 0) DESC, "Company" ASC
@@ -293,12 +307,30 @@ class CompanyService:
                 "limit": limit,
                 "offset": offset
             })
+            companies = result.fetchall()
+            logging.info(f"[DB_SERVICE][BY_LOCATION] Query returned {len(companies)} companies")
             
-            # Use .mappings().all() for direct conversion to dicts with correct keys
-            results = result.mappings().all()
-            logging.info(f"[DB_SERVICE][BY_LOCATION] Query returned {len(results)} companies")
+            result_dicts = []
+            for row in companies:
+                company_dict = {
+                    "id": row.id,
+                    "name": row.Company,
+                    "bin": row.BIN,
+                    "activity": row.Activity,
+                    "locality": row.Locality,
+                    "oked": row.OKED,
+                    "size": row.Size,
+                    "kato": row.KATO,
+                    "krp": row.KRP,
+                    "tax_data_2023": row.tax_data_2023,
+                    "tax_data_2024": row.tax_data_2024,
+                    "tax_data_2025": row.tax_data_2025,
+                    "contacts": None,  # phone and email columns don't exist in actual database
+                    "website": None,   # location column doesn't exist in actual DB
+                }
+                result_dicts.append(company_dict)
             
-            return [dict(row) for row in results]
+            return result_dicts
             
         except Exception as e:
             logging.error(f"[DB_SERVICE][BY_LOCATION] Error: {e}")
