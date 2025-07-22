@@ -53,7 +53,7 @@ async def handle_chat_with_database_search(
 
         # 2. Вызываем основную логику из ai_service.py
         # Эта функция парсит намерение, ищет в БД и возвращает результат
-        response_data = ai_service.handle_conversation_turn(
+        response_data = await ai_service.handle_conversation_turn(
             user_input=request.user_input,
             history=request.history,
             db=db,
