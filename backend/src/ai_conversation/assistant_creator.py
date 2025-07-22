@@ -4,9 +4,8 @@ import time
 import uuid
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
-from google import genai 
-from sqlalchemy.orm import Session
 from google.generativeai.types import FunctionDeclaration
+from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..companies.service import CompanyService
