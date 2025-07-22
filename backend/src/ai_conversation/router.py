@@ -20,26 +20,33 @@ router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
 
 @router.post("/chat-assistant", response_model=ChatResponse)
-def handle_chat_with_assistant(
-    request: ChatRequest, 
+async def handle_chat_with_assistant(
+    request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) 
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Handle an AI conversation turn with database persistence.
-    - Manages chat history and OpenAI thread context via the database.
-    - Saves the new conversation turn to the database.
+    Handle an AI conversation turn using Gemini API.
+    - Uses Gemini for text generation.
+    - Persists chat history in the database.
     """
     import time
     start_time = time.time()
-    
+    import uuid
+    import os
+    from ..chats import service as chat_service
+
     print(f"💬 [CHAT_ASSISTANT] New chat request from user {current_user.id}")
     print(f"📝 [CHAT_ASSISTANT] Input length: {len(request.user_input)} characters")
-    
+
     if not request.user_input.strip():
         print(f"❌ [CHAT_ASSISTANT] Empty input rejected")
         raise HTTPException(status_code=400, detail="User input cannot be empty")
-    
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API key is not configured.")
+
     db_chat_id: Optional[uuid.UUID] = None
     if request.chat_id:
         try:
@@ -51,46 +58,70 @@ def handle_chat_with_assistant(
     else:
         print(f"🆕 [CHAT_ASSISTANT] Creating new chat session")
 
-    print(f"🚀 [CHAT_ASSISTANT] Starting conversation processing for user {current_user.id}")
+    # Формируем историю для prompt
+    history = request.history or []
+    prompt_parts = []
+    for msg in history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "user":
+            prompt_parts.append(f"Пользователь: {content}")
+        elif role == "assistant":
+            prompt_parts.append(f"Ассистент: {content}")
+    prompt_parts.append(f"Пользователь: {request.user_input}")
+    prompt = "\n".join(prompt_parts)
 
+    gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-pro:generateContent?key={GEMINI_API_KEY}"
+    gemini_payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+
+    print(f"🤖 [CHAT_ASSISTANT] Sending request to Gemini API...")
+    print(f"📊 [CHAT_ASSISTANT] Prompt length: {len(prompt)} characters")
+
+    import httpx
     try:
-        response_data = handle_conversation_with_context(
-            user_input=request.user_input,
-            db=db,
-            user=current_user,
-            chat_id=db_chat_id,
-            assistant_id=request.assistant_id,
-        )
+        async with httpx.AsyncClient() as client:
+            gemini_start_time = time.time()
+            gemini_res = await client.post(gemini_url, json=gemini_payload)
+            gemini_res.raise_for_status()
+            g_data = gemini_res.json()
+            gemini_duration = time.time() - gemini_start_time
+            print(f"✅ [CHAT_ASSISTANT] Gemini API response received in {gemini_duration:.2f}s")
+    except httpx.RequestError as e:
+        print(f"❌ [CHAT_ASSISTANT] Gemini API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка подключения к Gemini API.")
+    except httpx.HTTPStatusError as e:
+        print(f"❌ [CHAT_ASSISTANT] Gemini API HTTP error {e.response.status_code}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Gemini API временно недоступен.")
 
-        if "error" in response_data:
-            print(f"❌ [CHAT_ASSISTANT] AI handler returned error: {response_data.get('details', 'Unknown error')}")
-            raise HTTPException(status_code=500, detail=response_data.get("details", "An unknown error occurred in the AI handler."))
+    # Извлекаем ответ
+    try:
+        answer = g_data["candidates"][0]["content"]["parts"][0]["text"]
+        answer_length = len(answer)
+        print(f"📝 [CHAT_ASSISTANT] Gemini answer extracted - length: {answer_length} characters")
+    except (KeyError, IndexError) as e:
+        print(f"⚠️ [CHAT_ASSISTANT] Failed to extract answer from Gemini response: {str(e)}")
+        raise HTTPException(status_code=500, detail="Не удалось обработать ответ от Gemini.")
 
-        companies_count = len(response_data.get("companies_found", []))
-        total_duration = time.time() - start_time
-        
-        print(f"✅ [CHAT_ASSISTANT] Successfully processed chat in {total_duration:.2f}s")
-        print(f"🏢 [CHAT_ASSISTANT] Found {companies_count} companies in response")
-        print(f"💭 [CHAT_ASSISTANT] Chat ID: {response_data.get('chat_id')}, Thread ID: {response_data.get('thread_id')}")
+    # Сохраняем сообщения в базу (если есть chat_id)
+    updated_history = history + [{"role": "user", "content": request.user_input}, {"role": "assistant", "content": answer}]
+    if db_chat_id:
+        chat_service.create_message(db, chat_id=db_chat_id, content=request.user_input, role="user")
+        chat_service.create_message(db, chat_id=db_chat_id, content=answer, role="assistant")
+    # Если нет chat_id, можно создать новый чат (опционально)
 
-        return ChatResponse(
-            message=response_data.get("response"),
-            companies=response_data.get("companies_found", []),
-            assistant_id=response_data.get('assistant_id'),
-            chat_id=response_data.get('chat_id'),
-            openai_thread_id=response_data.get("thread_id")
-        )
-        
-    except Exception as e:
-        total_duration = time.time() - start_time
-        print(f"❌ [CHAT_ASSISTANT] Error in chat endpoint after {total_duration:.2f}s: {str(e)}")
-        traceback.print_exc()
-        if isinstance(e, HTTPException):
-            raise
-        raise HTTPException(
-            status_code=500, 
-            detail="Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
-        )
+    total_duration = time.time() - start_time
+    print(f"✅ [CHAT_ASSISTANT] Successfully processed chat in {total_duration:.2f}s")
+
+    return ChatResponse(
+        message=answer,
+        companies=[],
+        updated_history=updated_history,
+        assistant_id=None,
+        chat_id=str(db_chat_id) if db_chat_id else None,
+        openai_thread_id=None
+    )
 
 
 @router.post("/charity-research", response_model=CompanyCharityResponse)
