@@ -71,7 +71,7 @@ async def handle_chat_with_assistant(
     prompt_parts.append(f"Пользователь: {request.user_input}")
     prompt = "\n".join(prompt_parts)
 
-    gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-pro:generateContent?key={GEMINI_API_KEY}"
+    gemini_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     gemini_payload = {
         "contents": [{"parts": [{"text": prompt}]}]
     }
