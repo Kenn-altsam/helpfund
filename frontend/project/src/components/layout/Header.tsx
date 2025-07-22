@@ -33,25 +33,25 @@ export function Header() {
             </Link>
           )}
           <nav className="hidden md:flex items-center space-x-4">
-            <Link to="/">
-              <Button
-                variant="outline"
-                size="sm"
-                className={`text-sm ${location.pathname === '/' ? 'bg-muted text-primary' : ''}`}
-              >
-                {t('header.home')}
-              </Button>
-            </Link>
-            <Link to="/finder">
-              <Button
-                variant="outline"
-                size="sm"
-                className={`text-sm ${location.pathname === '/finder' ? 'bg-muted text-primary' : ''}`}
-              >
-                {t('header.finder')}
-              </Button>
-            </Link>
-          </nav>
+          <Link to="/">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`text-sm ${location.pathname === '/' ? 'bg-muted text-primary' : ''}`}
+            >
+              {t('header.home')}
+            </Button>
+          </Link>
+          <Link to="/finder">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`text-sm ${location.pathname === '/finder' ? 'bg-muted text-primary' : ''}`}
+            >
+              {t('header.finder')}
+            </Button>
+          </Link>
+        </nav>
         </div>
 
         {/* Right-side controls: Auth buttons, user actions, language switcher */}
