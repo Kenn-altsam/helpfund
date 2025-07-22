@@ -170,9 +170,29 @@ def handle_conversation_with_context(
         response = assistant_manager._call_model_with_backoff(user_input)
         print(f"🧠 [DEBUG] Gemini API response received.")
 
-        # The Python SDK does not support function_calls; just use response.text
-        assistant_message_content = response.text
+        assistant_message_content = ""
         companies_found = []
+
+        if response.tool_calls:
+            print(f"🧠 [DEBUG] Gemini requested tool calls: {response.tool_calls}")
+            for tool_call in response.tool_calls:
+                tool_output = assistant_manager.handle_tool_call(tool_call, db, chat_id)
+                print(f"🧠 [DEBUG] Tool output: {tool_output}")
+                
+                # Append tool output to assistant_message_content or process as needed
+                # For now, let's just convert to JSON string if it's a dict/list
+                if isinstance(tool_output, dict) or isinstance(tool_output, list):
+                    assistant_message_content += json.dumps(tool_output) + "\n"
+                else:
+                    assistant_message_content += str(tool_output) + "\n"
+
+                # If companies were found by the search_companies tool, store them
+                if tool_call.name == "search_companies" and "companies" in tool_output:
+                    companies_found.extend(tool_output["companies"])
+        elif response.text:
+            assistant_message_content = response.text
+        else:
+            assistant_message_content = "No relevant response from AI."
 
         # Save assistant response to DB
         print(f"🧠 [DEBUG] Saving assistant response to DB: {assistant_message_content}")
