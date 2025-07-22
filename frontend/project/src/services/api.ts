@@ -53,8 +53,8 @@ api.interceptors.response.use(
       const authError = error.response?.data?.detail === "Could not validate credentials";
       if (authError) {
         localStorage.removeItem('access_token');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        if (window.location.pathname !== '/auth/login') {
+          window.location.href = '/auth/login';
         }
       }
     }

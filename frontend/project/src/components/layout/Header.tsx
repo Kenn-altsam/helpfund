@@ -12,7 +12,7 @@ export function Header() {
   // const considerationCount = state.considerationList.length; // kept for potential future use, not shown in header
 
   // Hide the global header on Finder, Login and Register pages
-  if (['/finder', '/login', '/register'].includes(location.pathname)) {
+  if (['/finder', '/auth/login', '/auth/register'].includes(location.pathname)) {
     return null;
   }
 
@@ -60,12 +60,12 @@ export function Header() {
         <div className="absolute right-0 flex items-center space-x-2">
           {!state.user ? (
             <>
-              <Link to="/login">
+              <Link to="/auth/login">
                 <Button variant="ghost" size="sm">
                   {t('header.login')}
                 </Button>
               </Link>
-              <Link to="/register">
+              <Link to="/auth/register">
                 <Button size="sm">{t('header.register')}</Button>
               </Link>
             </>

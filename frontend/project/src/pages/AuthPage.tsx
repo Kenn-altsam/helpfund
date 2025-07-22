@@ -16,7 +16,7 @@ export function AuthPage() {
   const location = useLocation();
   const { state, dispatch } = useGlobalContext();
   
-  const isLogin = location.pathname === '/login';
+  const isLogin = location.pathname === '/auth/login';
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -195,7 +195,7 @@ export function AuthPage() {
               <p className="text-sm text-muted-foreground">
                 {isLogin ? t('auth.login.noAccount') : t('auth.register.hasAccount')}{' '}
                 <Link
-                  to={isLogin ? '/register' : '/login'}
+                  to={isLogin ? '/auth/register' : '/auth/login'}
                   className="text-primary hover:underline font-medium"
                 >
                   {isLogin ? t('auth.login.register') : t('auth.register.login')}

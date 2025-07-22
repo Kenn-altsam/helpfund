@@ -46,8 +46,8 @@ function AppContent() {
           />
           {/* Redirect /companies/consideration to /consideration to avoid treating 'consideration' as a companyId */}
           <Route path="/companies/consideration" element={<Navigate to="/consideration" replace />} />
-          <Route path="/login" element={<AuthPage />} />
-          <Route path="/register" element={<AuthPage />} />
+          <Route path="/auth/login" element={<AuthPage />} />
+          <Route path="/auth/register" element={<AuthPage />} />
         </Routes>
       </main>
       {showFooter && <Footer />}
