@@ -23,41 +23,39 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/80">
-      <div
-        className={`container relative flex h-16 items-center ${isMainPage ? 'justify-center' : 'justify-between'}`}
-      >
-        {/* Left navigation */}
-        <nav className="absolute left-0 hidden md:flex items-center space-x-4">
-          <Link to="/">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`text-sm ${location.pathname === '/' ? 'bg-muted text-primary' : ''}`}
-            >
-              {t('header.home')}
-            </Button>
-          </Link>
-          <Link to="/finder">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`text-sm ${location.pathname === '/finder' ? 'bg-muted text-primary' : ''}`}
-            >
-              {t('header.finder')}
-            </Button>
-          </Link>
-        </nav>
+      <div className="container flex h-16 items-center">
+        {/* Left section: Brand and main navigation links */}
+        <div className="flex flex-1 items-center justify-start gap-x-4">
+          {showBrand && (
+            <Link to="/" className="flex items-center space-x-2">
+              <Heart className="h-6 w-6 text-primary" />
+              <span className="hidden sm:inline text-xl font-bold">{t('header.title')}</span>
+            </Link>
+          )}
+          <nav className="hidden md:flex items-center space-x-4">
+            <Link to="/">
+              <Button
+                variant="outline"
+                size="sm"
+                className={`text-sm ${location.pathname === '/' ? 'bg-muted text-primary' : ''}`}
+              >
+                {t('header.home')}
+              </Button>
+            </Link>
+            <Link to="/finder">
+              <Button
+                variant="outline"
+                size="sm"
+                className={`text-sm ${location.pathname === '/finder' ? 'bg-muted text-primary' : ''}`}
+              >
+                {t('header.finder')}
+              </Button>
+            </Link>
+          </nav>
+        </div>
 
-        {/* Center brand (hidden on Consideration page) */}
-        {showBrand && (
-          <Link to="/" className="flex items-center space-x-2">
-            <Heart className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">{t('header.title')}</span>
-          </Link>
-        )}
-
-        {/* Right-side controls */}
-        <div className="absolute right-0 flex items-center space-x-2">
+        {/* Right-side controls: Auth buttons, user actions, language switcher */}
+        <div className="flex flex-1 items-center justify-end space-x-2">
           {!state.user ? (
             <>
               <Link to="/auth/login">
@@ -83,7 +81,6 @@ export function Header() {
                   </Button>
                 </Link>
               )}
-
               {/* Profile link */}
               <Link to="/profile">
                 <Button
