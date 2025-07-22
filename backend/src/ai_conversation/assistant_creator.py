@@ -157,22 +157,10 @@ def handle_conversation_with_context(
 
         # Call Gemini
         response = assistant_manager._call_model_with_backoff(user_input)
-        
-        # Check for tool calls
-        if response.function_calls:
-            tool_call = response.function_calls[0]
-            tool_response = assistant_manager.handle_tool_call(tool_call, db, chat_id)
-            
-            # Send tool response back to Gemini
-            final_response_obj = assistant_manager.model.send_message(
-                f"Tool response: {json.dumps(tool_response)}",
-                tool_response=tool_response
-            )
-            assistant_message_content = final_response_obj.text
-            companies_found = tool_response.get("companies", [])
-        else:
-            assistant_message_content = response.text
-            companies_found = []
+
+        # The Python SDK does not support function_calls; just use response.text
+        assistant_message_content = response.text
+        companies_found = []
 
         # Save assistant response to DB
         chat_service.create_message(
