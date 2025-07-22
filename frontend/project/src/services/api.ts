@@ -19,7 +19,7 @@ declare global {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Create axios instance with proper type annotations
 const api = axios.create({
@@ -92,7 +92,7 @@ const generateId = () => `temp-id-${Math.random().toString(36).substr(2, 9)}`;
 export const companiesApi = {
   search: async (params: { location?: string; company_name?: string; limit?: number; page?: number }) => {
     try {
-      const response = await api.get('/companies/search', { params });
+      const response = await api.get('/v1/companies/search', { params });
       return {
         companies: response.data.data.map(transformCompanyData),
         pagination: response.data.metadata?.pagination
@@ -105,7 +105,7 @@ export const companiesApi = {
 
   getByLocation: async (location: string, limit: number = 50, page: number = 1) => {
     try {
-      const response = await api.get(`/companies/by-location/${encodeURIComponent(location)}`, {
+      const response = await api.get(`/v1/companies/by-location/${encodeURIComponent(location)}`, {
         params: { limit, page }
       });
       return {
@@ -120,7 +120,7 @@ export const companiesApi = {
 
   getDetails: async (companyId: string) => {
     try {
-      const response = await api.get(`/companies/${companyId}`);
+      const response = await api.get(`/v1/companies/${companyId}`);
       return transformCompanyData(response.data.data);
     } catch (error) {
       console.error('Failed to get company details:', error);
@@ -130,7 +130,7 @@ export const companiesApi = {
 
   getLocations: async () => {
     try {
-      const response = await api.get('/companies/locations/list');
+      const response = await api.get('/v1/companies/locations/list');
       return response.data.data;
     } catch (error) {
       console.error('Failed to get locations:', error);
@@ -140,7 +140,7 @@ export const companiesApi = {
 
   getTaxData: async (binNumber: string) => {
     try {
-      const response = await api.get(`/companies/tax/${binNumber}`);
+      const response = await api.get(`/v1/companies/tax/${binNumber}`);
       return response.data.data;
     } catch (error) {
       console.error('Failed to get tax data:', error);
@@ -150,7 +150,7 @@ export const companiesApi = {
 
   translateCity: async (cityName: string) => {
     try {
-      const response = await api.post('/companies/translations/translate-city', null, {
+      const response = await api.post('/v1/companies/translations/translate-city', null, {
         params: { city_name: cityName }
       });
       return response.data.data;
@@ -162,7 +162,7 @@ export const companiesApi = {
 
   getSupportedCities: async () => {
     try {
-      const response = await api.get('/companies/translations/supported-cities');
+      const response = await api.get('/v1/companies/translations/supported-cities');
       return response.data.data;
     } catch (error) {
       console.error('Failed to get supported cities:', error);
@@ -173,7 +173,7 @@ export const companiesApi = {
   // --- Consideration Endpoints ---
   getConsideration: async (): Promise<string[]> => {
     try {
-      const response = await api.get('/companies/consideration');
+      const response = await api.get('/v1/companies/consideration');
       return response.data;
     } catch (error) {
       console.error('Failed to get consideration list:', error);
@@ -183,7 +183,7 @@ export const companiesApi = {
 
   addConsideration: async (companyBin: string): Promise<void> => {
     try {
-      await api.post(`/companies/consideration/${companyBin}`);
+      await api.post(`/v1/companies/consideration/${companyBin}`);
     } catch (error) {
       console.error('Failed to add company to consideration:', error);
       throw error;
@@ -192,7 +192,7 @@ export const companiesApi = {
 
   removeConsideration: async (companyBin: string): Promise<void> => {
     try {
-      await api.delete(`/companies/consideration/${companyBin}`);
+      await api.delete(`/v1/companies/consideration/${companyBin}`);
     } catch (error) {
       console.error('Failed to remove company from consideration:', error);
       throw error;
@@ -204,7 +204,7 @@ export const companiesApi = {
 export const chatApi = {
   sendMessage: async (request: ChatRequest): Promise<RawChatResponse> => {
     try {
-      const response = await api.post('/ai/chat-assistant', request);
+      const response = await api.post('/v1/ai/chat-assistant', request);
 
       // Work with a strongly-typed copy of the response payload
       const rawData = response.data as RawChatResponse;
@@ -225,7 +225,7 @@ export const chatApi = {
 
   resetChat: async (): Promise<void> => {
     try {
-      await api.post('/funds/chat/reset');
+      await api.post('/v1/funds/chat/reset');
     } catch (error) {
       console.error('Failed to reset chat:', error);
       throw error;
@@ -239,7 +239,7 @@ export const chatApi = {
     chatId: string
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[]; created_at?: string }>> => {
     try {
-      const response = await api.get(`/chats/${chatId}`);
+      const response = await api.get(`/v1/chats/${chatId}`);
       return (response.data.messages || []).map((msg: any) => ({
         role: msg.role,
         content: msg.content,
@@ -258,7 +258,7 @@ export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
       // This endpoint remains correct as it fetches the list of all chats.
-      const response = await api.get('/chats/');
+      const response = await api.get('/v1/chats/');
       
       console.log('Raw response from /chats/ endpoint:', response);
       console.log('Data from /chats/ endpoint (BEFORE MAPPING):', response.data);
@@ -291,7 +291,7 @@ export const historyApi = {
   saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
     try {
       // MODIFIED: Point to the new, correct endpoint and use the new payload structure.
-      await api.post('/chats/history', {
+      await api.post('/v1/chats/history', {
         id: item.id, // The chat ID, which might be an existing one to update
         user_prompt: item.userPrompt,
         raw_ai_response: item.rawAiResponse,
@@ -308,7 +308,7 @@ export const historyApi = {
   deleteHistory: async (id: string): Promise<void> => {
     try {
       // MODIFIED: Point to the new, correct endpoint.
-      await api.delete(`/chats/${id}`);
+      await api.delete(`/v1/chats/${id}`);
     } catch (error) {
       console.error('Failed to delete chat history:', error);
       throw error;
@@ -324,7 +324,7 @@ export const authApi = {
     }
 
     try {
-      const response = await api.post<AuthResponse>('/auth/login', {
+      const response = await api.post<AuthResponse>('/v1/auth/login', {
         email: credentials.email,
         password: credentials.password
       });
@@ -361,7 +361,7 @@ export const authApi = {
 
     try {
       // Register user ‒ backend returns AuthResponse with access_token
-      const response = await api.post<AuthResponse>('/auth/register', {
+      const response = await api.post<AuthResponse>('/v1/auth/register', {
         email: credentials.email,
         password: credentials.password,
         full_name: credentials.full_name,
@@ -387,7 +387,7 @@ export const authApi = {
 
   getCurrentUser: async (): Promise<User> => {
     try {
-      const response = await api.get('/auth/me');
+      const response = await api.get('/v1/auth/me');
       return response.data;
     } catch (error) {
       console.error('Failed to get current user:', error);
@@ -397,7 +397,7 @@ export const authApi = {
 
   deleteAccount: async (): Promise<void> => {
     try {
-      await api.delete('/auth/delete-account');
+      await api.delete('/v1/auth/delete-account');
     } catch (error) {
       console.error('Failed to delete account:', error);
       throw error;
