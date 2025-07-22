@@ -204,7 +204,7 @@ export const companiesApi = {
 export const chatApi = {
   sendMessage: async (request: ChatRequest): Promise<RawChatResponse> => {
     try {
-      const response = await api.post('/v1/ai/chat-assistant', request);
+      const response = await api.post('/ai/chat', request);
 
       // Work with a strongly-typed copy of the response payload
       const rawData = response.data as RawChatResponse;
