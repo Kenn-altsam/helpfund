@@ -5,6 +5,7 @@ import uuid
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
 from sqlalchemy.orm import Session
+from google.generativeai.types import FunctionDeclaration
 
 from ..core.config import get_settings
 from ..companies.service import CompanyService
@@ -16,12 +17,35 @@ class GeminiFundAssistant:
     def __init__(self):
         self.settings = get_settings()
         genai.configure(api_key=self.settings.GEMINI_API_KEY)
+        search_companies_tool = FunctionDeclaration(
+            name="search_companies",
+            description="Searches for companies by name and location",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "company_name": {"type": "string", "description": "Company name to search for"},
+                    "location": {"type": "string", "description": "Location to search in"},
+                    "activity_keywords": {"type": "string", "description": "Keywords for company activity", "nullable": True},
+                    "limit": {"type": "integer", "default": 50, "description": "Max results to return"},
+                    "page": {"type": "integer", "default": 1, "description": "Page number for pagination"}
+                },
+                "required": ["company_name"]
+            }
+        )
+        get_company_details_tool = FunctionDeclaration(
+            name="get_company_details",
+            description="Get details for a company by ID",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "company_id": {"type": "string", "description": "ID of the company"}
+                },
+                "required": ["company_id"]
+            }
+        )
         self.model = genai.GenerativeModel(
             model_name=self.settings.GEMINI_MODEL_NAME,
-            tools=[
-                "search_companies",
-                "get_company_details"
-            ]
+            tools=[search_companies_tool, get_company_details_tool]
         )
 
     def _call_model_with_backoff(self, prompt: str, is_json_output: bool = False):
