@@ -42,9 +42,14 @@ async def handle_chat_with_database_search(
                 raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
         else:
             # Если ID чата не предоставлен, создаем новый чат в БД
-            new_chat = chat_service.create_chat(db=db, user_id=current_user.id)
+            chat_name = request.user_input[:100]
+            new_chat = chat_service.create_chat(
+                db=db,
+                user_id=current_user.id,
+                name=chat_name
+            )
             db_chat_id = new_chat.id
-            print(f"\U0001F196 [CHAT_DB] Created new chat session with ID: {db_chat_id}")
+            print(f"🆕 [CHAT_DB] Created new chat session '{chat_name}' with ID: {db_chat_id}")
 
         # 2. Вызываем основную логику из ai_service.py
         # Эта функция парсит намерение, ищет в БД и возвращает результат
