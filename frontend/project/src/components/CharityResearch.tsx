@@ -22,6 +22,7 @@ export const CharityResearch: React.FC<CharityResearchProps> = ({ initialCompany
       return;
     }
 
+    console.log('🔍 [CHARITY_RESEARCH] Начинаю поиск для компании:', companyName.trim());
     setIsLoading(true);
     setError(null);
     setResults(null);
@@ -32,9 +33,26 @@ export const CharityResearch: React.FC<CharityResearchProps> = ({ initialCompany
         additional_context: additionalContext.trim() || undefined,
       };
 
+      console.log('📤 [CHARITY_RESEARCH] Отправляю запрос:', request);
       const response = await charityApi.researchCompany(request);
+      console.log('📥 [CHARITY_RESEARCH] Получен ответ:', response);
+      
       setResults(response);
+      
+      if (response.charity_info && response.charity_info.length > 0) {
+        console.log(`✅ [CHARITY_RESEARCH] Найдено ${response.charity_info.length} результатов:`, response.charity_info);
+      } else {
+        console.log('ℹ️ [CHARITY_RESEARCH] Релевантных результатов не найдено');
+      }
     } catch (err: any) {
+      console.error('❌ [CHARITY_RESEARCH] Ошибка при запросе:', err);
+      console.error('📄 [CHARITY_RESEARCH] Детали ошибки:', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        message: err.message
+      });
+      
       const errorMessage = err.response?.data?.detail || err.message || 'Произошла ошибка при исследовании компании';
       setError(errorMessage);
     } finally {

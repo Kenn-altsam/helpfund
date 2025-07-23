@@ -44,16 +44,36 @@ export function CompanyCharityCard({ company }: CompanyCharityCardProps) {
       return;
     }
 
+    console.log('🔍 [COMPANY_CARD] Начинаю исследование благотворительности для:', company.name);
     setCharityLoading(true);
     setCharityResults(null);
 
     try {
-      const response = await charityApi.researchCompany({
-        company_name: company.name,
-      });
+      const request = { company_name: company.name };
+      console.log('📤 [COMPANY_CARD] Отправляю запрос:', request);
+      
+      const response = await charityApi.researchCompany(request);
+      console.log('📥 [COMPANY_CARD] Получен ответ:', response);
+      
       setCharityResults(response);
       setIsDialogOpen(true);
+      
+      if (response.charity_info && response.charity_info.length > 0) {
+        console.log(`✅ [COMPANY_CARD] Найдено ${response.charity_info.length} результатов для ${company.name}`);
+        toast.success(`Найдено ${response.charity_info.length} материалов о благотворительности`, { duration: 3000 });
+      } else {
+        console.log('ℹ️ [COMPANY_CARD] Релевантных результатов не найдено для', company.name);
+        toast.info('Информация о благотворительности не найдена', { duration: 3000 });
+      }
     } catch (error: any) {
+      console.error('❌ [COMPANY_CARD] Ошибка при исследовании:', error);
+      console.error('📄 [COMPANY_CARD] Детали ошибки:', {
+        company: company.name,
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      
       const errorMessage = error.response?.data?.detail || error.message || 'Ошибка при исследовании благотворительности';
       toast.error(errorMessage, { duration: 3000 });
     } finally {
