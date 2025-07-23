@@ -149,9 +149,11 @@ class CompanyService:
             converted_results = []
             for row in results:
                 company_dict = {
-                    "id": row.id,
+                    # --- ИСПРАВЛЕНИЕ ---
+                    "id": str(row.id) if row.id is not None else None,
                     "name": row.Company,
-                    "bin": row.BIN,
+                    "bin": str(row.BIN) if row.BIN is not None else None,
+                    # -----------------
                     "activity": row.Activity,
                     "locality": row.Locality,
                     "oked": row.OKED,
@@ -245,9 +247,11 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": row.id,
+                    # --- ИСПРАВЛЕНИЕ ---
+                    "id": str(row.id) if row.id is not None else None,
                     "name": row.company_name,
-                    "bin": row.bin_number,
+                    "bin": str(row.bin_number) if row.bin_number is not None else None,
+                    # -----------------
                     "activity": row.activity,
                     "locality": row.locality,
                     "oked": row.oked_code,
@@ -313,9 +317,11 @@ class CompanyService:
             result_dicts = []
             for row in companies:
                 company_dict = {
-                    "id": row.id,
+                    # --- ИСПРАВЛЕНИЕ ---
+                    "id": str(row.id) if row.id is not None else None,
                     "name": row.Company,
-                    "bin": row.BIN,
+                    "bin": str(row.BIN) if row.BIN is not None else None,
+                    # -----------------
                     "activity": row.Activity,
                     "locality": row.Locality,
                     "oked": row.OKED,
@@ -456,9 +462,11 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": row.id,
+                    # --- ИСПРАВЛЕНИЕ ---
+                    "id": str(row.id) if row.id is not None else None,
                     "name": row.company_name,
-                    "bin": row.bin_number,
+                    "bin": str(row.bin_number) if row.bin_number is not None else None,
+                    # -----------------
                     "activity": row.activity,
                     "locality": row.locality,
                     "oked": row.oked_code,
@@ -482,9 +490,11 @@ class CompanyService:
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
         """Converts a Company SQLAlchemy object to a dictionary, always including all fields."""
         return {
-            "id": getattr(company, "id", None),
+            # --- ИСПРАВЛЕНИЕ ---
+            "id": str(getattr(company, "id", None)) if getattr(company, "id", None) is not None else None,
             "name": getattr(company, "company_name", "") or "",
-            "bin": getattr(company, "bin_number", None),
+            "bin": str(getattr(company, "bin_number", None)) if getattr(company, "bin_number", None) is not None else None,
+            # -----------------
             "activity": getattr(company, "activity", None),
             "locality": getattr(company, "locality", None),
             "size": getattr(company, "company_size", None),
