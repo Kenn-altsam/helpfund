@@ -149,7 +149,7 @@ class CompanyService:
             converted_results = []
             for row in results:
                 company_dict = {
-                    "id": row.id,
+                    "id": str(row.id),  # Convert to string for Pydantic validation
                     "name": row.Company,
                     "bin": row.BIN,
                     "activity": row.Activity,
@@ -246,7 +246,7 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": row.id,
+                    "id": str(row.id),  # Convert to string for Pydantic validation
                     "name": row.company_name,
                     "bin": row.bin_number,
                     "activity": row.activity,
@@ -314,7 +314,7 @@ class CompanyService:
             result_dicts = []
             for row in companies:
                 company_dict = {
-                    "id": row.id,
+                    "id": str(row.id),  # Convert to string for Pydantic validation
                     "name": row.Company,
                     "bin": row.BIN,
                     "activity": row.Activity,
@@ -459,7 +459,7 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": row.id,
+                    "id": str(row.id),  # Convert to string for Pydantic validation
                     "name": row.company_name,
                     "bin": row.bin_number,
                     "activity": row.activity,
@@ -485,7 +485,7 @@ class CompanyService:
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
         """Converts a Company SQLAlchemy object to a dictionary, always including all fields."""
         return {
-            "id": getattr(company, "id", None),
+            "id": str(getattr(company, "id", "")) if getattr(company, "id", None) else "",
             "name": getattr(company, "company_name", "") or "",
             "bin": getattr(company, "bin_number", None),
             "activity": getattr(company, "activity", None),
