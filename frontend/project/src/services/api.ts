@@ -11,7 +11,7 @@ import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'ax
 //   openaiAssistantId?: string | null;
 // }
 // For now, I'll assume ChatHistoryItem can correctly represent this simplified structure.
-import { Company, ChatHistoryItem, User, ChatRequest, ChatResponse, AuthCredentials, AuthResponse } from '@/types';
+import { Company, ChatHistoryItem, User, ChatRequest, ChatResponse, AuthCredentials, AuthResponse, CompanyCharityRequest, CompanyCharityResponse } from '@/types';
 import { generateId } from '@/lib/utils';
 
 declare global {
@@ -310,6 +310,19 @@ export const historyApi = {
       throw error;
     }
   }
+};
+
+// Charity Research API
+export const charityApi = {
+  researchCompany: async (request: CompanyCharityRequest): Promise<CompanyCharityResponse> => {
+    try {
+      const response = await api.post('/v1/ai/charity-research', request);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to research company charity info:', error);
+      throw error;
+    }
+  },
 };
 
 // Auth API with proper error handling and state management

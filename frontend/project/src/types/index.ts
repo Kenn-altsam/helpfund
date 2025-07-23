@@ -53,6 +53,25 @@ export interface ChatHistoryItem {
   assistantId: string;
 }
 
+// === CHARITY RESEARCH TYPES ===
+export interface GoogleSearchResult {
+  title: string;
+  link: string;
+  snippet: string;
+}
+
+export interface CompanyCharityRequest {
+  company_name: string;
+  additional_context?: string;
+}
+
+export interface CompanyCharityResponse {
+  status: 'success' | 'error';
+  company_name: string;
+  charity_info: GoogleSearchResult[];
+  summary: string;
+}
+
 export interface GlobalState {
   history: ChatHistoryItem[];
   considerationList: Company[];
