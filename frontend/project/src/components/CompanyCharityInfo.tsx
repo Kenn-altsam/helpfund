@@ -1,34 +1,23 @@
 import { useState } from "react";
-import { Heart, Loader2, AlertCircle } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Heart, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { CompanyCharityResponse, GoogleSearchResult } from '@/types';
 
 interface CompanyCharityInfoProps {
   companyName: string;
 }
 
-interface CharityResponse {
-  status: 'success' | 'error' | 'warning';
-  answer: string;
-}
-
 export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => {
-  const { t } = useTranslation();
-  const [info, setInfo] = useState<string | null>(null);
+  const [charityData, setCharityData] = useState<CompanyCharityResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<'success' | 'error' | 'warning' | null>(null);
-
-  const linkify = (text: string) =>
-    text.replace(
-      /(https?:\/\/[^\s]+)/g,
-      (url) => `<a href="${url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${url}</a>`
-    );
+  const [error, setError] = useState<string | null>(null);
 
   const fetchInfo = async () => {
+    console.log('🔍 [CHARITY_INFO] Начинаю поиск благотворительности для:', companyName);
     setLoading(true);
-    setInfo(null);
-    setStatus(null);
+    setCharityData(null);
+    setError(null);
     
     try {
       const res = await fetch("/api/v1/ai/charity-research", {
@@ -44,41 +33,20 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       
-      const data: CharityResponse = await res.json();
-      setInfo(data.answer);
-      setStatus(data.status);
+      const data: CompanyCharityResponse = await res.json();
+      console.log('📥 [CHARITY_INFO] Получен ответ:', data);
+      setCharityData(data);
+      
+      if (data.charity_info && data.charity_info.length > 0) {
+        console.log(`✅ [CHARITY_INFO] Найдено ${data.charity_info.length} результатов для ${companyName}`);
+      } else {
+        console.log('ℹ️ [CHARITY_INFO] Релевантных результатов не найдено для', companyName);
+      }
     } catch (err) {
-      console.error('Charity research error:', err);
-      setInfo(t('company.charity.noData'));
-      setStatus('warning');
+      console.error('❌ [CHARITY_INFO] Ошибка при запросе:', err);
+      setError('Произошла ошибка при поиске информации о благотворительности');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (status) {
-      case 'success':
-        return 'border-green-200 bg-green-50';
-      case 'warning':
-        return 'border-yellow-200 bg-yellow-50';
-      case 'error':
-        return 'border-red-200 bg-red-50';
-      default:
-        return 'border-gray-200 bg-gray-50';
-    }
-  };
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'success':
-        return <Heart className="h-4 w-4 text-green-600" />;
-      case 'warning':
-        return <AlertCircle className="h-4 w-4 text-yellow-600" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <Heart className="h-4 w-4 text-gray-600" />;
     }
   };
 
@@ -94,12 +62,12 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
         {loading ? (
           <>
             <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-            {t('company.charity.loading')}
+            Поиск информации...
           </>
         ) : (
           <>
             <Heart className="h-3 w-3 mr-2" />
-            {t('company.charity.button')}
+            Информация о благотворительности
           </>
         )}
       </Button>
@@ -118,15 +86,71 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
         </div>
       )}
       
-      {info && !loading && (
-        <div className={`mt-2 p-3 rounded-md border text-xs whitespace-pre-wrap transition-all duration-300 ease-in-out ${getStatusColor()}`}>
+      {error && !loading && (
+        <div className="mt-2 p-3 rounded-md border border-red-200 bg-red-50 text-xs">
           <div className="flex items-start gap-2">
-            {getStatusIcon()}
-            <div 
-              className="flex-1"
-              dangerouslySetInnerHTML={{ __html: linkify(info) }}
-            />
+            <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+            <div className="text-red-700">{error}</div>
           </div>
+        </div>
+      )}
+      
+      {charityData && !loading && !error && (
+        <div className="mt-2 space-y-3">
+          {/* Сводка */}
+          <div className={`p-3 rounded-md border text-xs transition-all duration-300 ease-in-out ${
+            charityData.status === 'success' ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+          }`}>
+            <div className="flex items-start gap-2">
+              {charityData.status === 'success' ? (
+                <Heart className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+              )}
+              <div className={`flex-1 whitespace-pre-wrap ${
+                charityData.status === 'success' ? 'text-green-700' : 'text-yellow-700'
+              }`}>
+                {charityData.summary}
+              </div>
+            </div>
+          </div>
+
+          {/* Найденные ссылки */}
+          {charityData.charity_info && charityData.charity_info.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-gray-700">
+                Найдено материалов: {charityData.charity_info.length}
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {charityData.charity_info.map((item: GoogleSearchResult, index: number) => (
+                  <div key={index} className="p-2 bg-white border border-gray-200 rounded text-xs hover:bg-gray-50">
+                    <div className="font-medium text-blue-600 mb-1">
+                      <a 
+                        href={item.link} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="hover:underline flex items-start gap-1"
+                      >
+                        <span className="flex-1">{item.title}</span>
+                        <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                      </a>
+                    </div>
+                    <div className="text-gray-600 mb-1" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}>
+                      {item.snippet}
+                    </div>
+                    <div className="text-gray-400 text-xs truncate">
+                      {item.link}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
