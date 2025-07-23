@@ -84,19 +84,20 @@ export interface ApiResponse<T> {
 
 export interface ChatRequest {
   user_input: string;
-  history: Array<{ role: 'user' | 'assistant'; content: string }>;
-  location?: string;
-  assistant_id?: string;
-  thread_id?: string;
+  chat_id?: string; // Используем chat_id для персистентности
+  assistant_id?: string; // Оставляем для совместимости
+  thread_id?: string; // Оставляем для совместимости
   page?: number;
 }
 
 export interface ChatResponse {
   message: string;
   companies?: Company[];
-  assistant_id?: string;
-  thread_id?: string;
+  chat_id?: string; // Основной ID для персистентности
+  assistant_id?: string; // Для совместимости
+  thread_id?: string; // Для совместимости
   pagination?: PaginationMetadata;
+  updated_history?: Array<{ role: 'user' | 'assistant'; content: string; [key: string]: any }>;
 }
 
 export interface AuthCredentials {

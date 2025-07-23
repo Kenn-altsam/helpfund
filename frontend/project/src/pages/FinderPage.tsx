@@ -8,7 +8,7 @@ import { ChatMessage } from '@/components/ChatMessage';
 import { ChatHistory } from '@/components/ChatHistory';
 import { useGlobalContext } from '@/context/GlobalContext';
 import { chatApi, historyApi } from '@/services/api';
-import { ChatHistoryItem, Company } from '@/types';
+import { ChatHistoryItem, Company, ChatRequest } from '@/types';
 import { generateId } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -44,25 +44,32 @@ export function FinderPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // --- 💡 ИЗМЕНЕНИЕ 1: Читаем начальные значения из sessionStorage ---
+  // 💡 НОВАЯ ЛОГИКА: Используем chat_id для персистентности
+  const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('activeChatId'));
+  // Оставляем для совместимости с существующими чатами
   const [assistantId, setAssistantId] = useState<string | null>(() => sessionStorage.getItem('activeAssistantId'));
   const [threadId, setThreadId] = useState<string | null>(() => sessionStorage.getItem('activeThreadId'));
-
-  // Add currentPage state for pagination
-  // const [currentPage, setCurrentPage] = useState(1);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   /* ------------------------------------------------------------------
-   * Persist assistant & thread IDs in sessionStorage when they change
+   * Persist chat_id in sessionStorage when it changes
    * ------------------------------------------------------------------ */
-  // --- 💡 ИЗМЕНЕНИЕ 2: Сохраняем ID в sessionStorage при их изменении ---
+  useEffect(() => {
+    if (chatId) {
+      sessionStorage.setItem('activeChatId', chatId);
+    } else {
+      sessionStorage.removeItem('activeChatId');
+    }
+  }, [chatId]);
+
+  // Оставляем для совместимости
   useEffect(() => {
     if (assistantId) {
       sessionStorage.setItem('activeAssistantId', assistantId);
     } else {
-      sessionStorage.removeItem('activeAssistantId'); // Очищаем, если ID стал null
+      sessionStorage.removeItem('activeAssistantId');
     }
   }, [assistantId]);
 
@@ -70,14 +77,9 @@ export function FinderPage() {
     if (threadId) {
       sessionStorage.setItem('activeThreadId', threadId);
     } else {
-      sessionStorage.removeItem('activeThreadId'); // Очищаем, если ID стал null
+      sessionStorage.removeItem('activeThreadId');
     }
   }, [threadId]);
-
-  // When threadId changes (new chat or history selection), reset currentPage
-  // useEffect(() => {
-  //   setCurrentPage(1);
-  // }, [threadId]);
 
   /* --------------------------- Scroll helpers --------------------------- */
   const scrollToBottom = () => {
@@ -91,75 +93,34 @@ export function FinderPage() {
   /* ------------------------------------------------------------------
    * Load global history & restore active chat on mount
    * ------------------------------------------------------------------ */
-  // --- 💡 ИЗМЕНЕНИЕ: Улучшенная логика восстановления чата ---
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // 1. Сначала загружаем список всех чатов для боковой панели
-        console.log('FinderPage: Calling historyApi.getHistory()'); // DEBUG
+        // 1. Загружаем список всех чатов для боковой панели
+        console.log('FinderPage: Calling historyApi.getHistory()');
         const historyList = await historyApi.getHistory();
-        console.log('FinderPage: Received history list:', historyList); // DEBUG
+        console.log('FinderPage: Received history list:', historyList);
         dispatch({ type: 'LOAD_HISTORY', payload: historyList });
 
         // 2. Проверяем, есть ли активный чат в sessionStorage
-        const activeThreadId = sessionStorage.getItem('activeThreadId');
-        if (!activeThreadId) {
+        const activeChatId = sessionStorage.getItem('activeChatId');
+        if (!activeChatId) {
           return; // Нет активного чата, выходим
         }
 
-        // 3. Пытаемся найти сохраненную сводку чата
-        let activeHistoryItem = historyList.find(h => h.threadId === activeThreadId);
+        // 3. Ищем чат в загруженной истории
+        let activeHistoryItem = historyList.find(h => h.id === activeChatId);
 
-        // 4. Если сводка НЕ НАЙДЕНА, но ID треда есть - это "потерянный" чат. Восстанавливаем его!
-        if (!activeHistoryItem) {
-          console.warn(`History item for thread ${activeThreadId} not found. Attempting to recover...`);
-          try {
-            const assistantIdFromStorage = sessionStorage.getItem('activeAssistantId');
-            if (!assistantIdFromStorage) {
-              // Если нет и assistantId, восстановить невозможно
-              throw new Error('Cannot recover chat: missing assistantId in sessionStorage.');
-            }
-
-            // Пытаемся загрузить историю напрямую из треда OpenAI
-            const recoveredHistory = await chatApi.getConversationHistory(activeThreadId);
-
-            // Если история в треде не пуста, значит, чат реален
-            if (recoveredHistory.length > 0) {
-              console.log(`Successfully recovered ${recoveredHistory.length} messages.`);
-              // Создаем временный элемент истории, чтобы UI мог с ним работать
-              const tempHistoryItem: ChatHistoryItem = {
-                id: generateId(),
-                // Берем первый промпт пользователя как заголовок
-                userPrompt: recoveredHistory.find(m => m.role === 'user')?.content || 'Восстановленный чат',
-                aiResponse: [], // Не знаем точного ответа, но это не так важно
-                created_at: new Date().toISOString(),
-                threadId: activeThreadId,
-                assistantId: assistantIdFromStorage,
-              };
-
-              // Добавляем временный элемент в глобальное состояние, чтобы он появился в сайдбаре
-              dispatch({ type: 'ADD_HISTORY', payload: tempHistoryItem });
-
-              // Делаем его активным для дальнейшей работы
-              activeHistoryItem = tempHistoryItem;
-            } else {
-              // История пуста, значит, это "мертвый" ID. Начинаем новый чат.
-              startNewChat();
-              return;
-            }
-          } catch (recoveryError) {
-            console.error('Failed to recover chat:', recoveryError);
-            startNewChat(); // Если восстановление не удалось, сбрасываем
-            return;
-          }
-        }
-
-        // 5. Если у нас есть item (старый или восстановленный), загружаем его
         if (activeHistoryItem) {
+          // Загружаем найденный чат
           await handleSelectHistory(activeHistoryItem, true);
+        } else {
+          // Чат не найден в истории, возможно он был удален
+          console.warn(`Chat ${activeChatId} not found in history. Starting new chat.`);
+          startNewChat();
         }
       } catch (error) {
-        console.error('FinderPage: Failed to load initial history:', error); // DEBUG
+        console.error('FinderPage: Failed to load initial history:', error);
       }
     };
 
@@ -195,157 +156,51 @@ export function FinderPage() {
     setIsLoading(true);
 
     try {
-      // For 'more', use previous search context
-      let previousMessages = messages
-        .filter(m => m.type === 'user' || m.type === 'assistant')
-        .map(m => ({
-          role: m.type as 'user' | 'assistant',
-          content: m.content || '',
-        }));
-
-      // If 'more', try to find the last user search prompt (not a 'more' command)
-      let lastSearchPrompt = '';
-      if (isMore) {
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const m = messages[i];
-          if (m.type === 'user' && !isMoreCommand(m.content || '')) {
-            lastSearchPrompt = m.content || '';
-            break;
-          }
-        }
-        // If found, add it to the history for context
-        if (lastSearchPrompt) {
-          previousMessages = [
-            ...previousMessages,
-            { role: 'user', content: lastSearchPrompt },
-          ];
-        }
-      }
-
-      const requestPayload = {
+      // 💡 НОВАЯ ЛОГИКА: Упрощенный запрос без history
+      const requestPayload: ChatRequest = {
         user_input: currentInput,
-        history: previousMessages,
-        assistant_id: assistantId || undefined,
-        thread_id: threadId || undefined,
-        // Add page parameter for pagination
-        page: isMore ? 2 : 1, // For 'more' requests, use page 2, otherwise page 1
+        chat_id: chatId || undefined, // Используем chat_id
       };
 
-      console.log('[handleSendMessage] SENDING:', {
-        assistantId,
-        threadId,
-        requestPayload
-      });
+      console.log('[handleSendMessage] SENDING:', requestPayload);
 
       const response = await chatApi.sendMessage(requestPayload);
-      console.log('[handleSendMessage] RECEIVED:', {
-        response_assistant_id: response.assistant_id,
-        response_thread_id: response.thread_id,
-        response
-      });
+      console.log('[handleSendMessage] RECEIVED:', response);
 
-      // Persist IDs returned by backend
+      // 💡 ОБНОВЛЯЕМ СОСТОЯНИЕ: Приоритет chat_id
+      if (response.chat_id) {
+        setChatId(response.chat_id);
+      }
+      // Оставляем для совместимости
       if (response.assistant_id) setAssistantId(response.assistant_id);
       if (response.thread_id) setThreadId(response.thread_id);
 
-      if (isMore && response.companies?.length) {
-        // Append companies to the last assistant message, but deduplicate
-        setMessages(prev => {
-          // Remove loading
-          const withoutLoading = prev.filter(m => m.type !== 'loading');
-          // Find last assistant message
-          const lastAssistantIdx = withoutLoading.map(m => m.type).lastIndexOf('assistant');
-          if (lastAssistantIdx !== -1) {
-            // Gather all previously shown companies (by id, bin, or name)
-            const shownCompanies = new Set<string>();
-            withoutLoading.forEach(m => {
-              if (m.companies) {
-                m.companies.forEach(c => {
-                  // Prefer id, then bin, then name
-                  if (c.id) {
-                    shownCompanies.add(c.id);
-                  } else if (c.bin) {
-                    shownCompanies.add(c.bin);
-                  } else if (c.name) {
-                    shownCompanies.add(c.name);
-                  }
-                });
-              }
-            });
-            // Filter new companies to only those not already shown
-            const newUniqueCompanies = (response.companies ?? []).filter(c => {
-              if (c.id) {
-                return !shownCompanies.has(c.id);
-              } else if (c.bin) {
-                return !shownCompanies.has(c.bin);
-              } else if (c.name) {
-                return !shownCompanies.has(c.name);
-              }
-              return true;
-            });
-            // Append only unique new companies
-            const updated = [...withoutLoading];
-            const lastAssistant = { ...updated[lastAssistantIdx] };
-            lastAssistant.companies = [
-              ...(lastAssistant.companies || []),
-              ...newUniqueCompanies,
-            ];
-            updated[lastAssistantIdx] = lastAssistant;
-            return updated;
-          } else {
-            // If no assistant message, just add as new
-            return [
-              ...withoutLoading,
-              {
-                id: generateId(),
-                type: 'assistant',
-                content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
-                companies: response.companies || [],
-              },
-            ];
-          }
-        });
-      } else {
-        // Normal: replace loading with new assistant message
-        setMessages(prev => {
-          const withoutLoading = prev.filter(m => m.type !== 'loading');
-          return [
-            ...withoutLoading,
-            {
-              id: generateId(),
-              type: 'assistant',
-              content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
-              companies: response.companies || [],
-            },
-          ];
-        });
-      }
+      // Обновляем сообщения
+      setMessages(prev => {
+        const withoutLoading = prev.filter(m => m.type !== 'loading');
+        return [
+          ...withoutLoading,
+          {
+            id: generateId(),
+            type: 'assistant',
+            content: response.message ?? t('finder.response', { count: response.companies?.length || 0 }),
+            companies: response.companies || [],
+          },
+        ];
+      });
 
       /* --------------------- HISTORY MANAGEMENT --------------------- */
-      const effectiveThreadId = response.thread_id || threadId;
-      if (effectiveThreadId) {
-        const existingChat = globalHistory.find(h => h.threadId === effectiveThreadId);
+      const effectiveChatId = response.chat_id || chatId;
+      if (effectiveChatId) {
+        const existingChat = globalHistory.find(h => h.id === effectiveChatId);
 
-        // Persist full history item in backend
-        const payload: any = {
-          userPrompt: currentInput,
-          rawAiResponse: response.rawCompanies || [],
-          created_at: new Date().toISOString(),
-          threadId: effectiveThreadId,
-          assistantId: response.assistant_id || assistantId || '',
-        };
-        if (existingChat) {
-          payload.id = existingChat.id;
-        }
-        console.log('[handleSendMessage] Saving history with payload:', payload);
-        await historyApi.saveHistory(payload);
-
+        // Создаем или обновляем элемент истории
         const updatedHistoryItem: ChatHistoryItem = {
-          id: existingChat?.id || generateId(),
+          id: effectiveChatId,
           userPrompt: currentInput,
           aiResponse: response.companies || [],
           created_at: new Date().toISOString(),
-          threadId: effectiveThreadId,
+          threadId: response.thread_id || threadId || '',
           assistantId: response.assistant_id || assistantId || '',
         };
 
@@ -382,7 +237,7 @@ export function FinderPage() {
   ) => {
     console.log('[handleSelectHistory] Called with item:', item);
     // fast-return if already selected
-    if (item.id === threadId && messages.length) {
+    if (item.id === chatId && messages.length) {
       if (!keepSidebarOpen) setSidebarOpen(false);
       return;
     }
@@ -392,14 +247,12 @@ export function FinderPage() {
     setMessages([]);
 
     try {
-      let historyToSet: Message[] = [];
-
-      // Always fetch by chat ID
+      // 💡 НОВАЯ ЛОГИКА: Загружаем историю по chat_id через новый API
       console.log('[handleSelectHistory] Fetching conversation history for chatId:', item.id);
       const history = await chatApi.getConversationHistory(item.id);
       console.log('[handleSelectHistory] Received conversation history:', history);
 
-      historyToSet = history.map((h: any) => ({
+      const historyToSet: Message[] = history.map((h: any) => ({
         id: h.id ?? generateId(),
         type: h.role as 'user' | 'assistant',
         content: h.content,
@@ -407,6 +260,7 @@ export function FinderPage() {
         createdAt: h.created_at ?? Date.now(),
       }));
 
+      // Если последнее сообщение ассистента не имеет компаний, добавляем из aiResponse
       const lastAssistant = [...historyToSet].reverse().find(m => m.type === 'assistant');
       if (
         lastAssistant &&
@@ -416,13 +270,16 @@ export function FinderPage() {
         lastAssistant.companies = item.aiResponse;
       }
 
+      // Устанавливаем состояние
+      setChatId(item.id);
       setThreadId(item.threadId || '');
       setAssistantId(item.assistantId || '');
       setMessages(historyToSet);
       console.log('[handleSelectHistory] Set messages:', historyToSet);
 
     } catch (err) {
-      console.error('[handleSelectHistory] Failed to load full conversation history from API:', err);
+      console.error('[handleSelectHistory] Failed to load conversation history:', err);
+      // Fallback: отображаем базовую информацию из item
       const companiesForFallback = Array.isArray(item.aiResponse) ? item.aiResponse : [];
       setMessages([
         { id: generateId(), type: 'user', content: item.userPrompt },
@@ -433,6 +290,9 @@ export function FinderPage() {
           companies: companiesForFallback,
         },
       ]);
+      setChatId(item.id);
+      setThreadId(item.threadId || '');
+      setAssistantId(item.assistantId || '');
       toast.error(t('finder.historyLoadError'), { duration: 2000 });
     } finally {
       setIsLoading(false);
@@ -447,7 +307,7 @@ export function FinderPage() {
       dispatch({ type: 'DELETE_HISTORY', payload: id });
 
       // If current chat removed, reset
-      if (deletedItem && deletedItem.threadId === threadId) {
+      if (deletedItem && deletedItem.id === chatId) {
         startNewChat();
       }
 
@@ -460,8 +320,10 @@ export function FinderPage() {
 
   const startNewChat = () => {
     setMessages([]);
+    setChatId(null);
     setAssistantId(null);
     setThreadId(null);
+    sessionStorage.removeItem('activeChatId');
     sessionStorage.removeItem('activeAssistantId');
     sessionStorage.removeItem('activeThreadId');
     if (!sidebarOpen) inputRef.current?.focus();

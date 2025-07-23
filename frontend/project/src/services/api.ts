@@ -12,6 +12,7 @@ import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'ax
 // }
 // For now, I'll assume ChatHistoryItem can correctly represent this simplified structure.
 import { Company, ChatHistoryItem, User, ChatRequest, ChatResponse, AuthCredentials, AuthResponse } from '@/types';
+import { generateId } from '@/lib/utils';
 
 declare global {
   interface ImportMetaEnv {
@@ -85,8 +86,7 @@ interface RawChatResponse extends ChatResponse {
   rawCompanies?: any[];
 }
 
-// Helper function to generate a temporary unique ID for React keys when real ID is missing
-const generateId = () => `temp-id-${Math.random().toString(36).substr(2, 9)}`;
+// Using generateId from utils
 
 // Companies API
 export const companiesApi = {
@@ -204,7 +204,14 @@ export const companiesApi = {
 export const chatApi = {
   sendMessage: async (request: ChatRequest): Promise<RawChatResponse> => {
     try {
-      const response = await api.post('/v1/ai/chat', request);
+      // ИСПРАВЛЕНИЕ: Убираем history из запроса, бэкенд сам загружает из БД
+      const cleanRequest = {
+        user_input: request.user_input,
+        chat_id: request.chat_id, // Используем chat_id вместо thread_id
+        // НЕ отправляем history - бэкенд загружает из БД
+      };
+
+      const response = await api.post('/v1/ai/chat', cleanRequest);
 
       // Work with a strongly-typed copy of the response payload
       const rawData = response.data as RawChatResponse;
@@ -233,17 +240,20 @@ export const chatApi = {
   },
 
   /**
-   * Retrieve full message history for a given chat by its ID.
+   * Retrieve full message history for a given chat by its ID using new AI endpoint.
    */
   getConversationHistory: async (
     chatId: string
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[]; created_at?: string }>> => {
     try {
-      const response = await api.get(`/v1/chats/${chatId}`);
-      return (response.data.messages || []).map((msg: any) => ({
+      // ИСПРАВЛЕНИЕ: Используем новый AI эндпоинт для получения истории
+      const response = await api.get(`/v1/ai/chat/${chatId}/history`);
+      const historyData = response.data.history || [];
+      
+      return historyData.map((msg: any) => ({
         role: msg.role,
         content: msg.content,
-        companies: (msg.data?.companies_found || []).map(transformCompanyData),
+        companies: (msg.companies || []).map(transformCompanyData),
         created_at: msg.created_at,
       }));
     } catch (error) {
@@ -257,7 +267,7 @@ export const chatApi = {
 export const historyApi = {
   getHistory: async (): Promise<ChatHistoryItem[]> => {
     try {
-      // This endpoint remains correct as it fetches the list of all chats.
+      // Загружаем список всех чатов для боковой панели
       const response = await api.get('/v1/chats/');
       
       console.log('Raw response from /chats/ endpoint:', response);
@@ -266,13 +276,13 @@ export const historyApi = {
       const rawChatItems = Array.isArray(response.data) ? response.data : [];
 
       return rawChatItems.map((item: any) => {
-        // FIX: Use correct field names from backend (snake_case)
+        // Используем правильные имена полей от бэкенда
         const threadId = item.thread_id || '';
         const assistantId = item.assistant_id || '';
         return {
-          id: item.id || threadId || generateId(),
+          id: item.id || generateId(),
           userPrompt: item.title || 'Untitled Chat',
-          aiResponse: [],
+          aiResponse: [], // Не загружаем компании в список чатов
           created_at: item.updated_at ? new Date(item.updated_at).toISOString() : new Date().toISOString(),
           threadId: threadId,
           assistantId: assistantId,
@@ -288,26 +298,12 @@ export const historyApi = {
     }
   },
 
-  saveHistory: async (item: Omit<ChatHistoryItem, 'aiResponse' | 'id'> & { id?: string; rawAiResponse: any[] }): Promise<void> => {
-    try {
-      // MODIFIED: Point to the new, correct endpoint and use the new payload structure.
-      await api.post('/v1/chats/history', {
-        id: item.id, // The chat ID, which might be an existing one to update
-        user_prompt: item.userPrompt,
-        raw_ai_response: item.rawAiResponse,
-        created_at: item.created_at,
-        thread_id: item.threadId,
-        assistant_id: item.assistantId,
-      });
-    } catch (error) {
-      console.error('Failed to save chat history:', error);
-      throw error;
-    }
-  },
+  // УБИРАЕМ saveHistory - история теперь автоматически сохраняется на бэкенде
+  // при каждом сообщении через /ai/chat
 
   deleteHistory: async (id: string): Promise<void> => {
     try {
-      // MODIFIED: Point to the new, correct endpoint.
+      // Удаляем чат через существующий эндпоинт
       await api.delete(`/v1/chats/${id}`);
     } catch (error) {
       console.error('Failed to delete chat history:', error);
