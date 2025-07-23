@@ -121,6 +121,66 @@ class MessageDTO(BaseModel):
         }
 
 
+class SearchResult(BaseModel):
+    """Model for search results with pagination and metadata"""
+    
+    companies: List['CompanyData'] = Field(
+        default_factory=list,
+        description="List of companies found in search"
+    )
+    total_count: int = Field(
+        default=0,
+        description="Total number of companies matching search criteria"
+    )
+    page: int = Field(
+        default=1,
+        ge=1,
+        description="Current page number"
+    )
+    limit: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Number of results per page"
+    )
+    offset: int = Field(
+        default=0,
+        ge=0,
+        description="Offset for pagination"
+    )
+    has_more: bool = Field(
+        default=False,
+        description="Whether there are more results available"
+    )
+    search_params: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Parameters used for this search"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "companies": [
+                    {
+                        "bin": "123456789012",
+                        "name": "Tech Solutions LLP",
+                        "activity": "Software development",
+                        "locality": "Almaty"
+                    }
+                ],
+                "total_count": 150,
+                "page": 1,
+                "limit": 10,
+                "offset": 0,
+                "has_more": True,
+                "search_params": {
+                    "location": "Алматы",
+                    "activity_keywords": ["IT", "технологии"]
+                }
+            }
+        }
+
+
 class ChatResponse(BaseModel):
     """Response model for chat conversation with history"""
     
@@ -147,6 +207,10 @@ class ChatResponse(BaseModel):
     openai_thread_id: Optional[str] = Field(
         None,
         description="OpenAI Thread ID used for this response"
+    )
+    search_result: Optional[SearchResult] = Field(
+        None,
+        description="Detailed search results with pagination info"
     )
     
     @validator('message', pre=True, always=True)
@@ -203,7 +267,15 @@ class ChatResponse(BaseModel):
                 ],
                 "assistant_id": "asst_abc123",
                 "chat_id": str(uuid.uuid4()),
-                "openai_thread_id": "thread_xyz789"
+                "openai_thread_id": "thread_xyz789",
+                "search_result": {
+                    "companies": [],
+                    "total_count": 150,
+                    "page": 1,
+                    "limit": 10,
+                    "offset": 0,
+                    "has_more": True
+                }
             }
         }
 
@@ -219,6 +291,10 @@ class CompanyData(BaseModel):
     locality: Optional[str] = Field(None, description="Locality or region")
     krp: Optional[str] = Field(None, description="KRP code")
     size: Optional[str] = Field(None, description="Company size category")
+    id: Optional[str] = Field(None, description="Unique identifier for the company")
+    address: Optional[str] = Field(None, description="Full company address")
+    registration_date: Optional[str] = Field(None, description="Company registration date")
+    status: Optional[str] = Field(None, description="Company status (active, inactive, etc.)")
 
     class Config:
         extra = "allow"
@@ -232,6 +308,10 @@ class CompanyData(BaseModel):
                 "locality": "Almaty",
                 "krp": "2",
                 "size": "Medium",
+                "id": "comp_123",
+                "address": "Almaty, Медеуский район, улица Сатпаева, 90",
+                "registration_date": "2020-01-15",
+                "status": "active"
             }
         }
 
@@ -245,6 +325,7 @@ class APIResponse(BaseModel):
     )
     data: Union[
         ChatResponse,
+        SearchResult,
         List[CompanyData], 
         List[Dict[str, Any]], 
         Dict[str, Any]
@@ -283,22 +364,52 @@ class CompanyCharityRequest(BaseModel):
         max_length=200,
         description="Name of the company to research charity involvement"
     )
+    additional_context: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Additional context or specific areas of charity to focus on"
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
-                "company_name": "КазМунайГаз"
+                "company_name": "КазМунайГаз",
+                "additional_context": "Интересует поддержка образовательных проектов"
             }
         }
 
 
 class CompanyCharityResponse(BaseModel):
-    """Response model for company charity research"""
+    """Response model for company charity research with enhanced data"""
     
     status: str = Field(
         description="Status of the request (success/error/warning)"
     )
-    answer: str = Field(description="AI analysis of company's charity involvement")
+    answer: str = Field(
+        description="AI analysis of company's charity involvement"
+    )
+    search_query: Optional[str] = Field(
+        None,
+        description="Search query used to find information"
+    )
+    sources: Optional[List[str]] = Field(
+        None,
+        description="List of sources or URLs used for research"
+    )
+    confidence_score: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score of the analysis (0.0 to 1.0)"
+    )
+    charity_areas: Optional[List[str]] = Field(
+        None,
+        description="List of charity areas the company is involved in"
+    )
+    recommendations: Optional[str] = Field(
+        None,
+        description="Recommendations for approaching this company"
+    )
     
     @validator('status', pre=True, always=True)
     def validate_status(cls, v):
@@ -317,11 +428,36 @@ class CompanyCharityResponse(BaseModel):
             return "Произошла ошибка при обработке запроса."
         return v.strip()
     
+    @validator('confidence_score', pre=True, always=True)
+    def validate_confidence_score(cls, v):
+        """Ensure confidence score is within valid range"""
+        if v is None:
+            return None
+        try:
+            score = float(v)
+            return max(0.0, min(1.0, score))
+        except (ValueError, TypeError):
+            return None
+    
     class Config:
         json_schema_extra = {
             "example": {
                 "status": "success",
-                "answer": "Компания КазМунайГаз активно участвует в благотворительной деятельности..."
+                "answer": "Компания КазМунайГаз активно участвует в благотворительной деятельности, особенно в сферах образования, здравоохранения и поддержки социально уязвимых групп населения...",
+                "search_query": "КазМунайГаз благотворительность образование",
+                "sources": [
+                    "https://kmg.kz/sustainability/social-responsibility",
+                    "https://kmg.kz/news/charity-programs"
+                ],
+                "confidence_score": 0.85,
+                "charity_areas": [
+                    "Образование",
+                    "Здравоохранение", 
+                    "Спорт",
+                    "Культура",
+                    "Социальная помощь"
+                ],
+                "recommendations": "Рекомендуется обращаться через официальные каналы корпоративной социальной ответственности. Компания особенно заинтересована в долгосрочных партнерствах в сфере образования."
             }
         }
 
@@ -331,3 +467,6 @@ class CompanyCharityResponse(BaseModel):
 # ---------------------------------------------------------------------------
 MessageDTO.update_forward_refs()
 ChatResponse.update_forward_refs() 
+APIResponse.update_forward_refs()  # Убедитесь, что эта строка есть
+SearchResult.update_forward_refs()
+CompanyData.update_forward_refs() 
