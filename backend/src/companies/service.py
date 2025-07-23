@@ -120,10 +120,10 @@ class CompanyService:
                 query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
                 logging.info(f"[DB_SERVICE][SEARCH] Added full-text activity filters for keywords: {activity_keywords}")
 
-        # 4. Optimized ORDER BY - sort by all years sequentially
-        # This ensures companies with largest and most recent tax payments are first
-        query_parts.append("ORDER BY COALESCE(tax_data_2025, 0) DESC, COALESCE(tax_data_2024, 0) DESC, COALESCE(tax_data_2023, 0) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied multi-year tax sorting ORDER BY")
+        # 4. Optimized ORDER BY - use indexed columns first, then expensive operations
+        # Start with indexed columns for better performance
+        query_parts.append("ORDER BY \"Locality\" ASC, COALESCE(tax_data_2025, 0) DESC, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied optimized ORDER BY")
 
         # 5. Add pagination - ALWAYS use both LIMIT and OFFSET
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -149,7 +149,7 @@ class CompanyService:
             converted_results = []
             for row in results:
                 company_dict = {
-                    "id": str(row.id),  # Convert to string for Pydantic validation
+                    "id": row.id,
                     "name": row.Company,
                     "bin": row.BIN,
                     "activity": row.Activity,
@@ -231,11 +231,10 @@ class CompanyService:
             if filters:
                 query = query.where(and_(*filters))
 
-            # Optimized ORDER BY - sort by all years sequentially
+            # Optimized ORDER BY - use indexed columns first
             query = query.order_by(
-                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
-                func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
-                func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
+                Company.locality.asc(),
+                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
                 Company.company_name.asc()
             ).offset(offset).limit(limit)
             
@@ -246,7 +245,7 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": str(row.id),  # Convert to string for Pydantic validation
+                    "id": row.id,
                     "name": row.company_name,
                     "bin": row.bin_number,
                     "activity": row.activity,
@@ -295,7 +294,7 @@ class CompanyService:
             SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025
             FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY COALESCE(tax_data_2025, 0) DESC, COALESCE(tax_data_2024, 0) DESC, COALESCE(tax_data_2023, 0) DESC, "Company" ASC
+            ORDER BY "Locality" ASC, COALESCE(tax_data_2025, 0) DESC, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         
@@ -314,7 +313,7 @@ class CompanyService:
             result_dicts = []
             for row in companies:
                 company_dict = {
-                    "id": str(row.id),  # Convert to string for Pydantic validation
+                    "id": row.id,
                     "name": row.Company,
                     "bin": row.BIN,
                     "activity": row.Activity,
@@ -342,9 +341,8 @@ class CompanyService:
                     Company.locality.ilike(f'%{translated_location}%')
                 )
                 companies = query.order_by(
-                    func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
-                    func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
-                    func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
+                    Company.locality.asc(),
+                    func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
                     Company.company_name.asc()
                 ).offset(offset).limit(limit).all()
                 return [self._company_to_dict(company) for company in companies]
@@ -444,11 +442,10 @@ class CompanyService:
             if conditions:
                 query = query.where(or_(*conditions))
             
-            # Optimized ORDER BY - sort by all years sequentially
+            # Optimized ORDER BY - use indexed columns first
             query = query.order_by(
-                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
-                func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
-                func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
+                Company.locality.asc(),
+                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
                 Company.company_name.asc()
             ).limit(limit)
             
@@ -459,7 +456,7 @@ class CompanyService:
             converted_results = []
             for row in rows:
                 company_dict = {
-                    "id": str(row.id),  # Convert to string for Pydantic validation
+                    "id": row.id,
                     "name": row.company_name,
                     "bin": row.bin_number,
                     "activity": row.activity,
@@ -485,7 +482,7 @@ class CompanyService:
     def _company_to_dict(self, company: Company) -> Dict[str, Any]:
         """Converts a Company SQLAlchemy object to a dictionary, always including all fields."""
         return {
-            "id": str(getattr(company, "id", "")) if getattr(company, "id", None) else "",
+            "id": getattr(company, "id", None),
             "name": getattr(company, "company_name", "") or "",
             "bin": getattr(company, "bin_number", None),
             "activity": getattr(company, "activity", None),
