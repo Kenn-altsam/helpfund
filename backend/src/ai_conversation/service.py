@@ -9,6 +9,7 @@ import json
 import re
 import traceback
 import os
+import uuid
 from typing import Optional, Dict, Any, List
 
 from fastapi import HTTPException
@@ -18,6 +19,8 @@ from dotenv import load_dotenv
 from ..core.config import get_settings
 from ..companies.service import CompanyService
 from .location_service import get_canonical_location_from_text
+from ..chats import service as chat_service
+from ..chats.models import Chat, Message
 
 load_dotenv()
 
@@ -129,6 +132,59 @@ class GeminiService:
             raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={self.gemini_api_key}"
 
+    def _load_chat_history_from_db(self, db: Session, chat_id: uuid.UUID) -> List[Dict[str, Any]]:
+        """
+        Загружает историю сообщений из базы данных и преобразует в формат для Gemini.
+        """
+        try:
+            # Загружаем чат с сообщениями
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            if not chat:
+                print(f"🔍 [DB_HISTORY] Chat {chat_id} not found, starting with empty history")
+                return []
+
+            # Преобразуем сообщения в формат истории
+            history = []
+            for message in sorted(chat.messages, key=lambda m: m.created_at):
+                message_dict = {
+                    "role": message.role,
+                    "content": message.content
+                }
+                
+                # Если у сообщения есть данные (например parsed_intent), добавляем их
+                if message.data:
+                    message_dict.update(message.data)
+                
+                history.append(message_dict)
+
+            print(f"🔍 [DB_HISTORY] Loaded {len(history)} messages from chat {chat_id}")
+            return history
+
+        except Exception as e:
+            print(f"❌ [DB_HISTORY] Error loading chat history: {e}")
+            traceback.print_exc()
+            return []
+
+    def _save_message_to_db(self, db: Session, chat_id: uuid.UUID, role: str, content: str, data: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Сохраняет сообщение в базу данных.
+        """
+        try:
+            message = Message(
+                chat_id=chat_id,
+                role=role,
+                content=content,
+                data=data
+            )
+            db.add(message)
+            db.commit()
+            db.refresh(message)
+            print(f"💾 [DB_SAVE] Saved {role} message to chat {chat_id}")
+        except Exception as e:
+            print(f"❌ [DB_SAVE] Error saving message: {e}")
+            traceback.print_exc()
+            db.rollback()
+
     async def _parse_user_intent_with_gemini(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
         Uses Gemini to parse the user's intent from conversation history.
@@ -190,19 +246,37 @@ class GeminiService:
         return "\n".join(parts)
 
     async def handle_conversation_turn(self, user_input: str, history: List[Dict[str, str]], db: Session, conversation_id: Optional[str] = None) -> Dict[str, Any]:
-        """Main logic for handling a conversation turn using Gemini."""
-        print(f"🔄 [SERVICE] Handling turn with Gemini for: {user_input[:100]}...")
+        """Main logic for handling a conversation turn using Gemini with database persistence."""
+        print(f"🔄 [SERVICE] Handling turn with database persistence for: {user_input[:100]}...")
         
-        # Добавляем сообщение пользователя в историю ДО того, как передать ее Gemini для парсинга
-        history.append({"role": "user", "content": user_input})
+        # Конвертируем conversation_id в UUID для работы с базой данных
+        chat_id = None
+        if conversation_id:
+            try:
+                chat_id = uuid.UUID(conversation_id)
+                print(f"🔄 [SERVICE] Using existing chat_id: {chat_id}")
+            except ValueError:
+                print(f"❌ [SERVICE] Invalid conversation_id format: {conversation_id}")
+                raise HTTPException(status_code=400, detail="Invalid conversation_id format")
+
+        # Загружаем историю из базы данных вместо использования параметра history
+        if chat_id:
+            db_history = self._load_chat_history_from_db(db, chat_id)
+        else:
+            db_history = []
+            print(f"🔄 [SERVICE] No chat_id provided, starting with empty history")
+
+        # Добавляем новое сообщение пользователя в историю для анализа
+        db_history.append({"role": "user", "content": user_input})
         
-        parsed_intent = await self._parse_user_intent_with_gemini(history)
+        # Парсим намерение пользователя через Gemini
+        parsed_intent = await self._parse_user_intent_with_gemini(db_history)
 
         intent = parsed_intent.get("intent")
         location = parsed_intent.get("location")
         activity_keywords = parsed_intent.get("activity_keywords")
         page = parsed_intent.get("page_number", 1)
-        search_limit = parsed_intent.get("quantity", 10) # Это значение теперь должно приходить из Gemini корректно
+        search_limit = parsed_intent.get("quantity", 10)
         offset = (page - 1) * search_limit
         
         # Отладочная информация для пагинации
@@ -212,6 +286,7 @@ class GeminiService:
         final_message = parsed_intent.get("preliminary_response", "Обрабатываю ваш запрос...")
         companies_data = []
 
+        # Поиск компаний если это запрос поиска
         if intent == "find_companies" and location:
             print(f"🏢 Searching DB: location='{location}', keywords={activity_keywords}, limit={search_limit}, offset={offset}")
             company_service = CompanyService(db)
@@ -226,34 +301,40 @@ class GeminiService:
             
             if db_companies:
                 companies_data = db_companies
-                final_message = self._generate_summary_response(history, companies_data)
+                final_message = self._generate_summary_response(db_history, companies_data)
             else:
-                # Если компаний не найдено для текущего офсета
                 final_message = f"Я искал компании в {location} по вашему запросу, но не смог найти больше результатов на странице {page}. Попробуйте изменить критерии поиска."
-                if page > 1: # Если пользователь уже делал пагинацию, подскажем, что результаты могли закончиться
+                if page > 1:
                     final_message += " Возможно, вы уже просмотрели все доступные компании по этим критериям."
         
         elif intent == "find_companies" and not location:
             final_message = "Чтобы найти компании, мне нужно знать, в каком городе вы хотите искать. Пожалуйста, укажите местоположение."
-        else:
-            # Для intent 'general_question' или 'unclear' preliminary_response уже установлен.
-            pass # Нет специфичной логики поиска компаний
 
-        # <--- ГЛАВНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ --->
-        # Сохраняем спарсенный интент вместе с ответом ассистента в истории
-        # Это позволит Gemini в следующем запросе прочитать предыдущие параметры, такие как quantity.
-        assistant_response_for_history = {
+        # Сохраняем сообщения в базу данных если есть chat_id
+        if chat_id:
+            # Сохраняем сообщение пользователя
+            self._save_message_to_db(db, chat_id, "user", user_input)
+            
+            # Сохраняем ответ ассистента с parsed_intent и данными о компаниях
+            assistant_data = {
+                "parsed_intent": parsed_intent,
+                "companies": companies_data
+            }
+            self._save_message_to_db(db, chat_id, "assistant", final_message, assistant_data)
+
+        # Формируем обновленную историю для ответа (включая новые сообщения)
+        updated_history = db_history.copy()
+        updated_history.append({
             "role": "assistant",
             "content": final_message,
-            "metadata": {"companies": companies_data}, # Оставьте это для ваших нужд, если есть
-            "parsed_intent": parsed_intent # <-- Вот что важно добавить!
-        }
-        history.append(assistant_response_for_history)
+            "metadata": {"companies": companies_data},
+            "parsed_intent": parsed_intent
+        })
 
         return {
             'message': final_message,
             'companies': companies_data,
-            'updated_history': history,
+            'updated_history': updated_history,
             'reasoning': parsed_intent.get('reasoning'),
             'metadata': {"companies": companies_data}
         }

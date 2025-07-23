@@ -29,7 +29,7 @@ class ConversationInput(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Request model for chat conversation with history"""
+    """Request model for chat conversation - history is loaded from database"""
     
     user_input: str = Field(
         ..., 
@@ -37,58 +37,19 @@ class ChatRequest(BaseModel):
         max_length=1000,
         description="User's message or query"
     )
-    history: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="Conversation history with role and content"
-    )
     assistant_id: Optional[str] = Field(
         None,
         description="Optional OpenAI Assistant ID for persistent conversations"
     )
     chat_id: Optional[str] = Field(
         None,
-        description="Optional Database Chat ID (UUID) for persistent conversations"
+        description="Optional Database Chat ID (UUID) for persistent conversations. If not provided, a new chat will be created."
     )
-    
-    @validator('history', pre=True, always=True)
-    def validate_request_history(cls, v):
-        """Validate and clean incoming history"""
-        if not v:
-            return []
-        
-        if not isinstance(v, list):
-            print(f"⚠️ [MODELS] Request history is not a list: {type(v)}, converting to empty list")
-            return []
-        
-        validated_history = []
-        for i, item in enumerate(v):
-            if isinstance(item, dict):
-                # Be more flexible with the validation - just require some content
-                role = item.get('role', '').strip()
-                content = item.get('content', '').strip()
-                
-                if role and content:
-                    validated_history.append({
-                        'role': role,
-                        'content': content
-                    })
-                else:
-                    print(f"⚠️ [MODELS] Skipping history item {i} with missing role/content: {item}")
-            else:
-                print(f"⚠️ [MODELS] Skipping non-dict history item {i}: {type(item)}")
-        
-        print(f"✅ [MODELS] Request history validated: {len(v)} -> {len(validated_history)} items")
-        return validated_history
     
     class Config:
         json_schema_extra = {
             "example": {
                 "user_input": "Can you help me find tech companies?",
-                "history": [
-                    {"role": "user", "content": "Hi there!"},
-                    {"role": "assistant", "content": "Hello! I'm here to help you find potential corporate sponsors in Kazakhstan. How can I assist you today?"}
-                ],
-                "assistant_id": "asst_abc123",
                 "chat_id": str(uuid.uuid4())
             }
         }

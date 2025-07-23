@@ -10,6 +10,7 @@ from ..core.database import get_db
 from ..auth.models import User
 from ..auth.dependencies import get_current_user
 from ..chats import service as chat_service  # Сервис для сохранения истории чатов
+from ..chats.models import Chat  # Модель чата для проверки принадлежности
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
@@ -38,6 +39,7 @@ async def handle_chat_with_database_search(
         if request.chat_id:
             try:
                 db_chat_id = uuid.UUID(request.chat_id)
+                print(f"🔄 [CHAT_DB] Using existing chat session: {db_chat_id}")
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
         else:
@@ -52,41 +54,16 @@ async def handle_chat_with_database_search(
             print(f"🆕 [CHAT_DB] Created new chat session '{chat_name}' with ID: {db_chat_id}")
 
         # 2. Вызываем основную логику из ai_service.py
-        # Эта функция парсит намерение, ищет в БД и возвращает результат
+        # Сервис теперь сам загружает историю из БД и сохраняет новые сообщения
         response_data = await ai_service.handle_conversation_turn(
             user_input=request.user_input,
-            history=request.history,
+            history=[],  # Больше не используется, сервис загружает из БД
             db=db,
             conversation_id=str(db_chat_id)
         )
         
-        # 3. Сохраняем сообщения в базу данных, используя историю из ответа сервиса
-        # Это важно, так как сервис добавляет в историю и запрос, и ответ
-        last_user_message = next((msg for msg in reversed(response_data['updated_history']) if msg['role'] == 'user'), None)
-        last_assistant_message = next((msg for msg in reversed(response_data['updated_history']) if msg['role'] == 'assistant'), None)
-
-        if last_user_message:
-            # Для сообщения пользователя метаданные не нужны
-            chat_service.create_message(
-                db=db,
-                chat_id=db_chat_id,
-                content=last_user_message['content'],
-                role='user',
-                metadata=None # Явно указываем, что их нет
-            )
-
-        if last_assistant_message:
-            # Для сообщения ассистента извлекаем компании и передаем как metadata
-            companies_data = response_data.get('companies', [])
-            chat_service.create_message(
-                db=db,
-                chat_id=db_chat_id,
-                content=last_assistant_message['content'],
-                role='assistant',
-                metadata={"companies": companies_data}
-            )
-
-        # 4. Формируем и возвращаем финальный ответ для фронтенда
+        # 3. Формируем и возвращаем финальный ответ для фронтенда
+        # Сообщения уже сохранены в сервисе, дублирования нет
         final_response = ChatResponse(
             message=response_data.get('message'),
             companies=response_data.get('companies', []),
@@ -103,6 +80,47 @@ async def handle_chat_with_database_search(
         print(f"❌ [CHAT_DB] Critical error in chat endpoint: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Произошла непредвиденная ошибка на сервере.")
+
+
+@router.get("/chat/{chat_id}/history")
+async def get_chat_history_for_ai(
+    chat_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Получает историю чата в формате, оптимизированном для AI диалогов.
+    Возвращает историю в том же формате, что используется в updated_history.
+    """
+    try:
+        # Проверяем формат UUID
+        chat_uuid = uuid.UUID(chat_id)
+        
+        # Загружаем историю используя AI service
+        history = ai_service._load_chat_history_from_db(db, chat_uuid)
+        
+        # Проверяем, что чат принадлежит пользователю
+        chat = db.query(Chat).filter(
+            Chat.id == chat_uuid,
+            Chat.user_id == current_user.id
+        ).first()
+        
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found or access denied")
+        
+        return {
+            "chat_id": str(chat_uuid),
+            "title": chat.title,
+            "history": history,
+            "total_messages": len(history)
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
+    except Exception as e:
+        print(f"❌ [AI_HISTORY] Error getting chat history: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat history.")
 
 
 # ============================================================================== 
