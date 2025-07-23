@@ -120,10 +120,10 @@ class CompanyService:
                 query_parts.append(f"AND ({' OR '.join(activity_conditions)})")
                 logging.info(f"[DB_SERVICE][SEARCH] Added full-text activity filters for keywords: {activity_keywords}")
 
-        # 4. Optimized ORDER BY - use indexed columns first, then expensive operations
-        # Start with indexed columns for better performance
-        query_parts.append("ORDER BY \"Locality\" ASC, COALESCE(tax_data_2025, 0) DESC, \"Company\" ASC")
-        logging.info(f"[DB_SERVICE][SEARCH] Applied optimized ORDER BY")
+        # 4. Optimized ORDER BY - sort by all years sequentially
+        # This ensures companies with largest and most recent tax payments are first
+        query_parts.append("ORDER BY COALESCE(tax_data_2025, 0) DESC, COALESCE(tax_data_2024, 0) DESC, COALESCE(tax_data_2023, 0) DESC, \"Company\" ASC")
+        logging.info(f"[DB_SERVICE][SEARCH] Applied multi-year tax sorting ORDER BY")
 
         # 5. Add pagination - ALWAYS use both LIMIT and OFFSET
         query_parts.append("LIMIT :limit OFFSET :offset")
@@ -231,10 +231,11 @@ class CompanyService:
             if filters:
                 query = query.where(and_(*filters))
 
-            # Optimized ORDER BY - use indexed columns first
+            # Optimized ORDER BY - sort by all years sequentially
             query = query.order_by(
-                Company.locality.asc(),
-                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
+                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
+                func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
+                func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
                 Company.company_name.asc()
             ).offset(offset).limit(limit)
             
@@ -294,7 +295,7 @@ class CompanyService:
             SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025
             FROM companies 
             WHERE "Locality" ILIKE :location
-            ORDER BY "Locality" ASC, COALESCE(tax_data_2025, 0) DESC, "Company" ASC
+            ORDER BY COALESCE(tax_data_2025, 0) DESC, COALESCE(tax_data_2024, 0) DESC, COALESCE(tax_data_2023, 0) DESC, "Company" ASC
             LIMIT :limit OFFSET :offset
         """
         
@@ -341,8 +342,9 @@ class CompanyService:
                     Company.locality.ilike(f'%{translated_location}%')
                 )
                 companies = query.order_by(
-                    Company.locality.asc(),
-                    func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
+                    func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
+                    func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
+                    func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
                     Company.company_name.asc()
                 ).offset(offset).limit(limit).all()
                 return [self._company_to_dict(company) for company in companies]
@@ -442,10 +444,11 @@ class CompanyService:
             if conditions:
                 query = query.where(or_(*conditions))
             
-            # Optimized ORDER BY - use indexed columns first
+            # Optimized ORDER BY - sort by all years sequentially
             query = query.order_by(
-                Company.locality.asc(),
-                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(), 
+                func.coalesce(Company.tax_data_2025, 0).desc().nullslast(),
+                func.coalesce(Company.tax_data_2024, 0).desc().nullslast(),
+                func.coalesce(Company.tax_data_2023, 0).desc().nullslast(),
                 Company.company_name.asc()
             ).limit(limit)
             
