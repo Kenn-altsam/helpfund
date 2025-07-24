@@ -62,30 +62,32 @@ class Settings(BaseSettings):
     # Example: "https://example.com,https://myapp.com"
     # The custom validator is removed to rely on default behavior.
     # ------------------------------------------------------------------
-    ALLOWED_ORIGINS: List[str] = Field(default=["*"])
+    ALLOWED_ORIGINS: str = "*"  # Explicitly string to handle custom parsing
 
-    @model_validator(mode='before')
-    @classmethod
-    def validate_allowed_origins(cls, values):
-        """Handle ALLOWED_ORIGINS parsing safely"""
-        if isinstance(values, dict) and 'ALLOWED_ORIGINS' in values:
-            origins = values['ALLOWED_ORIGINS']
-            if origins is None or origins == "":
-                values['ALLOWED_ORIGINS'] = ["*"]
-            elif isinstance(origins, str):
-                # Try to parse as JSON first (for ["url1", "url2"] format)
-                try:
-                    import json
-                    parsed_origins = json.loads(origins)
-                    if isinstance(parsed_origins, list):
-                        values['ALLOWED_ORIGINS'] = [origin.strip() for origin in parsed_origins if origin.strip()]
-                        return values
-                except (json.JSONDecodeError, TypeError):
-                    pass
+    # The custom validator is removed to rely on default behavior.
+
+    # @model_validator(mode='before')
+    # @classmethod
+    # def validate_allowed_origins(cls, values):
+    #     """Handle ALLOWED_ORIGINS parsing safely"""
+    #     if isinstance(values, dict) and 'ALLOWED_ORIGINS' in values:
+    #         origins = values['ALLOWED_ORIGINS']
+    #         if origins is None or origins == "":
+    #             values['ALLOWED_ORIGINS'] = ["*"]
+    #         elif isinstance(origins, str):
+    #             # Try to parse as JSON first (for ["url1", "url2"] format)
+    #             try:
+    #                 import json
+    #                 parsed_origins = json.loads(origins)
+    #                 if isinstance(parsed_origins, list):
+    #                     values['ALLOWED_ORIGINS'] = [origin.strip() for origin in parsed_origins if origin.strip()]
+    #                     return values
+    #             except (json.JSONDecodeError, TypeError):
+    #                 pass
                 
-                # Fall back to comma-separated string parsing
-                values['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins.split(',') if origin.strip()]
-        return values
+    #             # Fall back to comma-separated string parsing
+    #             values['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins.split(',') if origin.strip()]
+    #     return values
 
     # ------------------------------------------------------------------
     # OpenAI - UPDATED FOR AZURE
@@ -128,6 +130,12 @@ class Settings(BaseSettings):
         # It's okay to leave it here, but the loop below is the problem.
         load_dotenv()
 
+        # Parse ALLOWED_ORIGINS from string to list
+        if isinstance(self.ALLOWED_ORIGINS, str):
+            self.ALLOWED_ORIGINS = [origin.strip() for origin in self.ALLOWED_ORIGINS.split(',') if origin.strip()]
+        else:
+            self.ALLOWED_ORIGINS = [] # Default to empty list if not a string
+
         # Basic validation
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL must be set in the environment.")
@@ -166,6 +174,10 @@ def get_settings() -> Settings:
     print("⚙️  Loading settings...")
     settings = Settings()
     
+    # Manually parse ALLOWED_ORIGINS from string to list
+    if isinstance(settings.ALLOWED_ORIGINS, str):
+        settings.ALLOWED_ORIGINS = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(',') if origin.strip()]
+
     # --- Add detailed logging for Azure settings ---
     print(f"  - Azure Key Loaded: {'Yes' if settings.AZURE_OPENAI_KEY else 'No'}")
     print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
