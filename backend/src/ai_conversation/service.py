@@ -326,7 +326,21 @@ class GeminiService:
             print(f"📈 Found {len(db_companies) if db_companies else 0} companies in database.")
             
             if db_companies:
-                companies_data = db_companies
+                # 🆕 ОБОГАЩАЕМ КОМПАНИИ ВЕБ-ДАННЫМИ
+                print(f"🌐 [WEB_ENRICHMENT] Enriching {len(db_companies)} companies with web data...")
+                try:
+                    enriched_companies = await company_service.enrich_companies_with_web_data(db_companies)
+                    companies_data = enriched_companies
+                    
+                    # Подсчитываем сколько компаний получили веб-данные
+                    enriched_count = len([c for c in companies_data if c.get('website') or c.get('contacts')])
+                    print(f"✅ [WEB_ENRICHMENT] Successfully enriched {enriched_count}/{len(companies_data)} companies with web data")
+                    
+                except Exception as e:
+                    print(f"⚠️ [WEB_ENRICHMENT] Failed to enrich companies with web data: {e}")
+                    # Если обогащение не удалось, используем обычные данные
+                    companies_data = db_companies
+                
                 final_message = self._generate_summary_response(db_history, companies_data)
             else:
                 final_message = f"Я искал компании в {location} по вашему запросу, но не смог найти больше результатов на странице {page}. Попробуйте изменить критерии поиска."

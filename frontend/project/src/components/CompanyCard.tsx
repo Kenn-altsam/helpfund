@@ -62,25 +62,42 @@ export function CompanyCard({ company }: CompanyCardProps) {
         </div>
         {/* Show contacts */}
         <div className="text-xs">
-          <b>{t("company.contacts")}:</b> {company.contacts !== undefined && company.contacts !== null && company.contacts !== '' ? company.contacts : t("company.contacts_missing")}
+          <b>{t("company.contacts")}:</b>{" "}
+          {company.contacts !== undefined && company.contacts !== null && company.contacts !== '' ? (
+            <span className="flex items-center gap-1">
+              <span>{company.contacts}</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                🌐 найдено
+              </span>
+            </span>
+          ) : (
+            <span className="text-gray-500">{t("company.contacts_missing")}</span>
+          )}
         </div>
         {/* Show website */}
         <div className="text-xs">
           <b>{t("company.website")}:</b>{" "}
           {company.website !== undefined && company.website !== null && company.website !== '' ? (
-            <a
-              href={
-                company.website.startsWith('http://') || company.website.startsWith('https://')
-                  ? company.website
-                  : `https://${company.website}`
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline"
-            >
-              {company.website}
-            </a>
-          ) : t("company.website_missing")}
+            <span className="flex items-center gap-1">
+              <a
+                href={
+                  company.website.startsWith('http://') || company.website.startsWith('https://')
+                    ? company.website
+                    : `https://${company.website}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 underline break-all"
+              >
+                {company.website}
+              </a>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                🌐 найдено
+              </span>
+            </span>
+          ) : (
+            <span className="text-gray-500">{t("company.website_missing")}</span>
+          )}
         </div>
       </CardContent>
 

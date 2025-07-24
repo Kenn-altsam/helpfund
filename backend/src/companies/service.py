@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func, text
 from uuid import UUID
 import logging
+import asyncio
+from datetime import datetime, timedelta
 
-from .models import Company
+from .models import Company, CompanyWebData
+from .google_search_service import google_search_service, CompanyWebInfo
 from ..core.translation_service import CityTranslationService
 
 logging.basicConfig(level=logging.INFO)
@@ -529,4 +532,170 @@ class CompanyService:
             ).count()
         except Exception as e:
             logging.error(f"[DB_SERVICE][COUNT_BY_LOCATION] Error: {e}")
-            return 0 
+            return 0
+
+    async def get_company_web_data(self, company_bin: str, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Get web data (website and contacts) for a company
+        
+        Args:
+            company_bin: Company BIN number
+            force_refresh: If True, fetch fresh data from Google Search
+            
+        Returns:
+            Dictionary with website and contacts info
+        """
+        try:
+            # Check if we have cached data and it's not too old
+            cached_data = None
+            if not force_refresh:
+                cached_data = self.db.query(CompanyWebData).filter(
+                    CompanyWebData.company_bin == company_bin
+                ).first()
+                
+                # Check if data is fresh (less than 7 days old)
+                if cached_data:
+                    data_age = datetime.utcnow() - cached_data.created_at
+                    if data_age < timedelta(days=7):
+                        logging.info(f"[WEB_DATA] Using cached data for BIN {company_bin}")
+                        return {
+                            "website": cached_data.website,
+                            "contacts": cached_data.contacts,
+                            "confidence_score": cached_data.confidence_score,
+                            "search_query": cached_data.search_query,
+                            "is_cached": True,
+                            "last_updated": cached_data.updated_at.isoformat() if cached_data.updated_at else None
+                        }
+            
+            # Get company info for search
+            company = self.db.query(Company).filter(
+                Company.bin_number == company_bin
+            ).first()
+            
+            if not company:
+                logging.warning(f"[WEB_DATA] Company not found for BIN {company_bin}")
+                return None
+            
+            # Perform Google search
+            logging.info(f"[WEB_DATA] Searching web data for {company.company_name} (BIN: {company_bin})")
+            web_info = await google_search_service.search_company_info(
+                company_name=company.company_name,
+                company_bin=company_bin,
+                location=company.locality
+            )
+            
+            # Save/update cached data
+            if cached_data:
+                # Update existing record
+                cached_data.website = web_info.website
+                cached_data.contacts = web_info.contacts
+                cached_data.search_query = web_info.search_query
+                cached_data.confidence_score = web_info.confidence_score
+                cached_data.updated_at = datetime.utcnow()
+            else:
+                # Create new record
+                cached_data = CompanyWebData(
+                    company_bin=company_bin,
+                    website=web_info.website,
+                    contacts=web_info.contacts,
+                    search_query=web_info.search_query,
+                    confidence_score=web_info.confidence_score
+                )
+                self.db.add(cached_data)
+            
+            self.db.commit()
+            
+            return {
+                "website": web_info.website,
+                "contacts": web_info.contacts,
+                "confidence_score": web_info.confidence_score,
+                "search_query": web_info.search_query,
+                "is_cached": False,
+                "last_updated": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logging.error(f"[WEB_DATA] Error getting web data for BIN {company_bin}: {e}")
+            self.db.rollback()
+            return None
+
+    async def enrich_companies_with_web_data(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Enrich company data with web information (website and contacts)
+        
+        Args:
+            companies: List of company dictionaries
+            
+        Returns:
+            List of companies enriched with web data
+        """
+        enriched_companies = []
+        
+        # Process companies in batches to avoid overwhelming the API
+        batch_size = 3
+        for i in range(0, len(companies), batch_size):
+            batch = companies[i:i + batch_size]
+            
+            # Create tasks for parallel processing
+            tasks = []
+            for company in batch:
+                company_bin = company.get('bin')
+                if company_bin:
+                    task = self.get_company_web_data(company_bin)
+                    tasks.append((company, task))
+                else:
+                    # If no BIN, just add the company without web data
+                    enriched_companies.append(company)
+            
+            # Execute tasks in parallel
+            if tasks:
+                results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+                
+                for (company, _), result in zip(tasks, results):
+                    if isinstance(result, Exception):
+                        logging.error(f"[WEB_DATA] Error enriching company {company.get('name')}: {result}")
+                        enriched_companies.append(company)
+                    elif result:
+                        # Add web data to company
+                        company_with_web = company.copy()
+                        company_with_web['website'] = result.get('website')
+                        company_with_web['contacts'] = result.get('contacts')
+                        enriched_companies.append(company_with_web)
+                    else:
+                        # No web data found, add original company
+                        enriched_companies.append(company)
+            
+            # Small delay between batches to be respectful to the API
+            if i + batch_size < len(companies):
+                await asyncio.sleep(1)
+        
+        return enriched_companies
+
+    def clear_cached_web_data(self, company_bin: str) -> bool:
+        """
+        Clear cached web data for a specific company
+        
+        Args:
+            company_bin: Company BIN number
+            
+        Returns:
+            True if data was cleared, False otherwise
+        """
+        try:
+            result = self.db.query(CompanyWebData).filter(
+                CompanyWebData.company_bin == company_bin
+            ).delete()
+            
+            self.db.commit()
+            
+            if result > 0:
+                logging.info(f"[WEB_DATA] Cleared cached data for BIN {company_bin}")
+                return True
+            else:
+                logging.info(f"[WEB_DATA] No cached data found for BIN {company_bin}")
+                return False
+                
+        except Exception as e:
+            logging.error(f"[WEB_DATA] Error clearing cached data for BIN {company_bin}: {e}")
+            self.db.rollback()
+            return False 
