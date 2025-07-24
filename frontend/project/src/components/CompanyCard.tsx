@@ -62,7 +62,13 @@ export function CompanyCard({ company }: CompanyCardProps) {
         </div>
         {/* Show contacts */}
         <div className="text-xs">
-          <b>{t("company.contacts")}:</b> {company.contacts !== undefined && company.contacts !== null && company.contacts !== '' ? company.contacts : t("company.contacts_missing")}
+          <b>{t("company.contacts")}:</b>{" "}
+          {company.contacts && (company.contacts.phone || company.contacts.email) ? (
+            <>
+              {company.contacts.phone && <p>{t("company.phone")}: {company.contacts.phone}</p>}
+              {company.contacts.email && <p>{t("company.email")}: {company.contacts.email}</p>}
+            </>
+          ) : t("company.contacts_missing")}
         </div>
         {/* Show website */}
         <div className="text-xs">
