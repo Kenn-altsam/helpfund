@@ -24,11 +24,12 @@ from ..chats.models import Chat, Message
 
 load_dotenv()
 
-# Removed Google Search API related environment variables
+# Removed Google Search API related environment variables, only Gemini API key is needed.
 # GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 # GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Removed checks for Google API keys, only check for Gemini API key.
 # if not GOOGLE_API_KEY:
 #     raise RuntimeError("GOOGLE_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
 # if not GOOGLE_SEARCH_ENGINE_ID:
@@ -379,88 +380,17 @@ class GeminiService:
 
     async def _research_charity_online(self, company_name: str) -> str:
         """
-        Выполняет оптимизированный и умный Google поиск прошлой благотворительной деятельности компании.
-        Делает максимум 2 целенаправленных запроса для максимальной релевантности.
+        Выполняет исследование благотворительной деятельности компании с использованием Gemini API.
+        Gemini осуществляет поиск информации в интернете и генерирует сводку.
         """
-        print(f"🌐 [WEB_RESEARCH] Starting SMART charity research for: {company_name}")
+        print(f"🌐 [WEB_RESEARCH] Starting Gemini-powered charity research for: {company_name}")
 
-        # УЛУЧШЕНИЕ 1: Умная очистка названия компании
-        # Убираем организационно-правовые формы и символы для более точного поиска
-        clean_company_name = re.sub(
-            r'^(ТОО|АО|ИП|A\.O\.|TOO|LLP|JSC|ОДО|ООО|ЗАО|ПАО)\s*|"|«|»|["\']', 
-            '', 
-            company_name, 
-            flags=re.IGNORECASE
-        ).strip()
-        print(f"   -> Optimized search name: '{clean_company_name}'")
+        # Gemini напрямую выполняет поиск и обобщение, используя свои веб-возможности.
+        # Поэтому здесь мы только формируем промпт для Gemini.
 
-        # УЛУЧШЕНИЕ 2: Максимально релевантные ключевые слова для Казахстана
-        core_charity_terms = [
-            "благотворительность", "пожертвования", "спонсорство", 
-            "социальная ответственность", "помощь", "поддержка"
-        ]
-        
-        specific_charity_actions = [
-            "детский дом", "фонд", "образование", "здравоохранение",
-            "помощь малообеспеченным", "социальный проект"
-        ]
-
-        # УЛУЧШЕНИЕ 3: Два стратегических запроса вместо множества
-        # Запрос 1: Основные благотворительные термины
-        query_1 = f'"{clean_company_name}" Казахстан ({" OR ".join(core_charity_terms[:3])})'
-        
-        # Запрос 2: Конкретные благотворительные действия
-        query_2 = f'"{clean_company_name}" ({" OR ".join(specific_charity_actions[:3])})'
-
-        queries_to_execute = [query_1, query_2]
-        
-        search_results_text = ""
-        unique_links = set()
-        max_results_per_query = 3  # Ограничиваем для концентрации на качестве
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for i, query in enumerate(queries_to_execute, 1):
-                search_url = f"https://www.googleapis.com/customsearch/v1?key={os.getenv('GOOGLE_API_KEY')}&cx={os.getenv('GOOGLE_SEARCH_ENGINE_ID')}&q={query}&num={max_results_per_query}&lr=lang_ru"
-                print(f"   -> Executing strategic query {i}/2: {query}")
-                
-                try:
-                    response = await client.get(search_url)
-                    if response.status_code == 429:
-                        print(f"❌ [WEB_RESEARCH] Rate limit reached. Stopping search.")
-                        break
-                    
-                    response.raise_for_status()
-                    data = response.json()
-
-                    if 'items' in data:
-                        for item in data['items']:
-                            link = item.get('link')
-                            title = item.get('title', '')
-                            snippet = item.get('snippet', '')
-                            
-                            # Фильтруем результаты на релевантность
-                            if link and link not in unique_links and self._is_charity_relevant(title, snippet):
-                                unique_links.add(link)
-                                search_results_text += f"📄 Источник:\n"
-                                search_results_text += f"Заголовок: {title}\n"
-                                search_results_text += f"Описание: {snippet}\n"
-                                search_results_text += f"Ссылка: {link}\n\n"
-                    
-                except httpx.HTTPStatusError as e:
-                    print(f"⚠️ [WEB_RESEARCH] HTTP error for query {i}: {e}")
-                except Exception as e:
-                    print(f"⚠️ [WEB_RESEARCH] Error for query {i}: {e}")
-                    traceback.print_exc()
-
-        # Если ничего релевантного не найдено
-        if not search_results_text.strip():
-            return f"По компании '{company_name}' в открытых источниках не найдено достоверной информации о благотворительной деятельности или социальных проектах. Рекомендуется обратиться напрямую к компании для получения такой информации."
-
-        # УЛУЧШЕНИЕ 4: Генерация качественной сводки через Gemini
-        # Теперь Gemini напрямую выполняет поиск и обобщение, используя свои веб-возможности.
         research_prompt = CHARITY_SUMMARY_PROMPT_TEMPLATE.format(
             company_name=company_name,
-            # search_results_text is no longer needed directly from external search
+            # search_results_text is intentionally left empty as Gemini performs the web search directly
             search_results_text=""
         )
         
@@ -480,6 +410,8 @@ class GeminiService:
             traceback.print_exc()
             return f"Не удалось провести исследование благотворительной деятельности компании '{company_name}' из-за технической ошибки. Попробуйте позже."
 
+
+# The _is_charity_relevant function is no longer needed and has been removed.
 
 # Global service instance
 ai_service = GeminiService()

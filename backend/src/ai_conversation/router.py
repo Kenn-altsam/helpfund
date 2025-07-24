@@ -21,7 +21,7 @@ from ..chats.models import Chat  # Модель чата для проверки
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
-# ==============================================================================
+# ============================================================================== 
 # === ИНИЦИАЛИЗАЦИЯ API КЛЮЧЕЙ ДЛЯ GOOGLE SEARCH ===
 # ==============================================================================
 # Загружаем .env файл из корня проекта (на два уровня вверх от текущего файла)
@@ -41,7 +41,7 @@ load_dotenv(dotenv_path=env_path)
 #     raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID не установлен в переменных окружения. Проверьте ваш .env файл.")
 
 
-# ==============================================================================
+# ============================================================================== 
 # === НОВЫЙ, ПРАВИЛЬНЫЙ ЭНДПОИНТ ДЛЯ ПОИСКА КОМПАНИЙ ЧЕРЕЗ БД ===
 # ==============================================================================
 @router.post("/chat", response_model=ChatResponse)
@@ -87,7 +87,7 @@ async def handle_chat_with_database_search(
             db=db,
             conversation_id=str(db_chat_id)
         )
-
+        
         # 3. Формируем и возвращаем финальный ответ для фронтенда
         # Сообщения уже сохранены в сервисе, дублирования нет
         final_response = ChatResponse(
@@ -121,26 +121,26 @@ async def get_chat_history_for_ai(
     try:
         # Проверяем формат UUID
         chat_uuid = uuid.UUID(chat_id)
-
+        
         # Загружаем историю используя AI service
         history = ai_service._load_chat_history_from_db(db, chat_uuid)
-
+        
         # Проверяем, что чат принадлежит пользователю
         chat = db.query(Chat).filter(
             Chat.id == chat_uuid,
             Chat.user_id == current_user.id
         ).first()
-
+        
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found or access denied")
-
+        
         return {
             "chat_id": str(chat_uuid),
             "title": chat.title,
             "history": history,
             "total_messages": len(history)
         }
-
+        
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid chat_id format. Must be a UUID.")
     except Exception as e:
@@ -152,7 +152,7 @@ async def get_chat_history_for_ai(
 
 
 
-# ==============================================================================
+# ============================================================================== 
 # === НОВЫЙ ЭНДПОИНТ ДЛЯ АНАЛИЗА БЛАГОТВОРИТЕЛЬНОСТИ (ОБНОВЛЕННЫЙ КОД) ===
 # ==============================================================================
 @router.post("/charity-research", response_model=CompanyCharityResponse)
@@ -194,8 +194,8 @@ async def get_company_charity_info(
         else:
             # Если есть какая-то информация, считаем успешным
             return CompanyCharityResponse(
-                status="success",
-                company_name=company_name,
+            status="success",
+            company_name=company_name,
                 charity_info=[], # Пустой список, так как прямые ссылки не извлекаются
                 summary=summary_from_gemini
             )
