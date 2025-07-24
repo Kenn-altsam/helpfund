@@ -52,7 +52,7 @@ export const CharityResearchExample: React.FC = () => {
         </h1>
         <p className="text-gray-600 max-w-2xl mx-auto">
           Полная демонстрация функциональности поиска информации о благотворительной 
-          деятельности компаний с использованием Gemini API.
+          деятельности компаний с использованием Google Search API.
         </p>
       </div>
 

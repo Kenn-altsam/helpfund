@@ -7,12 +7,12 @@ import httpx
 import json
 import re
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dotenv import load_dotenv
 
-from .models import ChatRequest, ChatResponse, CompanyCharityRequest, CompanyCharityResponse # Removed GoogleSearchResult as it's no longer used
+from .models import ChatRequest, ChatResponse, CompanyCharityRequest, CompanyCharityResponse, GoogleSearchResult
 # !!! ИМПОРТИРУЕМ НАШ ГЛАВНЫЙ СЕРВИС !!!
-from .service import ai_service
+from .service import ai_service, GeminiService # Import GeminiService
 from ..core.database import get_db
 from ..auth.models import User
 from ..auth.dependencies import get_current_user
@@ -22,25 +22,20 @@ from ..chats.models import Chat  # Модель чата для проверки
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
 # ============================================================================== 
-# === ИНИЦИАЛИЗАЦИЯ API КЛЮЧЕЙ ДЛЯ GOOGLE SEARCH ===
+# === ИНИЦИАЛИЗАЦИЯ API КЛЮЧЕЙ ДЛЯ GEMINI ===
 # ==============================================================================
 # Загружаем .env файл из корня проекта (на два уровня вверх от текущего файла)
 import pathlib
 env_path = pathlib.Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# GOOGLE_API_KEY is no longer used here directly for search
-# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-# GEMINI_API_KEY is now the main API key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Removed GOOGLE_API_KEY check and GOOGLE_SEARCH_ENGINE_ID checks
-# if not GOOGLE_API_KEY:
-#     raise RuntimeError("GOOGLE_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
-# if not GOOGLE_SEARCH_ENGINE_ID:
-#     raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID не установлен в переменных окружения. Проверьте ваш .env файл.")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
+
+# Инициализируем GeminiService здесь, чтобы использовать его в роутере
+gemini_service_instance = GeminiService(api_key=GEMINI_API_KEY)
 
 
 # ============================================================================== 
@@ -168,21 +163,27 @@ async def get_company_charity_info(
     """
     company_name = request.company_name
 
-    print(f"\U0001F50D [CHARITY_RESEARCH] Starting Gemini-powered research for company: '{company_name}' by user {current_user.id}")
+    print(f"\U0001F50D [CHARITY_RESEARCH] Starting research for company: '{company_name}' by user {current_user.id}")
 
     if not company_name.strip():
         raise HTTPException(status_code=400, detail="Название компании не может быть пустым.")
 
-    # Вызываем ai_service для выполнения благотворительного исследования с помощью Gemini
-    gemini_summary = await ai_service._research_charity_online(company_name)
+    try:
+        # Используем GeminiService для исследования благотворительности
+        summary = await gemini_service_instance.research_charity_online(company_name, request.additional_context)
+        
+        # Так как Gemini возвращает сводку, а не список ссылок, адаптируем ответ.
+        # В данном случае, charity_info будет пустым или содержать обобщенную информацию
+        # в зависимости от того, как GeminiService будет возвращать структурированные данные.
+        # Для начала, просто возвращаем summary.
+        return CompanyCharityResponse(
+            status="success",
+            company_name=company_name,
+            charity_info=[], # Пока оставляем пустым, так как Gemini не возвращает список GoogleSearchResult
+            summary=summary
+        )
 
-    # Поскольку Gemini теперь генерирует всю сводку, мы просто возвращаем её.
-    # Информация о конкретных источниках будет встроена в сводку Gemini.
-    print(f"✅ [CHARITY_RESEARCH] Gemini research completed for '{company_name}'.")
-    
-    return CompanyCharityResponse(
-        status="success",
-        company_name=company_name,
-        charity_info=[], # charity_info will be empty as Gemini provides summary directly
-        summary=gemini_summary
-    ) 
+    except Exception as e:
+        print(f"❌ [CHARITY_RESEARCH] Critical error during charity research: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Произошла ошибка при исследовании благотворительности: {e}") 
