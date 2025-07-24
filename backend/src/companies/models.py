@@ -50,30 +50,3 @@ class Company(Base):
     
     def __repr__(self):
         return f"<Company(company_name='{self.company_name}', bin_number='{self.bin_number}')>"
-
-
-class CompanyWebData(Base):
-    """Model for caching company web search results"""
-    
-    __tablename__ = "company_web_data"
-    
-    # Primary key
-    id = Column(PostgresUUID, primary_key=True, server_default=func.gen_random_uuid())
-    
-    # Company identifier
-    company_bin = Column(String(12), nullable=False, index=True, unique=True)
-    
-    # Search results
-    website = Column(Text, nullable=True)
-    contacts = Column(Text, nullable=True)
-    
-    # Search metadata
-    search_query = Column(Text, nullable=True)
-    confidence_score = Column(Float, default=0.0)
-    
-    # Timestamps
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    
-    def __repr__(self):
-        return f"<CompanyWebData(company_bin='{self.company_bin}', website='{self.website}')>"

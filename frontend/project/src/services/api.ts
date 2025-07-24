@@ -103,48 +103,6 @@ export const companiesApi = {
     }
   },
 
-  searchEnriched: async (params: { 
-    location?: string; 
-    company_name?: string; 
-    activity_keywords?: string[];
-    limit?: number; 
-    page?: number;
-    enrich_web_data?: boolean;
-  }) => {
-    try {
-      const response = await api.get('/v1/companies/search-enriched', { params });
-      return {
-        companies: response.data.data.map(transformCompanyData),
-        pagination: response.data.metadata?.pagination,
-        enrichment: response.data.metadata?.enrichment
-      };
-    } catch (error) {
-      console.error('Failed to search companies with enrichment:', error);
-      throw error;
-    }
-  },
-
-  getCompanyWebData: async (companyBin: string, forceRefresh: boolean = false) => {
-    try {
-      const response = await api.get(`/v1/companies/${companyBin}/web-data`, {
-        params: { force_refresh: forceRefresh }
-      });
-      return response.data.data;
-    } catch (error) {
-      console.error('Failed to get company web data:', error);
-      throw error;
-    }
-  },
-
-  clearCompanyWebData: async (companyBin: string) => {
-    try {
-      await api.delete(`/v1/companies/${companyBin}/web-data`);
-    } catch (error) {
-      console.error('Failed to clear company web data:', error);
-      throw error;
-    }
-  },
-
   getByLocation: async (location: string, limit: number = 50, page: number = 1) => {
     try {
       const response = await api.get(`/v1/companies/by-location/${encodeURIComponent(location)}`, {
