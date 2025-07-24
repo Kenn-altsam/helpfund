@@ -553,10 +553,10 @@ class CompanyService:
                     CompanyWebData.company_bin == company_bin
                 ).first()
                 
-                # Check if data is fresh (less than 7 days old)
+                # Check if data is fresh (less than 2 days old)
                 if cached_data:
                     data_age = datetime.utcnow() - cached_data.created_at
-                    if data_age < timedelta(days=7):
+                    if data_age < timedelta(days=2):
                         logging.info(f"[WEB_DATA] Using cached data for BIN {company_bin}")
                         return {
                             "website": cached_data.website,
