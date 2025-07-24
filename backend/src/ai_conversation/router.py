@@ -159,54 +159,190 @@ async def get_company_charity_info(
     current_user: User = Depends(get_current_user)  # Защищаем эндпоинт аутентификацией
 ):
     """
-    ОПТИМИЗИРОВАННАЯ ВЕРСИЯ: Выполняет ОДИН мощный поиск в Google по благотворительной деятельности указанной компании
-    и возвращает AI-сгенерированную сводку. Экономит лимиты API!
+    Выполняет поиск в Google по благотворительной деятельности указанной компании
+    и возвращает найденные ссылки и сниппеты.
     """
     company_name = request.company_name
 
-    print(f"\U0001F50D [CHARITY_RESEARCH_OPTIMIZED] Starting OPTIMIZED research for company: '{company_name}' by user {current_user.id}")
+    print(f"\U0001F50D [CHARITY_RESEARCH] Starting research for company: '{company_name}' by user {current_user.id}")
 
     if not company_name.strip():
         raise HTTPException(status_code=400, detail="Название компании не может быть пустым.")
 
-    try:
-        # === ИСПОЛЬЗУЕМ НОВУЮ ОПТИМИЗИРОВАННУЮ ФУНКЦИЮ ===
-        # Вместо множества запросов делаем ОДИН мощный запрос через ai_service
-        summary = await ai_service._research_charity_online(company_name)
+    # Более специфичные поисковые запросы для точного поиска благотворительности
+    base_queries = [
+        f'"{company_name}" "благотворительный фонд"',
+        f'"{company_name}" "социальная ответственность" "программа"',
+        f'"{company_name}" "помощь" "финансирует" OR "поддерживает"',
+        f'"{company_name}" "КСО" "проект" OR "инициатива"',
+        f'"{company_name}" "спонсирует" "образование" OR "здравоохранение"',
+        f'"{company_name}" "charitable foundation" OR "charity program"',
+        f'"{company_name}" "CSR" "initiative" OR "program"',
+        f'"{company_name}" "donates" OR "sponsors" OR "supports"'
+    ]
+    
+    # Если предоставлен дополнительный контекст, добавляем специфичные запросы
+    search_queries = base_queries.copy()
+    if request.additional_context and request.additional_context.strip():
+        context = request.additional_context.strip()
+        print(f"🎯 [CHARITY_RESEARCH] Дополнительный контекст: '{context}'")
         
-        print(f"✅ [CHARITY_RESEARCH_OPTIMIZED] Successfully completed research for '{company_name}'")
+        # Добавляем запросы с дополнительным контекстом
+        context_queries = [
+            f'"{company_name}" "благотворительность" "{context}"',
+            f'"{company_name}" "спонсорство" "{context}"',
+            f'"{company_name}" "поддержка" "{context}"',
+            f'"{company_name}" "программа" "{context}"'
+        ]
+        search_queries.extend(context_queries)
+        print(f"📝 [CHARITY_RESEARCH] Добавлено {len(context_queries)} запросов с контекстом")
+
+    all_search_results: List[GoogleSearchResult] = []
+    
+    # Ключевые слова для определения релевантности благотворительности
+    charity_keywords = [
+        'благотворительность', 'благотворительный', 'фонд', 'помощь', 'поддержка',
+        'финансирует', 'спонсирует', 'программа', 'проект', 'инициатива',
+        'социальная ответственность', 'КСО', 'CSR', 'образование', 'здравоохранение',
+        'charity', 'charitable', 'foundation', 'donates', 'sponsors', 'supports',
+        'initiative', 'program', 'social responsibility'
+    ]
+    
+    # Исключающие ключевые слова (чтобы отфильтровать нерелевантные результаты)
+    exclude_keywords = [
+        'вакансия', 'работа', 'новости', 'реклама', 'продажа', 'услуги',
+        'vacancy', 'job', 'news', 'advertisement', 'sale', 'services',
+        'купить', 'цена', 'стоимость', 'прайс'
+    ]
+    
+    # Использование httpx.AsyncClient для асинхронных запросов
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for i, query in enumerate(search_queries):
+            print(f"🔍 [CHARITY_RESEARCH] Выполняю запрос {i+1}/{len(search_queries)}: '{query[:80]}...'")
+            
+            search_url = (
+                f"https://www.googleapis.com/customsearch/v1?"
+                f"key={GOOGLE_API_KEY}&"
+                f"cx={GOOGLE_SEARCH_ENGINE_ID}&"
+                f"q={query}&"
+                f"num=3&"  # Ограничиваем количество результатов на запрос
+                f"lr=lang_ru&"  # Предпочтение русскому языку
+                f"gl=kz"  # Географическое ограничение - Казахстан
+            )
+
+            try:
+                response = await client.get(search_url)
+                response.raise_for_status()
+                search_data = response.json()
+                
+                found_relevant = 0
+                total_found = len(search_data.get('items', []))
+
+                if 'items' in search_data:
+                    for item in search_data['items']:
+                        title = item.get('title', '').lower()
+                        snippet = item.get('snippet', '').lower()
+                        link = item.get('link', '')
+                        
+                        # Проверяем релевантность результата
+                        is_charity_relevant = any(keyword in title or keyword in snippet for keyword in charity_keywords)
+                        has_exclude_keywords = any(exclude in title or exclude in snippet for exclude in exclude_keywords)
+                        
+                        # Добавляем только релевантные результаты без исключающих слов
+                        if is_charity_relevant and not has_exclude_keywords:
+                            all_search_results.append(GoogleSearchResult(
+                                title=item.get('title', 'Нет заголовка'),
+                                link=link,
+                                snippet=item.get('snippet', 'Нет описания')
+                            ))
+                            found_relevant += 1
+                            print(f"✅ [CHARITY_RESEARCH] Релевантный результат: {item.get('title', '')[:50]}...")
+                        else:
+                            print(f"🚫 [CHARITY_RESEARCH] Отфильтрован: {item.get('title', '')[:50]}...")
+                
+                print(f"📊 [CHARITY_RESEARCH] Запрос {i+1}: найдено {total_found}, релевантных {found_relevant}")
+                
+                # Небольшая задержка между запросами, чтобы не перегружать API
+                if i < len(search_queries) - 1:  # Не ждем после последнего запроса
+                    await asyncio.sleep(0.5)
+                
+            except httpx.RequestError as e:
+                print(f"❌ [CHARITY_RESEARCH] Ошибка HTTP для запроса '{query[:50]}...': {e}")
+            except Exception as e:
+                print(f"❌ [CHARITY_RESEARCH] Неизвестная ошибка для запроса '{query[:50]}...': {e}")
+                traceback.print_exc()
+
+    # Генерируем улучшенную сводку на основе найденных результатов
+    if not all_search_results:
+        final_summary_for_response = (
+            f"По результатам целенаправленного поиска не найдено публичной информации о "
+            f"благотворительной деятельности компании '{company_name}'. "
+            f"Это может означать:\n"
+            f"• Компания не ведет активную благотворительную деятельность\n"
+            f"• Информация о социальных проектах не публикуется в открытых источниках\n"
+            f"• Благотворительная деятельность ведется под другими названиями или через дочерние структуры\n\n"
+            f"Рекомендация: обратитесь напрямую к представителям компании для уточнения возможностей спонсорской поддержки."
+        )
+    else:
+        # Анализируем найденные результаты для создания сводки
+        charity_areas = set()
+        for result in all_search_results:
+            text = (result.title + " " + result.snippet).lower()
+            
+            if any(word in text for word in ['образование', 'education', 'школа', 'университет', 'обучение']):
+                charity_areas.add('образование')
+            if any(word in text for word in ['здравоохранение', 'health', 'медицина', 'больница', 'лечение']):
+                charity_areas.add('здравоохранение')
+            if any(word in text for word in ['спорт', 'sport', 'команда', 'соревнование', 'турнир']):
+                charity_areas.add('спорт')
+            if any(word in text for word in ['культура', 'culture', 'искусство', 'театр', 'музей']):
+                charity_areas.add('культура')
+            if any(word in text for word in ['экология', 'environment', 'природа', 'окружающая среда']):
+                charity_areas.add('экология')
+            if any(word in text for word in ['дети', 'children', 'детский', 'молодежь']):
+                charity_areas.add('поддержка детей и молодежи')
         
-        # Определяем статус на основе содержания ответа
-        if ("не найдено" in summary.lower() or 
-            "лимит" in summary.lower() or 
-            "ошибка" in summary.lower() or
-            "не удалось" in summary.lower()):
-            status = "error" if "ошибка" in summary.lower() or "не удалось" in summary.lower() else "success"
-            charity_info = []
-        else:
-            status = "success"
-            charity_info = []  # В оптимизированной версии мы возвращаем только сводку
+        areas_text = ", ".join(charity_areas) if charity_areas else "различные социальные сферы"
         
-        return CompanyCharityResponse(
-            status=status,
-            company_name=company_name,
-            charity_info=charity_info,  # Пустой список - вся информация в сводке
-            summary=summary
+        final_summary_for_response = (
+            f"Найдена информация о благотворительной и социальной деятельности компании '{company_name}'. "
+            f"Обнаружено {len(all_search_results)} релевантных источников, указывающих на активность в области: {areas_text}.\n\n"
+            f"Компания проявляет заинтересованность в корпоративной социальной ответственности. "
+            f"Для получения актуальной информации о возможностях спонсорской поддержки рекомендуется "
+            f"изучить официальные источники компании и обратиться в отдел по связям с общественностью."
         )
 
-    except Exception as e:
-        print(f"❌ [CHARITY_RESEARCH_OPTIMIZED] Critical error during research for '{company_name}': {e}")
-        traceback.print_exc()
-        
-        # Возвращаем ошибку пользователю
-        error_summary = (
-            f"Произошла техническая ошибка при поиске информации о благотворительной деятельности "
-            f"компании '{company_name}'. Пожалуйста, попробуйте позже или обратитесь к администратору."
-        )
-        
+    # Финальное логирование результатов
+    total_queries = len(search_queries)
+    total_results = len(all_search_results)
+    
+    if not all_search_results:
+        print(f"🔍 [CHARITY_RESEARCH] Завершено исследование компании '{company_name}': 0 релевантных результатов из {total_queries} запросов")
         return CompanyCharityResponse(
-            status="error",
+            status="success",
             company_name=company_name,
             charity_info=[],
-            summary=error_summary
-        ) 
+            summary=final_summary_for_response
+        )
+
+    print(f"✅ [CHARITY_RESEARCH] Исследование завершено для '{company_name}': найдено {total_results} релевантных результатов из {total_queries} запросов")
+    
+    # Логируем найденные области благотворительности
+    areas = set()
+    for result in all_search_results:
+        text = (result.title + " " + result.snippet).lower()
+        if any(word in text for word in ['образование', 'education']): areas.add('образование')
+        if any(word in text for word in ['здравоохранение', 'health']): areas.add('здравоохранение')
+        if any(word in text for word in ['спорт', 'sport']): areas.add('спорт')
+        if any(word in text for word in ['культура', 'culture']): areas.add('культура')
+        if any(word in text for word in ['экология', 'environment']): areas.add('экология')
+    
+    if areas:
+        print(f"📋 [CHARITY_RESEARCH] Выявленные области деятельности: {', '.join(areas)}")
+
+    return CompanyCharityResponse(
+        status="success",
+        company_name=company_name,
+        charity_info=all_search_results,
+        summary=final_summary_for_response
+    ) 
