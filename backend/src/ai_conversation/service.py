@@ -150,33 +150,10 @@ CHARITY_SUMMARY_PROMPT_TEMPLATE = """
 "В открытых источниках найдены только общие упоминания о социальной ответственности компании без конкретных примеров благотворительных проектов или пожертвований."
 """
 
-# Новый промпт для генерации сводки по благотворительности с использованием Gemini
-CHARITY_SUMMARY_PROMPT_TEMPLATE = """
-Проанализируй предоставленные результаты веб-поиска о компании "{company_name}" и подготовь краткую, информативную сводку о её благотворительной деятельности или социальных проектах. 
-
-Если прямых доказательств благотворительности не найдено, укажи это. Если найдены косвенные упоминания (например, общая социальная ответственность без конкретных проектов), отметь это.
-
-ФОКУСИРУЙСЯ ТОЛЬКО НА ИНФОРМАЦИИ, СВЯЗАННОЙ С БЛАГОТВОРИТЕЛЬНОСТЬЮ И КСО. НЕ ВКЛЮЧАЙ ИНФОРМАЦИЮ О ПРОДАЖАХ, ПРОДУКТАХ, ВАКАНСИЯХ ИЛИ НЕРЕЛЕВАНТНЫЕ НОВОСТИ.
-
-Результаты веб-поиска:
-{search_results_text}
-
-Начни свой ответ со статуса: "НАЙДЕНЫ ПРЯМЫЕ ДОКАЗАТЕЛЬСТВА" или "КОСВЕННЫЕ УПОМИНАНИЯ" или "НЕ НАЙДЕНО ДОКАЗАТЕЛЬСТВ".
-Далее предоставь краткую сводку. НЕ используй Markdown, только обычный текст.
-"""
-
-
-# Новый промпт для Gemini, чтобы он сам "искал" информацию
-GEMINI_CHARITY_RESEARCH_PROMPT_TEMPLATE = """
-Найди мне информацию о благотворительности компании {company_name}.
-{additional_context_prompt}
-Если есть хоть какие-то сведения — перечисли их. Если нет — напиши, что не найдено.
-"""
-
 class GeminiService:
-    def __init__(self, api_key: str):
+    def __init__(self):
         self.settings = get_settings()
-        self.gemini_api_key = api_key # ИСПОЛЬЗУЕМ API КЛЮЧ, ПЕРЕДАННЫЙ В КОНСТРУКТОР
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={self.gemini_api_key}"
@@ -388,74 +365,140 @@ class GeminiService:
             'metadata': {"companies": companies_data}
         }
 
-    async def research_charity_online(self, company_name: str, additional_context: Optional[str] = None) -> str:
+    async def _research_charity_online(self, company_name: str) -> str:
         """
-        Выполняет исследование прошлой благотворительной деятельности компании через Gemini.
-        Gemini будет генерировать сводку на основе своих внутренних знаний, без внешнего веб-поиска.
+        Выполняет оптимизированный и умный Google поиск прошлой благотворительной деятельности компании.
+        Делает максимум 2 целенаправленных запроса для максимальной релевантности.
         """
-        print(f"🌐 [GEMINI_RESEARCH] Starting charity research via Gemini for: {company_name}")
+        print(f"🌐 [WEB_RESEARCH] Starting SMART charity research for: {company_name}")
 
-        additional_context_prompt = ""
-        if additional_context and additional_context.strip():
-            additional_context_prompt = f"Учитывай дополнительный контекст: {additional_context.strip()}.\n"
+        # УЛУЧШЕНИЕ 1: Умная очистка названия компании
+        # Убираем организационно-правовые формы и символы для более точного поиска
+        clean_company_name = re.sub(
+            r'^(ТОО|АО|ИП|A\.O\.|TOO|LLP|JSC|ОДО|ООО|ЗАО|ПАО)\s*|"|«|»|["\']', 
+            '', 
+            company_name, 
+            flags=re.IGNORECASE
+        ).strip()
+        print(f"   -> Optimized search name: '{clean_company_name}'")
 
-        prompt = GEMINI_CHARITY_RESEARCH_PROMPT_TEMPLATE.format(
-            company_name=company_name,
-            additional_context_prompt=additional_context_prompt
+        # УЛУЧШЕНИЕ 2: Максимально релевантные ключевые слова для Казахстана
+        core_charity_terms = [
+            "благотворительность", "пожертвования", "спонсорство", 
+            "социальная ответственность", "помощь", "поддержка"
+        ]
+        
+        specific_charity_actions = [
+            "детский дом", "фонд", "образование", "здравоохранение",
+            "помощь малообеспеченным", "социальный проект"
+        ]
+
+        # УЛУЧШЕНИЕ 3: Два стратегических запроса вместо множества
+        # Запрос 1: Основные благотворительные термины
+        query_1 = f'"{clean_company_name}" Казахстан ({" OR ".join(core_charity_terms[:3])})'
+        
+        # Запрос 2: Конкретные благотворительные действия
+        query_2 = f'"{clean_company_name}" ({" OR ".join(specific_charity_actions[:3])})'
+
+        queries_to_execute = [query_1, query_2]
+        
+        search_results_text = ""
+        unique_links = set()
+        max_results_per_query = 3  # Ограничиваем для концентрации на качестве
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for i, query in enumerate(queries_to_execute, 1):
+                search_url = f"https://www.googleapis.com/customsearch/v1?key={os.getenv('GOOGLE_API_KEY')}&cx={os.getenv('GOOGLE_SEARCH_ENGINE_ID')}&q={query}&num={max_results_per_query}&lr=lang_ru"
+                print(f"   -> Executing strategic query {i}/2: {query}")
+                
+                try:
+                    response = await client.get(search_url)
+                    if response.status_code == 429:
+                        print(f"❌ [WEB_RESEARCH] Rate limit reached. Stopping search.")
+                        break
+                    
+                    response.raise_for_status()
+                    data = response.json()
+
+                    if 'items' in data:
+                        for item in data['items']:
+                            link = item.get('link')
+                            title = item.get('title', '')
+                            snippet = item.get('snippet', '')
+                            
+                            # Фильтруем результаты на релевантность
+                            if link and link not in unique_links and self._is_charity_relevant(title, snippet):
+                                unique_links.add(link)
+                                search_results_text += f"📄 Источник:\n"
+                                search_results_text += f"Заголовок: {title}\n"
+                                search_results_text += f"Описание: {snippet}\n"
+                                search_results_text += f"Ссылка: {link}\n\n"
+                    
+                except httpx.HTTPStatusError as e:
+                    print(f"⚠️ [WEB_RESEARCH] HTTP error for query {i}: {e}")
+                except Exception as e:
+                    print(f"⚠️ [WEB_RESEARCH] Error for query {i}: {e}")
+                    traceback.print_exc()
+
+        # Если ничего релевантного не найдено
+        if not search_results_text.strip():
+            return f"По компании '{company_name}' в открытых источниках не найдено достоверной информации о благотворительной деятельности или социальных проектах. Рекомендуется обратиться напрямую к компании для получения такой информации."
+
+        # УЛУЧШЕНИЕ 4: Генерация качественной сводки через Gemini
+        summary_prompt = CHARITY_SUMMARY_PROMPT_TEMPLATE.format(
+            company_name=company_name, 
+            search_results_text=search_results_text
         )
-
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.3,
-                "topK": 40,
-                "topP": 0.95,
-                "maxOutputTokens": 2048,
-            },
-            "safetySettings": [
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH", 
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                }
-            ]
-        }
-
-        print(f"📤 [GEMINI_RESEARCH] Sending request to Gemini with prompt: {prompt[:200]}...")
-
+        
+        payload = {"contents": [{"parts": [{"text": summary_prompt}]}]}
+        
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client: # Увеличиваем таймаут на случай долгих ответов Gemini
+            async with httpx.AsyncClient(timeout=45.0) as client:
                 response = await client.post(self.gemini_url, json=payload)
                 response.raise_for_status()
                 g_data = response.json()
+                summary = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                print(f"✅ [AI_SUMMARY] Smart charity analysis completed successfully.")
+                return summary.strip()
                 
-                # Проверяем наличие 'candidates' и 'content' перед доступом
-                if 'candidates' in g_data and len(g_data['candidates']) > 0 and 'content' in g_data['candidates'][0] and 'parts' in g_data['candidates'][0]['content'] and len(g_data['candidates'][0]['content']['parts']) > 0:
-                    summary = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                    print(f"✅ [GEMINI_RESEARCH] Gemini charity analysis completed successfully.")
-                    return summary.strip()
-                else:
-                    print(f"❌ [GEMINI_RESEARCH] Gemini returned no candidates or content: {g_data}")
-                    return f"Не удалось получить информацию о благотворительности компании '{company_name}' от Gemini. Возможно, нет данных или проблема с ответом модели."
-
-        except httpx.HTTPStatusError as e:
-            print(f"❌ [GEMINI_RESEARCH] HTTP error {e.response.status_code}: {e.response.text}")
-            return f"Ошибка API Gemini (код {e.response.status_code}): {e.response.text}"
         except Exception as e:
-            print(f"❌ [GEMINI_RESEARCH] Failed to perform Gemini charity research: {e}")
+            print(f"❌ [AI_SUMMARY] Failed to generate charity summary: {e}")
             traceback.print_exc()
-            return f"Произошла техническая ошибка при обращении к Gemini для исследования благотворительности компании '{company_name}'. Попробуйте позже."
+            return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за технической ошибки. Попробуйте позже."
+
+    def _is_charity_relevant(self, title: str, snippet: str) -> bool:
+        """
+        Проверяет релевантность результата поиска для благотворительной деятельности.
+        Фильтрует спам и нерелевантные результаты.
+        """
+        combined_text = f"{title} {snippet}".lower()
+        
+        # Позитивные индикаторы благотворительности
+        positive_indicators = [
+            "благотворительность", "пожертвование", "спонсорство", "помощь", 
+            "поддержка", "фонд", "социальная ответственность", "CSR",
+            "детский дом", "больница", "образование", "стипендия",
+            "волонтер", "донор", "меценат", "гранты"
+        ]
+        
+        # Негативные индикаторы (спам, реклама, не благотворительность)
+        negative_indicators = [
+            "купить", "скидка", "цена", "товар", "услуга", "продажа",
+            "реклама", "заказать", "доставка", "магазин", "каталог",
+            "вакансия", "работа", "резюме", "сотрудник"
+        ]
+        
+        # Подсчитываем релевантность
+        positive_score = sum(1 for indicator in positive_indicators if indicator in combined_text)
+        negative_score = sum(1 for indicator in negative_indicators if indicator in combined_text)
+        
+        # Результат релевантен, если есть позитивные индикаторы и мало негативных
+        is_relevant = positive_score > 0 and negative_score <= positive_score
+        
+        if not is_relevant:
+            print(f"   -> Filtered out non-relevant result: {title[:50]}...")
+        
+        return is_relevant
 
 # Global service instance
-ai_service = GeminiService(os.getenv("GEMINI_API_KEY"))
+ai_service = GeminiService()
