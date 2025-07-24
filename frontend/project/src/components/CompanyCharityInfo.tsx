@@ -99,23 +99,32 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
         <div className="mt-2 space-y-3">
           {/* Сводка */}
           <div className={`p-3 rounded-md border text-xs transition-all duration-300 ease-in-out ${
-            charityData.status === 'success' ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+            charityData.status === 'success' ? 'border-green-200 bg-green-50' : 
+            charityData.status === 'error' ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50'
           }`}>
             <div className="flex items-start gap-2">
               {charityData.status === 'success' ? (
                 <Heart className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : charityData.status === 'error' ? (
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
               ) : (
                 <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
               )}
               <div className={`flex-1 whitespace-pre-wrap ${
-                charityData.status === 'success' ? 'text-green-700' : 'text-yellow-700'
+                charityData.status === 'success' ? 'text-green-700' : 
+                charityData.status === 'error' ? 'text-red-700' : 'text-yellow-700'
               }`}>
                 {charityData.summary}
               </div>
             </div>
           </div>
 
-          {/* Найденные ссылки */}
+          {/* Оптимизация: показываем информацию о методе поиска */}
+          <div className="text-xs text-gray-500 italic">
+            ⚡ Оптимизированный поиск - AI-анализ благотворительной деятельности
+          </div>
+
+          {/* Найденные ссылки (если есть) - для обратной совместимости */}
           {charityData.charity_info && charityData.charity_info.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-gray-700">
