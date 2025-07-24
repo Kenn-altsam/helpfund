@@ -73,7 +73,7 @@ class CompanyService:
         
         # Optimized query construction - only select needed columns for better performance
         query_parts = [
-            "SELECT id, \"Company\", \"BIN\", \"Activity\", \"Locality\", \"OKED\", \"Size\", \"KATO\", \"KRP\", tax_data_2023, tax_data_2024, tax_data_2025, website, phone, email",
+            "SELECT id, \"Company\", \"BIN\", \"Activity\", \"Locality\", \"OKED\", \"Size\", \"KATO\", \"KRP\", tax_data_2023, tax_data_2024, tax_data_2025, website, contacts",
             "FROM companies WHERE 1=1"
         ]
         params = {}
@@ -163,10 +163,7 @@ class CompanyService:
                     "tax_data_2023": row.tax_data_2023,
                     "tax_data_2024": row.tax_data_2024,
                     "tax_data_2025": row.tax_data_2025,
-                    "contacts": {
-                        "phone": row.phone,
-                        "email": row.email,
-                    },
+                    "contacts": row.contacts,
                     "website": row.website,
                 }
                 converted_results.append(company_dict)
@@ -210,7 +207,7 @@ class CompanyService:
             query = select(Company.id, Company.company_name, Company.bin_number, Company.activity, 
                           Company.locality, Company.oked_code, Company.company_size, Company.kato_code, 
                           Company.krp_code, Company.tax_data_2023, Company.tax_data_2024, Company.tax_data_2025, 
-                          Company.website, Company.phone, Company.email)
+                          Company.website, Company.contacts)
             filters = []
 
             if location:
@@ -265,10 +262,7 @@ class CompanyService:
                     "tax_data_2023": row.tax_data_2023,
                     "tax_data_2024": row.tax_data_2024,
                     "tax_data_2025": row.tax_data_2025,
-                    "contacts": {
-                        "phone": row.phone,
-                        "email": row.email,
-                    },
+                    "contacts": row.contacts,
                     "website": row.website,
                 }
                 converted_results.append(company_dict)
@@ -302,7 +296,7 @@ class CompanyService:
         translated_location = CityTranslationService.translate_city_name(location)
         
         query = """
-            SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025, website, phone, email
+            SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025, website, contacts
             FROM companies 
             WHERE "Locality" ILIKE :location
             ORDER BY "Locality" ASC, COALESCE(tax_data_2025, 0) DESC, "Company" ASC
@@ -338,10 +332,7 @@ class CompanyService:
                     "tax_data_2023": row.tax_data_2023,
                     "tax_data_2024": row.tax_data_2024,
                     "tax_data_2025": row.tax_data_2025,
-                    "contacts": {
-                        "phone": row.phone,
-                        "email": row.email,
-                    },
+                    "contacts": row.contacts,
                     "website": row.website,
                 }
                 result_dicts.append(company_dict)
@@ -514,10 +505,7 @@ class CompanyService:
             "tax_data_2023": getattr(company, "tax_data_2023", None),
             "tax_data_2024": getattr(company, "tax_data_2024", None),
             "tax_data_2025": getattr(company, "tax_data_2025", None),
-            "contacts": {
-                "phone": getattr(company, "phone", None),
-                "email": getattr(company, "email", None),
-            },
+            "contacts": getattr(company, "contacts", None),
             "website": getattr(company, "website", None),
         }
 

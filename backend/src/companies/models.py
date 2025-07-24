@@ -44,14 +44,9 @@ class Company(Base):
     tax_data_2024 = Column("tax_data_2024", BigInteger, nullable=True)
     tax_data_2025 = Column("tax_data_2025", BigInteger, nullable=True)
     
-    # New fields for website and contacts
+    # Fields for website and contacts, matching actual database schema
     website = Column("website", String(255), nullable=True)
-    phone = Column("phone", String(50), nullable=True)
-    email = Column("email", String(255), nullable=True)
-    
-    # Legacy fields for backward compatibility (these columns don't exist in actual DB)
-    # contacts = Column("contacts", Text, nullable=True)
-    # website = Column("website", Text, nullable=True)
+    contacts = Column("contacts", Text, nullable=True)
     
     def __repr__(self):
         return f"<Company(company_name='{self.company_name}', bin_number='{self.bin_number}')>"
