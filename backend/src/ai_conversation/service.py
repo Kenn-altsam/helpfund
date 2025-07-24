@@ -24,6 +24,18 @@ from ..chats.models import Chat, Message
 
 load_dotenv()
 
+# Removed Google Search API related environment variables
+# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# if not GOOGLE_API_KEY:
+#     raise RuntimeError("GOOGLE_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
+# if not GOOGLE_SEARCH_ENGINE_ID:
+#     raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID не установлен в переменных окружения. Проверьте ваш .env файл.")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
+
 # <<< НОВЫЙ ПРОМПТ ДЛЯ GEMINI >>>
 GEMINI_INTENT_PROMPT = """
 Твоя задача — проанализировать историю диалога и последнее сообщение пользователя, чтобы извлечь параметры для поиска компаний в базе данных. Ты должен ответить ТОЛЬКО одним валидным JSON-объектом без каких-либо других слов или форматирования.
@@ -445,12 +457,14 @@ class GeminiService:
             return f"По компании '{company_name}' в открытых источниках не найдено достоверной информации о благотворительной деятельности или социальных проектах. Рекомендуется обратиться напрямую к компании для получения такой информации."
 
         # УЛУЧШЕНИЕ 4: Генерация качественной сводки через Gemini
-        summary_prompt = CHARITY_SUMMARY_PROMPT_TEMPLATE.format(
-            company_name=company_name, 
-            search_results_text=search_results_text
+        # Теперь Gemini напрямую выполняет поиск и обобщение, используя свои веб-возможности.
+        research_prompt = CHARITY_SUMMARY_PROMPT_TEMPLATE.format(
+            company_name=company_name,
+            # search_results_text is no longer needed directly from external search
+            search_results_text=""
         )
         
-        payload = {"contents": [{"parts": [{"text": summary_prompt}]}]}
+        payload = {"contents": [{"parts": [{"text": research_prompt}]}]}
         
         try:
             async with httpx.AsyncClient(timeout=45.0) as client:
@@ -458,47 +472,14 @@ class GeminiService:
                 response.raise_for_status()
                 g_data = response.json()
                 summary = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                print(f"✅ [AI_SUMMARY] Smart charity analysis completed successfully.")
+                print(f"✅ [AI_RESEARCH] Gemini-powered charity research completed successfully.")
                 return summary.strip()
                 
         except Exception as e:
-            print(f"❌ [AI_SUMMARY] Failed to generate charity summary: {e}")
+            print(f"❌ [AI_RESEARCH] Failed to perform Gemini charity research: {e}")
             traceback.print_exc()
-            return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за технической ошибки. Попробуйте позже."
+            return f"Не удалось провести исследование благотворительной деятельности компании '{company_name}' из-за технической ошибки. Попробуйте позже."
 
-    def _is_charity_relevant(self, title: str, snippet: str) -> bool:
-        """
-        Проверяет релевантность результата поиска для благотворительной деятельности.
-        Фильтрует спам и нерелевантные результаты.
-        """
-        combined_text = f"{title} {snippet}".lower()
-        
-        # Позитивные индикаторы благотворительности
-        positive_indicators = [
-            "благотворительность", "пожертвование", "спонсорство", "помощь", 
-            "поддержка", "фонд", "социальная ответственность", "CSR",
-            "детский дом", "больница", "образование", "стипендия",
-            "волонтер", "донор", "меценат", "гранты"
-        ]
-        
-        # Негативные индикаторы (спам, реклама, не благотворительность)
-        negative_indicators = [
-            "купить", "скидка", "цена", "товар", "услуга", "продажа",
-            "реклама", "заказать", "доставка", "магазин", "каталог",
-            "вакансия", "работа", "резюме", "сотрудник"
-        ]
-        
-        # Подсчитываем релевантность
-        positive_score = sum(1 for indicator in positive_indicators if indicator in combined_text)
-        negative_score = sum(1 for indicator in negative_indicators if indicator in combined_text)
-        
-        # Результат релевантен, если есть позитивные индикаторы и мало негативных
-        is_relevant = positive_score > 0 and negative_score <= positive_score
-        
-        if not is_relevant:
-            print(f"   -> Filtered out non-relevant result: {title[:50]}...")
-        
-        return is_relevant
 
 # Global service instance
 ai_service = GeminiService()
