@@ -200,7 +200,9 @@ async def get_company_charity_info(
         'финансирует', 'спонсирует', 'программа', 'проект', 'инициатива',
         'социальная ответственность', 'КСО', 'CSR', 'образование', 'здравоохранение',
         'charity', 'charitable', 'foundation', 'donates', 'sponsors', 'supports',
-        'initiative', 'program', 'social responsibility'
+        'initiative', 'program', 'social responsibility',
+        # Новые ключевые слова для платформ и доноров
+        'перечислил в фонд', 'предоставил платформу', 'собрал средства для', 'донор фонда', 'организовал сбор средств', 'платформа для пожертвований'
     ]
     
     # Исключающие ключевые слова (чтобы отфильтровать нерелевантные результаты)
@@ -309,7 +311,9 @@ async def get_company_charity_info(
         # Ключевые слова для определения ПРЯМЫХ действий благотворительности
         direct_action_keywords = [
             'выделил', 'профинансировал', 'пожертвовал', 'передал', 'спонсировал',
-            'donated', 'funded', 'sponsored', 'allocated', 'contributed'
+            'donated', 'funded', 'sponsored', 'allocated', 'contributed',
+            # Новые ключевые слова для платформ и доноров
+            'перечислил в фонд', 'предоставил платформу', 'собрал средства для', 'донор фонда', 'организовал сбор средств', 'платформа для пожертвований'
         ]
         
         for result in all_search_results:
@@ -317,7 +321,9 @@ async def get_company_charity_info(
             
             # Проверяем наличие прямых действий
             has_direct_action = any(action in text for action in direct_action_keywords)
-            if has_direct_action:
+            is_platform = any(kw in text for kw in ['предоставил платформу', 'платформа для пожертвований'])
+            is_major_donor = any(kw in text for kw in ['перечислил в фонд', 'донор фонда', 'собрал средства для', 'организовал сбор средств'])
+            if has_direct_action or is_platform or is_major_donor:
                 direct_evidence_count += 1
                 
                 # Ищем суммы или конкретные проекты
@@ -325,6 +331,10 @@ async def get_company_charity_info(
                     specific_activities.append('финансовые пожертвования')
                 if any(word in text for word in ['фонд', 'foundation']):
                     specific_activities.append('благотворительные фонды')
+                if is_platform:
+                    specific_activities.append('платформа для сбора пожертвований')
+                if is_major_donor:
+                    specific_activities.append('крупный донор/организатор сбора средств')
             
             # Анализ областей деятельности (только при наличии прямых действий)
             if has_direct_action:
