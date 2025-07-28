@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Loader2, AlertCircle, ExternalLink, Award, Coins, Users } from 'lucide-react';
+import { Heart, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { CompanyCharityResponse, GoogleSearchResult } from '@/types';
@@ -110,21 +110,7 @@ export const CompanyCharityInfo = ({ companyName }: CompanyCharityInfoProps) => 
               <div className={`flex-1 whitespace-pre-wrap ${
                 charityData.status === 'success' ? 'text-green-700' : 'text-yellow-700'
               }`}>
-                {/* Визуальное выделение ключевых форм участия */}
-                {(() => {
-                  const summary = charityData.summary;
-                  const badges = [];
-                  if (/платформа для сбора пожертвований/i.test(summary)) {
-                    badges.push(<span key="platform" className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[10px] mr-2"><Award className="h-3 w-3" />Платформа</span>);
-                  }
-                  if (/крупный донор|организатор сбора средств/i.test(summary)) {
-                    badges.push(<span key="donor" className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-[10px] mr-2"><Coins className="h-3 w-3" />Крупный донор</span>);
-                  }
-                  if (/поддержка детей|образование|здравоохранение|спорт|экология|культура/i.test(summary)) {
-                    badges.push(<span key="social" className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded text-[10px] mr-2"><Users className="h-3 w-3" />Социальные проекты</span>);
-                  }
-                  return <>{badges}{summary}</>;
-                })()}
+                {charityData.summary}
               </div>
             </div>
           </div>
