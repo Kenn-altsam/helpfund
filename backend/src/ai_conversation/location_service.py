@@ -20,6 +20,7 @@ You are an expert in Kazakh geography. Your task is to extract ONE canonical cit
 Example 1: "Find me IT companies in Almaty" -> "Алматы"
 Example 2: "I'm looking for a sponsor" -> "null"
 Example 3: "Горнодобывающие компании Шымкента" -> "Шымкент"
+Example 4: "Улытауской -> Улытауская"
 """
 
 def get_client() -> OpenAI:
