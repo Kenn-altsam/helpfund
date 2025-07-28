@@ -1,7 +1,7 @@
 # Cursor Rules for Ayala Foundation Backend Project
 
 ## Project Overview
-This iOS app assists charity funds in discovering companies and their relevant data (e.g., contact info, industry, past donations, sponsorship opportunities) based on geographical location and AI-powered natural language input. The app uses artificial intelligence to interpret user prompts and intelligently match charity funds with potential corporate sponsors, streamlining the sponsorship discovery process.
+This website assists charity funds in discovering companies and their relevant data (e.g., contact info, industry, past donations, sponsorship opportunities) based on geographical location and AI-powered natural language input. The app uses artificial intelligence to interpret user prompts and intelligently match charity funds with potential corporate sponsors, streamlining the sponsorship discovery process.
 
 ## Project Structure
 - Follow modular architecture with clear separation of concerns
