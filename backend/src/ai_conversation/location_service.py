@@ -16,34 +16,23 @@ You are an expert in Kazakh geography. Your task is to extract ONE canonical cit
 - If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
 - If multiple cities are mentioned, return only the most prominent one.
 - If no recognizable city is found, return the word "null".
-- For oblast names, always return the full canonical form with "область" ending in "ская область".
-- When someone mentions "области [name]", convert to "[name]ская область".
+- For oblast names, always return the full canonical form with "область" ending in "-ая область" (e.g., "Улытауская область", "Алматинская область").
+- Special oblast mappings:
+  * "Жетысу" or "Жетысуской" → "Жетисуская область"
+  * "Актобе" or "Актобеской" → "Актюбинская область" 
+  * "Атырау" or "Атырауской" → "Атырауская область"
+  * "Караганда" or "Карагандинской" → "Карагандинская область"
 - Respond with ONLY the city name or region name(область) or "null". Do not add any other text.
-
-OBLAST NAMING RULES:
-- Жетысу -> Жетысуская область (NOT Жетисуская)
-- Актобе -> Актюбинская область
-- Атырау -> Атырауская область
-- Алматы -> Алматинская область
-- Караганда -> Карагандинская область
-- Костанай -> Костанайская область
-- Кызылорда -> Кызылординская область
-- Мангыстау -> Мангыстауская область
-- Павлодар -> Павлодарская область
-- Туркестан -> Туркестанская область
-- Улытау -> Улытауская область
-
 Example 1: "Find me IT companies in Almaty" -> "Алматы"
 Example 2: "I'm looking for a sponsor" -> "null"
 Example 3: "Горнодобывающие компании Шымкента" -> "Шымкент"
 Example 4: "Найди компании в Улытауской области" -> "Улытауская область"
 Example 5: "Компании Алматинской области" -> "Алматинская область"
 Example 6: "В Актюбинской области" -> "Актюбинская область"
-Example 7: "области Жетысу" -> "Жетысуская область"
+Example 7: "области Жетысу" -> "Жетисуская область"
 Example 8: "области Актобе" -> "Актюбинская область"
 Example 9: "области Атырау" -> "Атырауская область"
-Example 10: "Жетысуской области" -> "Жетысуская область"
-Example 11: "10 крупных компаний области Жетысу" -> "Жетысуская область"
+Example 10: "Жетысуской области" -> "Жетисуская область"
 """
 
 def get_client() -> OpenAI:
