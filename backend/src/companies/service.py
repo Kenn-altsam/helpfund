@@ -82,10 +82,14 @@ class CompanyService:
         # 1. Add location filter if provided (using indexed column)
         if location:
             translated_location = CityTranslationService.translate_city_name(location)
-            param_count += 1
-            query_parts.append(f"AND \"Locality\" ILIKE :loc_{param_count}")
-            params[f"loc_{param_count}"] = f"%{translated_location}%"
-            logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
+            # Skip location filter if translation returned "null"
+            if translated_location != "null":
+                param_count += 1
+                query_parts.append(f"AND \"Locality\" ILIKE :loc_{param_count}")
+                params[f"loc_{param_count}"] = f"%{translated_location}%"
+                logging.info(f"[DB_SERVICE][SEARCH] Added location filter: Locality ILIKE '%{translated_location}%'")
+            else:
+                logging.warning(f"[DB_SERVICE][SEARCH] Location '{location}' translated to 'null', skipping location filter")
 
         # 2. Add company name filter if provided (optimized for single word vs multi-word)
         if company_name:
@@ -212,8 +216,12 @@ class CompanyService:
 
             if location:
                 translated_location = CityTranslationService.translate_city_name(location)
-                location_filter = Company.locality.ilike(f"%{translated_location}%")
-                filters.append(location_filter)
+                # Skip location filter if translation returned "null"
+                if translated_location != "null":
+                    location_filter = Company.locality.ilike(f"%{translated_location}%")
+                    filters.append(location_filter)
+                else:
+                    logging.warning(f"[DB_SERVICE][FALLBACK] Location '{location}' translated to 'null', skipping location filter")
 
             if company_name:
                 name_filter = Company.company_name.ilike(f"%{company_name}%")
@@ -295,6 +303,11 @@ class CompanyService:
         # Use optimized query with proper indexing - only select needed columns
         translated_location = CityTranslationService.translate_city_name(location)
         
+        # Check if translation returned "null"
+        if translated_location == "null":
+            logging.warning(f"[DB_SERVICE][BY_LOCATION] Location '{location}' translated to 'null', returning empty list")
+            return []
+        
         query = """
             SELECT id, "Company", "BIN", "Activity", "Locality", "OKED", "Size", "KATO", "KRP", tax_data_2023, tax_data_2024, tax_data_2025, website, contacts
             FROM companies 
@@ -344,6 +357,11 @@ class CompanyService:
             # Fallback to ORM
             try:
                 self.db.rollback()
+                # Check if translation returned "null" before using in ORM fallback
+                if translated_location == "null":
+                    logging.warning(f"[DB_SERVICE][BY_LOCATION] ORM fallback: Location '{location}' translated to 'null', returning empty list")
+                    return []
+                    
                 query = self.db.query(Company).filter(
                     Company.locality.ilike(f'%{translated_location}%')
                 )
@@ -525,6 +543,12 @@ class CompanyService:
             # Ensure we start with a clean transaction state
             self.db.rollback()
             translated_location = CityTranslationService.translate_city_name(location)
+            
+            # Check if translation returned "null"
+            if translated_location == "null":
+                logging.warning(f"[DB_SERVICE][COUNT_BY_LOCATION] Location '{location}' translated to 'null', returning 0")
+                return 0
+                
             return self.db.query(Company).filter(
                 Company.locality.ilike(f"%{translated_location}%")
             ).count()
