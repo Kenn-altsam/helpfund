@@ -13,14 +13,38 @@ _client: Optional[OpenAI] = None
 # A constant for the prompt makes it easier to manage
 LOCATION_EXTRACTION_PROMPT = """
 You are an expert in Kazakh geography. Your task is to extract ONE canonical city or region name from the user's text.
+
+AVAILABLE REGIONS IN DATABASE (2015-2017 data):
+- Алматинская область
+- Атырауская область  
+- Актюбинская область
+- Карагандинская область
+- Костанайская область
+- Кызылординская область
+- Мангистауская область
+- Павлодарская область
+- Жамбылская область
+- Восточно-Казахстанская область
+- Западно-Казахстанская область
+- Акмолинская область
+- Южно-Казахстанская область
+
+RULES:
 - If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
 - If multiple cities are mentioned, return only the most prominent one.
-- If no recognizable city is found, return the word "null".
-- Respond with ONLY the city name or region name(область) or "null". Do not add any other text.
+- If no recognizable city or region is found, return the word "null".
+- For regions: convert any form to canonical form (e.g., "Улытауской области" -> "Улытауская область")
+- IMPORTANT: If a region is not in the available list above, return "null" and do not guess.
+- Respond with ONLY the city name or region name or "null". Do not add any other text.
+
+EXAMPLES:
 Example 1: "Find me IT companies in Almaty" -> "Алматы"
 Example 2: "I'm looking for a sponsor" -> "null"
 Example 3: "Горнодобывающие компании Шымкента" -> "Шымкент"
-Example 4: "Улытауской -> Улытауская"
+Example 4: "Улытауской области" -> "null" (not in database)
+Example 5: "Алматинской области" -> "Алматинская область"
+Example 6: "в Атырауской области" -> "Атырауская область"
+Example 7: "Карагандинская область" -> "Карагандинская область"
 """
 
 def get_client() -> OpenAI:

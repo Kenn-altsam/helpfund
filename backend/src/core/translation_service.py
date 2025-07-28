@@ -38,38 +38,88 @@ class CityTranslationService:
         "turkestan": "Туркестан",
         "ekibastuz": "Экибастуз",
         
-        # Regions/Oblast centers
+        # Regions/Oblast centers - UPDATED WITH ALL REGIONS FROM DATABASE
         "akmola": "Акмола", 
         "akmola region": "Акмолинская область",
         "akmola oblast": "Акмолинская область",
+        "акмолинская область": "Акмолинская область",
+        "акмолинской области": "Акмолинская область",
+        
         "aktobe region": "Актюбинская область",
         "aktobe oblast": "Актюбинская область",
+        "актюбинская область": "Актюбинская область",
+        "актюбинской области": "Актюбинская область",
+        
         "almaty region": "Алматинская область", 
         "almaty oblast": "Алматинская область",
+        "алматинская область": "Алматинская область",
+        "алматинской области": "Алматинская область",
+        
         "atyrau region": "Атырауская область",
         "atyrau oblast": "Атырауская область",
+        "атырауская область": "Атырауская область",
+        "атырауской области": "Атырауская область",
+        
         "east kazakhstan": "Восточно-Казахстанская область",
         "east kazakhstan region": "Восточно-Казахстанская область",
+        "восточно-казахстанская область": "Восточно-Казахстанская область",
+        "восточно-казахстанской области": "Восточно-Казахстанская область",
+        
         "jambyl region": "Жамбылская область",
         "jambyl oblast": "Жамбылская область",
         "zhambyl region": "Жамбылская область",
         "zhambyl oblast": "Жамбылская область",
+        "жамбылская область": "Жамбылская область",
+        "жамбылской области": "Жамбылская область",
+        
         "karaganda region": "Карагандинская область",
         "karaganda oblast": "Карагандинская область", 
+        "карагандинская область": "Карагандинская область",
+        "карагандинской области": "Карагандинская область",
+        
         "kostanay region": "Костанайская область",
         "kostanay oblast": "Костанайская область",
+        "костанайская область": "Костанайская область",
+        "костанайской области": "Костанайская область",
+        
         "kyzylorda region": "Кызылординская область",
         "kyzylorda oblast": "Кызылординская область",
-        "mangystau region": "Мангыстауская область",
-        "mangystau oblast": "Мангыстауская область",
+        "кызылординская область": "Кызылординская область",
+        "кызылординской области": "Кызылординская область",
+        
+        "mangystau region": "Мангистауская область",
+        "mangystau oblast": "Мангистауская область",
+        "мангыстауская область": "Мангистауская область",
+        "мангыстауской области": "Мангистауская область",
+        "мангистауская область": "Мангистауская область",
+        "мангистауской области": "Мангистауская область",
+        
         "north kazakhstan": "Северо-Казахстанская область",
         "north kazakhstan region": "Северо-Казахстанская область",
+        "северо-казахстанская область": "Северо-Казахстанская область",
+        "северо-казахстанской области": "Северо-Казахстанская область",
+        
         "pavlodar region": "Павлодарская область",
         "pavlodar oblast": "Павлодарская область",
+        "павлодарская область": "Павлодарская область",
+        "павлодарской области": "Павлодарская область",
+        
         "south kazakhstan": "Южно-Казахстанская область", 
         "south kazakhstan region": "Южно-Казахстанская область",
+        "южно-казахстанская область": "Южно-Казахстанская область",
+        "южно-казахстанской области": "Южно-Казахстанская область",
+        
         "west kazakhstan": "Западно-Казахстанская область",
         "west kazakhstan region": "Западно-Казахстанская область",
+        "западно-казахстанская область": "Западно-Казахстанская область",
+        "западно-казахстанской области": "Западно-Казахстанская область",
+        
+        # Улытауская область - НЕ СУЩЕСТВУЕТ в базе данных (2015-2017)
+        # Есть только "УЛЫТАУСКОГО РАЙОНА" в Карагандинской области
+        "улытауская область": "null",
+        "улытауской области": "null",
+        "ulytau region": "null",
+        "ulytau oblast": "null",
         
         # Common smaller cities
         "stepnogorsk": "Степногорск",
@@ -124,7 +174,7 @@ class CityTranslationService:
             city_name: City name in English or other language
             
         Returns:
-            Russian city name if translation found, otherwise original name
+            Russian city name if translation found, "null" if explicitly marked as not found, otherwise original name
         """
         if not city_name:
             return city_name
@@ -134,11 +184,18 @@ class CityTranslationService:
         
         # Direct translation lookup
         if normalized_name in cls.CITY_TRANSLATIONS:
-            return cls.CITY_TRANSLATIONS[normalized_name]
+            translated = cls.CITY_TRANSLATIONS[normalized_name]
+            # If explicitly marked as "null", return "null"
+            if translated == "null":
+                return "null"
+            return translated
             
         # Try partial matches for compound names or regions
         for english_name, russian_name in cls.CITY_TRANSLATIONS.items():
             if english_name in normalized_name or normalized_name in english_name:
+                # If explicitly marked as "null", return "null"
+                if russian_name == "null":
+                    return "null"
                 return russian_name
                 
         # If no translation found, return original
