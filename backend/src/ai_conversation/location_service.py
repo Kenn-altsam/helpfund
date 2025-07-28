@@ -6,7 +6,6 @@ from typing import Optional
 from openai import OpenAI, APIConnectionError, AuthenticationError, RateLimitError
 
 from ..core.config import get_settings
-from ..core.translation_service import CityTranslationService
 
 # Use a global variable for a singleton client, initialized as None
 _client: Optional[OpenAI] = None
@@ -17,12 +16,8 @@ You are an expert in Kazakh geography. Your task is to extract ONE canonical cit
 - If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
 - If multiple cities are mentioned, return only the most prominent one.
 - If no recognizable city is found, return the word "null".
-- For oblast names, always return the full canonical form with "область" ending in "-ая область" (e.g., "Улытауская область", "Алматинская область").
-- Special oblast mappings:
-  * "Жетысу" or "Жетысуской" → "Жетисуская область"
-  * "Актобе" or "Актобеской" → "Актюбинская область" 
-  * "Атырау" or "Атырауской" → "Атырауская область"
-  * "Караганда" or "Карагандинской" → "Карагандинская область"
+- For oblast names, always return the full canonical form ending with "-ая область" (e.g., "Жетисуская область", "Актюбинская область", "Атырауская область").
+- IMPORTANT: For oblast names, use the correct spelling - "Жетисуская область" (with "и"), not "Жетысуская область" (with "ы").
 - Respond with ONLY the city name or region name(область) or "null". Do not add any other text.
 Example 1: "Find me IT companies in Almaty" -> "Алматы"
 Example 2: "I'm looking for a sponsor" -> "null"
@@ -34,6 +29,9 @@ Example 7: "области Жетысу" -> "Жетисуская область
 Example 8: "области Актобе" -> "Актюбинская область"
 Example 9: "области Атырау" -> "Атырауская область"
 Example 10: "Жетысуской области" -> "Жетисуская область"
+Example 11: "найди мне 15 компаний в Алмате" -> "Алматы"
+Example 12: "5 крупных компаний Улытауской области" -> "Улытауская область"
+Example 13: "10 крупных компаний области Абай" -> "Абайская область"
 """
 
 def get_client() -> OpenAI:
@@ -86,11 +84,7 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
         if location.lower() == "null" or not location:
             return None
         
-        # Apply translation service as a safety net to correct any AI output variations
-        translated_location = CityTranslationService.translate_city_name(location)
-        print(f"🧠 Location service: AI output '{location}' -> translated to '{translated_location}'")
-        
-        return translated_location
+        return location
 
     except (APIConnectionError, RateLimitError) as e:
         print(f"❌ OpenAI network/rate limit error in location service: {e}")
