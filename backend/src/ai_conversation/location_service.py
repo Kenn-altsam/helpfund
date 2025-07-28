@@ -6,6 +6,7 @@ from typing import Optional
 from openai import OpenAI, APIConnectionError, AuthenticationError, RateLimitError
 
 from ..core.config import get_settings
+from ..core.translation_service import CityTranslationService
 
 # Use a global variable for a singleton client, initialized as None
 _client: Optional[OpenAI] = None
@@ -85,7 +86,11 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
         if location.lower() == "null" or not location:
             return None
         
-        return location
+        # Apply translation service as a safety net to correct any AI output variations
+        translated_location = CityTranslationService.translate_city_name(location)
+        print(f"🧠 Location service: AI output '{location}' -> translated to '{translated_location}'")
+        
+        return translated_location
 
     except (APIConnectionError, RateLimitError) as e:
         print(f"❌ OpenAI network/rate limit error in location service: {e}")
