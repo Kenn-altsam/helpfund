@@ -129,7 +129,7 @@ class CompanyService:
         query_parts.append("ORDER BY \"Locality\" ASC, COALESCE(tax_data_2025, 0) DESC, \"Company\" ASC")
         logging.info(f"[DB_SERVICE][SEARCH] Applied optimized ORDER BY")
 
-        # 5. Add pagination - ALWAYS use both LIMIT and OFFSET
+        # 6. Add pagination - ALWAYS use both LIMIT and OFFSET
         query_parts.append("LIMIT :limit OFFSET :offset")
         params["limit"] = limit
         params["offset"] = offset
@@ -548,10 +548,12 @@ class CompanyService:
             if translated_location == "null":
                 logging.warning(f"[DB_SERVICE][COUNT_BY_LOCATION] Location '{location}' translated to 'null', returning 0")
                 return 0
-                
+
             return self.db.query(Company).filter(
                 Company.locality.ilike(f"%{translated_location}%")
             ).count()
         except Exception as e:
             logging.error(f"[DB_SERVICE][COUNT_BY_LOCATION] Error: {e}")
-            return 0 
+            return 0
+
+ 
