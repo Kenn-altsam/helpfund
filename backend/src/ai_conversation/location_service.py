@@ -29,12 +29,29 @@ AVAILABLE REGIONS IN DATABASE (2015-2017 data):
 - Акмолинская область
 - Южно-Казахстанская область
 
+MAJOR CITIES:
+- Алматы (Almaty, Алмате, Алмата)
+- Астана (Astana, Nur-Sultan, Нур-Султан)
+- Шымкент (Shymkent, Чимкент)
+- Актобе (Aktobe, Актюбинск)
+- Тараз (Taraz, Джамбул)
+- Павлодар (Pavlodar)
+- Усть-Каменогорск (Ust-Kamenogorsk, Оскемен)
+- Семей (Semey, Семипалатинск)
+- Атырау (Atyrau, Гурьев)
+- Костанай (Kostanay)
+- Петропавл (Petropavl, Петропавловск)
+- Караганда (Karaganda)
+- Актау (Aktau, Шевченко)
+- Кызылорда (Kyzylorda)
+
 RULES:
 - If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
 - If multiple cities are mentioned, return only the most prominent one.
 - If no recognizable city or region is found, return the word "null".
 - For regions: convert any form to canonical form (e.g., "Улытауской области" -> "Улытауская область")
 - IMPORTANT: If a region is not in the available list above, return "null" and do not guess.
+- Handle common misspellings: "Алмате" -> "Алматы", "Алмата" -> "Алматы"
 - Respond with ONLY the city name or region name or "null". Do not add any other text.
 
 EXAMPLES:
@@ -45,7 +62,123 @@ Example 4: "Улытауской области" -> "null" (not in database)
 Example 5: "Алматинской области" -> "Алматинская область"
 Example 6: "в Атырауской области" -> "Атырауская область"
 Example 7: "Карагандинская область" -> "Карагандинская область"
+Example 8: "Найди компании в Алмате" -> "Алматы"
+Example 9: "компании Алматы" -> "Алматы"
 """
+
+# Simple fallback logic for common cities when AI is unavailable
+SIMPLE_CITY_PATTERNS = {
+    # Алматы variations
+    "алмате": "Алматы",
+    "алмата": "Алматы", 
+    "алматы": "Алматы",
+    "almaty": "Алматы",
+    "в алмате": "Алматы",
+    "в алматы": "Алматы",
+    "алмате": "Алматы",
+    # Астана variations
+    "астана": "Астана",
+    "astana": "Астана",
+    "нур-султан": "Астана",
+    "nur-sultan": "Астана",
+    "астане": "Астана",
+    "в астане": "Астана",
+    # Шымкент variations
+    "шымкент": "Шымкент",
+    "shymkent": "Шымкент",
+    "чимкент": "Шымкент",
+    # Актобе variations
+    "актобе": "Актобе",
+    "aktobe": "Актобе",
+    "актюбинск": "Актобе",
+    # Тараз variations
+    "тараз": "Тараз",
+    "taraz": "Тараз",
+    "джамбул": "Тараз",
+    # Павлодар variations
+    "павлодар": "Павлодар",
+    "pavlodar": "Павлодар",
+    # Усть-Каменогорск variations
+    "усть-каменогорск": "Усть-Каменогорск",
+    "ust-kamenogorsk": "Усть-Каменогорск",
+    "оскемен": "Усть-Каменогорск",
+    # Семей variations
+    "семей": "Семей",
+    "semey": "Семей",
+    "семипалатинск": "Семей",
+    # Атырау variations
+    "атырау": "Атырау",
+    "atyrau": "Атырау",
+    "гурьев": "Атырау",
+    # Костанай variations
+    "костанай": "Костанай",
+    "kostanay": "Костанай",
+    # Петропавл variations
+    "петропавл": "Петропавл",
+    "petropavl": "Петропавл",
+    "петропавловск": "Петропавл",
+    # Караганда variations
+    "караганда": "Караганда",
+    "karaganda": "Караганда",
+    # Актау variations
+    "актау": "Актау",
+    "aktau": "Актау",
+    "шевченко": "Актау",
+    # Кызылорда variations
+    "кызылорда": "Кызылорда",
+    "kyzylorda": "Кызылорда",
+}
+
+# Simple region patterns
+SIMPLE_REGION_PATTERNS = {
+    "алматинская область": "Алматинская область",
+    "алматинской области": "Алматинская область",
+    "атырауская область": "Атырауская область",
+    "атырауской области": "Атырауская область",
+    "актюбинская область": "Актюбинская область",
+    "актюбинской области": "Актюбинская область",
+    "карагандинская область": "Карагандинская область",
+    "карагандинской области": "Карагандинская область",
+    "костанайская область": "Костанайская область",
+    "костанайской области": "Костанайская область",
+    "кызылординская область": "Кызылординская область",
+    "кызылординской области": "Кызылординская область",
+    "мангистауская область": "Мангистауская область",
+    "мангистауской области": "Мангистауская область",
+    "павлодарская область": "Павлодарская область",
+    "павлодарской области": "Павлодарская область",
+    "жамбылская область": "Жамбылская область",
+    "жамбылской области": "Жамбылская область",
+    "восточно-казахстанская область": "Восточно-Казахстанская область",
+    "восточно-казахстанской области": "Восточно-Казахстанская область",
+    "западно-казахстанская область": "Западно-Казахстанская область",
+    "западно-казахстанской области": "Западно-Казахстанская область",
+    "акмолинская область": "Акмолинская область",
+    "акмолинской области": "Акмолинская область",
+    "южно-казахстанская область": "Южно-Казахстанская область",
+    "южно-казахстанской области": "Южно-Казахстанская область",
+}
+
+def extract_location_simple(text: str) -> Optional[str]:
+    """
+    Simple fallback function to extract location without AI
+    """
+    if not text:
+        return None
+        
+    text_lower = text.lower()
+    
+    # Check for regions first
+    for pattern, canonical in SIMPLE_REGION_PATTERNS.items():
+        if pattern in text_lower:
+            return canonical
+    
+    # Check for cities
+    for pattern, canonical in SIMPLE_CITY_PATTERNS.items():
+        if pattern in text_lower:
+            return canonical
+    
+    return None
 
 def get_client() -> OpenAI:
     """
@@ -72,9 +205,16 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
     """
     Uses OpenAI to extract the canonical city name from a user's query.
     Results are cached, and specific API errors are handled gracefully.
+    Falls back to simple pattern matching if AI is unavailable.
     """
     if not text.strip():
         return None
+
+    # First try simple pattern matching as fallback
+    simple_result = extract_location_simple(text)
+    if simple_result:
+        print(f"✅ Found location using simple pattern matching: '{simple_result}'")
+        return simple_result
 
     try:
         # This will log only when the API is actually called (not a cache hit)
@@ -101,15 +241,28 @@ def get_canonical_location_from_text(text: str) -> Optional[str]:
 
     except (APIConnectionError, RateLimitError) as e:
         print(f"❌ OpenAI network/rate limit error in location service: {e}")
+        print(f"🔄 Falling back to simple pattern matching for: '{text[:50]}...'")
+        # Try simple pattern matching as fallback
+        fallback_result = extract_location_simple(text)
+        if fallback_result:
+            print(f"✅ Fallback successful: '{fallback_result}'")
+            return fallback_result
         return None # Fail gracefully on temporary issues
     except AuthenticationError as e:
         print(f"❌ OpenAI authentication error in location service. Check API Key. Error: {e}")
-        # This is a critical configuration error, re-raising might be appropriate
-        # so developers see it immediately. For now, we fail gracefully.
+        print(f"🔄 Falling back to simple pattern matching for: '{text[:50]}...'")
+        # Try simple pattern matching as fallback
+        fallback_result = extract_location_simple(text)
+        if fallback_result:
+            print(f"✅ Fallback successful: '{fallback_result}'")
+            return fallback_result
         return None
     except Exception as e:
         print(f"❌ An unexpected error occurred in location service: {e}")
-        # Optionally log the full traceback for debugging
-        # import traceback
-        # traceback.print_exc()
+        print(f"🔄 Falling back to simple pattern matching for: '{text[:50]}...'")
+        # Try simple pattern matching as fallback
+        fallback_result = extract_location_simple(text)
+        if fallback_result:
+            print(f"✅ Fallback successful: '{fallback_result}'")
+            return fallback_result
         return None 
