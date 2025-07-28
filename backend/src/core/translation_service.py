@@ -94,6 +94,12 @@ class CityTranslationService:
         "akmola region": "Акмолинская область",
         "akmola oblast": "Акмолинская область",
         "akmola": "Акмолинская область",
+        "zhetysu region": "Жетисуская область",
+        "zhetysu oblast": "Жетисуская область",
+        "zhetysu": "Жетисуская область",
+        "jetysu region": "Жетисуская область",
+        "jetysu oblast": "Жетисуская область",
+        "jetysu": "Жетисуская область",
         
         # Common smaller cities
         "stepnogorsk": "Степногорск",
