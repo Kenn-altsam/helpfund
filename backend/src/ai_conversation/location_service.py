@@ -16,11 +16,14 @@ You are an expert in Kazakh geography. Your task is to extract ONE canonical cit
 - If the city is in Latin (e.g., Almaty, Astana), convert it to Cyrillic (Алматы, Астана).
 - If multiple cities are mentioned, return only the most prominent one.
 - If no recognizable city is found, return the word "null".
+- For oblast names, always return the full canonical form with "область" (e.g., "Улытауская область", "Алматинская область").
 - Respond with ONLY the city name or region name(область) or "null". Do not add any other text.
 Example 1: "Find me IT companies in Almaty" -> "Алматы"
 Example 2: "I'm looking for a sponsor" -> "null"
 Example 3: "Горнодобывающие компании Шымкента" -> "Шымкент"
-Example 4: "Улытауской -> Улытауская"
+Example 4: "Найди компании в Улытауской области" -> "Улытауская область"
+Example 5: "Компании Алматинской области" -> "Алматинская область"
+Example 6: "В Актюбинской области" -> "Актюбинская область"
 """
 
 def get_client() -> OpenAI:
