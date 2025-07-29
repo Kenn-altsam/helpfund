@@ -40,6 +40,60 @@ if not GOOGLE_SEARCH_ENGINE_ID:
 
 
 # ============================================================================== 
+# === МОНИТОРИНГ И УПРАВЛЕНИЕ СЕРВИСОМ ===
+# ==============================================================================
+@router.get("/status")
+async def get_service_status():
+    """
+    Get the current status of the AI service including circuit breaker state.
+    """
+    try:
+        status = ai_service.get_service_status()
+        return {
+            "status": "success",
+            "data": status,
+            "message": "Service status retrieved successfully"
+        }
+    except Exception as e:
+        print(f"❌ [STATUS] Error getting service status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting service status: {str(e)}")
+
+@router.post("/reset-circuit-breaker")
+async def reset_circuit_breaker():
+    """
+    Manually reset the circuit breaker to CLOSED state.
+    """
+    try:
+        ai_service.reset_circuit_breaker()
+        return {
+            "status": "success",
+            "message": "Circuit breaker reset successfully",
+            "data": ai_service.get_service_status()
+        }
+    except Exception as e:
+        print(f"❌ [RESET] Error resetting circuit breaker: {e}")
+        raise HTTPException(status_code=500, detail=f"Error resetting circuit breaker: {str(e)}")
+
+@router.post("/health-check")
+async def force_health_check():
+    """
+    Force a health check of the Gemini API.
+    """
+    try:
+        is_healthy = await ai_service.force_health_check()
+        return {
+            "status": "success",
+            "data": {
+                "is_healthy": is_healthy,
+                "service_status": ai_service.get_service_status()
+            },
+            "message": f"Health check completed. API is {'healthy' if is_healthy else 'unhealthy'}"
+        }
+    except Exception as e:
+        print(f"❌ [HEALTH_CHECK] Error during health check: {e}")
+        raise HTTPException(status_code=500, detail=f"Error during health check: {str(e)}")
+
+# ============================================================================== 
 # === НОВЫЙ, ПРАВИЛЬНЫЙ ЭНДПОИНТ ДЛЯ ПОИСКА КОМПАНИЙ ЧЕРЕЗ БД ===
 # ==============================================================================
 @router.post("/chat", response_model=ChatResponse)

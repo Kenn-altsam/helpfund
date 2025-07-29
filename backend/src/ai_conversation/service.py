@@ -10,6 +10,8 @@ import re
 import traceback
 import os
 import uuid
+import asyncio
+import time
 from typing import Optional, Dict, Any, List
 
 from fastapi import HTTPException
@@ -244,11 +246,116 @@ CHARITY_SUMMARY_PROMPT_TEMPLATE = """
 
 class GeminiService:
     def __init__(self):
-        self.settings = get_settings()
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
-        self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={self.gemini_api_key}"
+        settings = get_settings()
+        self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
+        self.company_service = CompanyService()
+        
+        # Circuit breaker state
+        self._circuit_breaker_failures = 0
+        self._circuit_breaker_last_failure_time = 0
+        self._circuit_breaker_threshold = 5  # failures before opening
+        self._circuit_breaker_timeout = 60  # seconds to wait before trying again
+        self._circuit_breaker_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+
+    async def _check_gemini_health(self) -> bool:
+        """
+        Check if Gemini API is healthy by making a simple test request.
+        """
+        try:
+            test_payload = {
+                "contents": [{
+                    "parts": [{
+                        "text": "Respond with 'OK' if you can read this."
+                    }]
+                }]
+            }
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(self.gemini_url, json=test_payload)
+                if response.status_code == 200:
+                    print("✅ [HEALTH_CHECK] Gemini API is healthy")
+                    return True
+                else:
+                    print(f"⚠️ [HEALTH_CHECK] Gemini API returned status {response.status_code}")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ [HEALTH_CHECK] Gemini API health check failed: {e}")
+            return False
+
+    def _should_use_circuit_breaker(self) -> bool:
+        """
+        Check if circuit breaker should prevent API calls.
+        """
+        current_time = time.time()
+        
+        if self._circuit_breaker_state == "OPEN":
+            if current_time - self._circuit_breaker_last_failure_time > self._circuit_breaker_timeout:
+                print("🔄 [CIRCUIT_BREAKER] Moving to HALF_OPEN state")
+                self._circuit_breaker_state = "HALF_OPEN"
+                return False
+            else:
+                print("🚫 [CIRCUIT_BREAKER] Circuit breaker is OPEN, skipping API call")
+                return True
+        
+        return False
+
+    def _record_circuit_breaker_failure(self):
+        """
+        Record a failure for circuit breaker logic.
+        """
+        self._circuit_breaker_failures += 1
+        self._circuit_breaker_last_failure_time = time.time()
+        
+        if self._circuit_breaker_failures >= self._circuit_breaker_threshold:
+            print(f"🚫 [CIRCUIT_BREAKER] Opening circuit breaker after {self._circuit_breaker_failures} failures")
+            self._circuit_breaker_state = "OPEN"
+        else:
+            print(f"⚠️ [CIRCUIT_BREAKER] Failure {self._circuit_breaker_failures}/{self._circuit_breaker_threshold}")
+
+    def _record_circuit_breaker_success(self):
+        """
+        Record a success for circuit breaker logic.
+        """
+        if self._circuit_breaker_state == "HALF_OPEN":
+            print("✅ [CIRCUIT_BREAKER] Success in HALF_OPEN state, closing circuit breaker")
+            self._circuit_breaker_state = "CLOSED"
+        
+        self._circuit_breaker_failures = 0
+
+    def get_service_status(self) -> Dict[str, Any]:
+        """
+        Get current service status including circuit breaker state.
+        """
+        return {
+            "circuit_breaker_state": self._circuit_breaker_state,
+            "circuit_breaker_failures": self._circuit_breaker_failures,
+            "circuit_breaker_threshold": self._circuit_breaker_threshold,
+            "last_failure_time": self._circuit_breaker_last_failure_time,
+            "time_since_last_failure": time.time() - self._circuit_breaker_last_failure_time if self._circuit_breaker_last_failure_time > 0 else None
+        }
+
+    def reset_circuit_breaker(self):
+        """
+        Manually reset the circuit breaker to CLOSED state.
+        """
+        print("🔄 [CIRCUIT_BREAKER] Manually resetting circuit breaker")
+        self._circuit_breaker_state = "CLOSED"
+        self._circuit_breaker_failures = 0
+        self._circuit_breaker_last_failure_time = 0
+
+    async def force_health_check(self) -> bool:
+        """
+        Force a health check of the Gemini API.
+        """
+        print("🔍 [HEALTH_CHECK] Forcing health check of Gemini API")
+        is_healthy = await self._check_gemini_health()
+        
+        if is_healthy and self._circuit_breaker_state == "OPEN":
+            print("✅ [HEALTH_CHECK] API is healthy, resetting circuit breaker")
+            self.reset_circuit_breaker()
+        
+        return is_healthy
 
     def _load_chat_history_from_db(self, db: Session, chat_id: uuid.UUID) -> List[Dict[str, Any]]:
         """
@@ -306,38 +413,258 @@ class GeminiService:
     async def _parse_user_intent_with_gemini(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
         Uses Gemini to parse the user's intent from conversation history.
+        Includes retry logic, circuit breaker, and fallback mechanisms for API failures.
         """
+        # Check circuit breaker first
+        if self._should_use_circuit_breaker():
+            print("🚫 [GEMINI_PARSER] Using fallback due to circuit breaker")
+            return self._get_fallback_response("circuit_breaker_open", "Service temporarily unavailable", history)
+        
         full_prompt_text = f"{GEMINI_INTENT_PROMPT}\n\n---\n\nИСТОРИЯ ДИАЛОГА:\n{json.dumps(history, ensure_ascii=False)}\n\n---\n\nПроанализируй последнее сообщение в истории и верни JSON."
 
         payload = {"contents": [{"parts": [{"text": full_prompt_text}]}]}
         
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(self.gemini_url, json=payload)
-                response.raise_for_status()
+        # Retry configuration
+        max_retries = 3
+        base_delay = 1.0  # seconds
+        max_delay = 10.0  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Exponential backoff delay for retries
+                if attempt > 0:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    print(f"🔄 [GEMINI_PARSER] Retry attempt {attempt + 1}/{max_retries} after {delay}s delay")
+                    await asyncio.sleep(delay)
                 
-                g_data = response.json()
-                raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                
-                # Очистка от возможных ```json ... ``` оберток
-                cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
-                
-                parsed_result = json.loads(cleaned_json_text)
-                print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
-                return parsed_result
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(self.gemini_url, json=payload)
+                    
+                    # Handle specific HTTP status codes
+                    if response.status_code == 503:
+                        print(f"⚠️ [GEMINI_PARSER] Service Unavailable (503) on attempt {attempt + 1}")
+                        if attempt == max_retries - 1:
+                            raise httpx.HTTPStatusError(
+                                f"Gemini API is temporarily unavailable after {max_retries} attempts",
+                                request=response.request,
+                                response=response
+                            )
+                        continue
+                    
+                    elif response.status_code == 429:
+                        print(f"⚠️ [GEMINI_PARSER] Rate limited (429) on attempt {attempt + 1}")
+                        if attempt == max_retries - 1:
+                            raise httpx.HTTPStatusError(
+                                f"Rate limit exceeded after {max_retries} attempts",
+                                request=response.request,
+                                response=response
+                            )
+                        # Wait longer for rate limits
+                        await asyncio.sleep(min(delay * 2, max_delay))
+                        continue
+                    
+                    elif response.status_code >= 500:
+                        print(f"⚠️ [GEMINI_PARSER] Server error ({response.status_code}) on attempt {attempt + 1}")
+                        if attempt == max_retries - 1:
+                            raise httpx.HTTPStatusError(
+                                f"Server error {response.status_code} after {max_retries} attempts",
+                                request=response.request,
+                                response=response
+                            )
+                        continue
+                    
+                    response.raise_for_status()
+                    
+                    g_data = response.json()
+                    raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                    
+                    # Очистка от возможных ```json ... ``` оберток
+                    cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
+                    
+                    parsed_result = json.loads(cleaned_json_text)
+                    print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
+                    self._record_circuit_breaker_success()
+                    return parsed_result
 
+            except httpx.TimeoutException as e:
+                print(f"⏰ [GEMINI_PARSER] Timeout on attempt {attempt + 1}: {e}")
+                if attempt == max_retries - 1:
+                    self._record_circuit_breaker_failure()
+                    return self._get_fallback_response("timeout", str(e), history)
+                continue
+                
+            except httpx.HTTPStatusError as e:
+                print(f"❌ [GEMINI_PARSER] HTTP error on attempt {attempt + 1}: {e}")
+                if attempt == max_retries - 1:
+                    self._record_circuit_breaker_failure()
+                    return self._get_fallback_response("http_error", str(e), history)
+                continue
+                
+            except json.JSONDecodeError as e:
+                print(f"❌ [GEMINI_PARSER] JSON parsing error: {e}")
+                self._record_circuit_breaker_failure()
+                return self._get_fallback_response("json_error", str(e), history)
+                
+            except Exception as e:
+                print(f"❌ [GEMINI_PARSER] Unexpected error on attempt {attempt + 1}: {e}")
+                traceback.print_exc()
+                if attempt == max_retries - 1:
+                    self._record_circuit_breaker_failure()
+                    return self._get_fallback_response("unexpected_error", str(e), history)
+                continue
+        
+        # This should never be reached, but just in case
+        return self._get_fallback_response("max_retries_exceeded", "Maximum retry attempts exceeded", history)
+
+    def _get_fallback_response(self, error_type: str, error_message: str, history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+        """
+        Generate a fallback response when Gemini API fails.
+        Attempts to extract basic information from the last user message.
+        """
+        print(f"🔄 [FALLBACK] Using fallback parser for error type: {error_type}")
+        
+        # Try to extract basic information from the last user message
+        try:
+            last_message = None
+            if history:
+                for msg in reversed(history):
+                    if msg.get("role") == "user":
+                        last_message = msg.get("content", "")
+                        break
+            
+            if last_message:
+                # Simple keyword-based parsing as fallback
+                location = self._extract_location_fallback(last_message)
+                quantity = self._extract_quantity_fallback(last_message)
+                activity_keywords = self._extract_activity_fallback(last_message)
+                
+                intent = "find_companies" if location or activity_keywords else "unclear"
+                
+                return {
+                    "intent": intent,
+                    "location": location,
+                    "activity_keywords": activity_keywords,
+                    "quantity": quantity,
+                    "page_number": 1,
+                    "reasoning": f"Fallback parsing due to {error_type}: {error_message}",
+                    "preliminary_response": self._get_fallback_message(error_type)
+                }
         except Exception as e:
-            print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
-            traceback.print_exc()
-            return {
-                "intent": "unclear",
-                "location": None,
-                "activity_keywords": None,
-                "quantity": 10,
-                "page_number": 1,
-                "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
-                "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
-            }
+            print(f"❌ [FALLBACK] Error in fallback parsing: {e}")
+        
+        # Ultimate fallback
+        return {
+            "intent": "unclear",
+            "location": None,
+            "activity_keywords": None,
+            "quantity": 10,
+            "page_number": 1,
+            "reasoning": f"Complete fallback due to {error_type}: {error_message}",
+            "preliminary_response": self._get_fallback_message(error_type)
+        }
+
+    def _extract_location_fallback(self, message: str) -> Optional[str]:
+        """Simple location extraction as fallback when Gemini is unavailable."""
+        # Common location keywords with variations
+        location_mappings = {
+            "алматы": "Алматы",
+            "астана": "Астана", 
+            "астане": "Астана",
+            "шымкент": "Шымкент",
+            "актобе": "Актобе",
+            "караганда": "Караганда",
+            "караганде": "Караганда",
+            "тараз": "Тараз",
+            "павлодар": "Павлодар",
+            "семей": "Семей",
+            "усть-каменогорск": "Усть-Каменогорск",
+            "урджар": "Урджар",
+            "кызылорда": "Кызылорда",
+            "атырау": "Атырау",
+            "актау": "Актау",
+            "костанай": "Костанай",
+            "петропавловск": "Петропавловск",
+            "кокшетау": "Кокшетау",
+            "талдыкорган": "Талдыкорган",
+            "туркестан": "Туркестан",
+            "кентау": "Кентау",
+            "жамбыл": "Жамбыл"
+        }
+        
+        message_lower = message.lower()
+        for location_variant, canonical_name in location_mappings.items():
+            if location_variant in message_lower:
+                return canonical_name
+        return None
+
+    def _extract_quantity_fallback(self, message: str) -> int:
+        """Simple quantity extraction as fallback when Gemini is unavailable."""
+        import re
+        numbers = re.findall(r'\d+', message)
+        if numbers:
+            return min(int(numbers[0]), 50)  # Cap at 50 for safety
+        return 10
+
+    def _extract_activity_fallback(self, message: str) -> Optional[List[str]]:
+        """Simple activity keyword extraction as fallback when Gemini is unavailable."""
+        # Common activity keywords with variations
+        activity_mappings = {
+            "it": "IT",
+            "технологии": "технологии",
+            "технология": "технологии",
+            "программирование": "программирование",
+            "программист": "программирование",
+            "строительство": "строительство",
+            "строительный": "строительство",
+            "строительные": "строительство",
+            "торговля": "торговля",
+            "торговый": "торговля",
+            "производство": "производство",
+            "производственный": "производство",
+            "услуги": "услуги",
+            "услуга": "услуги",
+            "образование": "образование",
+            "образовательный": "образование",
+            "медицина": "медицина",
+            "медицинский": "медицина",
+            "медицинские": "медицина",
+            "финансы": "финансы",
+            "финансовый": "финансы",
+            "финансовые": "финансы",
+            "транспорт": "транспорт",
+            "транспортный": "транспорт",
+            "энергетика": "энергетика",
+            "энергетический": "энергетика",
+            "нефть": "нефть",
+            "нефтяной": "нефть",
+            "нефтяные": "нефть",
+            "газ": "газ",
+            "газовый": "газ",
+            "металлургия": "металлургия",
+            "металлургический": "металлургия"
+        }
+        
+        message_lower = message.lower()
+        found_keywords = []
+        for keyword_variant, canonical_keyword in activity_mappings.items():
+            if keyword_variant in message_lower:
+                if canonical_keyword not in found_keywords:
+                    found_keywords.append(canonical_keyword)
+        
+        return found_keywords if found_keywords else None
+
+    def _get_fallback_message(self, error_type: str) -> str:
+        """Get appropriate fallback message based on error type."""
+        messages = {
+            "timeout": "Извините, запрос занимает больше времени, чем ожидалось. Попробуйте еще раз через минуту.",
+            "http_error": "Извините, у нас временные проблемы с обработкой запросов. Попробуйте еще раз.",
+            "json_error": "Извините, произошла ошибка при обработке ответа. Попробуйте переформулировать запрос.",
+            "unexpected_error": "Извините, произошла неожиданная ошибка. Попробуйте еще раз.",
+            "max_retries_exceeded": "Извините, сервис временно недоступен. Попробуйте позже.",
+            "service_unavailable": "Извините, сервис обработки запросов временно недоступен. Попробуйте через несколько минут.",
+            "circuit_breaker_open": "Извините, сервис временно недоступен из-за технических проблем. Попробуйте через минуту."
+        }
+        return messages.get(error_type, "Извините, произошла ошибка. Попробуйте еще раз.")
 
     def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response based on found companies."""
