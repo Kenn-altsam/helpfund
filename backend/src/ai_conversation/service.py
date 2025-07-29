@@ -10,7 +10,10 @@ import re
 import traceback
 import os
 import uuid
+import asyncio
+import time
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -23,6 +26,35 @@ from ..chats import service as chat_service
 from ..chats.models import Chat, Message
 
 load_dotenv()
+
+# Rate limiting configuration
+class RateLimiter:
+    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = []
+    
+    async def acquire(self) -> bool:
+        now = datetime.now()
+        # Remove old requests outside the window
+        self.requests = [req_time for req_time in self.requests 
+                        if now - req_time < timedelta(seconds=self.window_seconds)]
+        
+        if len(self.requests) >= self.max_requests:
+            return False
+        
+        self.requests.append(now)
+        return True
+    
+    def get_wait_time(self) -> float:
+        if not self.requests:
+            return 0
+        oldest_request = min(self.requests)
+        return max(0, self.window_seconds - (datetime.now() - oldest_request).total_seconds())
+
+# Global rate limiters
+gemini_rate_limiter = RateLimiter(max_requests=30, window_seconds=60)  # 30 requests per minute
+google_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)  # 10 requests per minute
 
 # <<< НОВЫЙ ПРОМПТ ДЛЯ GEMINI >>>
 GEMINI_INTENT_PROMPT = """
@@ -305,40 +337,90 @@ class GeminiService:
 
     async def _parse_user_intent_with_gemini(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
-        Uses Gemini to parse the user's intent from conversation history.
+        Uses Gemini to parse the user's intent from conversation history with rate limiting and retry logic.
         """
+        # Rate limiting check
+        if not await gemini_rate_limiter.acquire():
+            wait_time = gemini_rate_limiter.get_wait_time()
+            print(f"⚠️ [RATE_LIMIT] Gemini API rate limit reached. Wait {wait_time:.1f} seconds")
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Rate limit exceeded. Please wait {wait_time:.1f} seconds before trying again."
+            )
+
         full_prompt_text = f"{GEMINI_INTENT_PROMPT}\n\n---\n\nИСТОРИЯ ДИАЛОГА:\n{json.dumps(history, ensure_ascii=False)}\n\n---\n\nПроанализируй последнее сообщение в истории и верни JSON."
 
         payload = {"contents": [{"parts": [{"text": full_prompt_text}]}]}
         
-        try:
-            timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(self.gemini_url, json=payload)
-                response.raise_for_status()
-                
-                g_data = response.json()
-                raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                
-                # Очистка от возможных ```json ... ``` оберток
-                cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
-                
-                parsed_result = json.loads(cleaned_json_text)
-                print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
-                return parsed_result
+        # Retry logic with exponential backoff
+        max_retries = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(self.gemini_url, json=payload)
+                    
+                    # Handle rate limiting
+                    if response.status_code == 429:
+                        retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                        print(f"⚠️ [GEMINI_RATE_LIMIT] Attempt {attempt + 1}/{max_retries}: Rate limited, waiting {retry_after}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_after)
+                            continue
+                        else:
+                            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Please try again later.")
+                    
+                    # Handle service unavailable
+                    if response.status_code == 503:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"⚠️ [GEMINI_SERVICE_UNAVAILABLE] Attempt {attempt + 1}/{max_retries}: Service unavailable, waiting {delay}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            raise HTTPException(status_code=503, detail="Gemini API service temporarily unavailable. Please try again later.")
+                    
+                    response.raise_for_status()
+                    
+                    g_data = response.json()
+                    raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                    
+                    # Очистка от возможных ```json ... ``` оберток
+                    cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
+                    
+                    parsed_result = json.loads(cleaned_json_text)
+                    print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
+                    return parsed_result
 
-        except Exception as e:
-            print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
-            traceback.print_exc()
-            return {
-                "intent": "unclear",
-                "location": None,
-                "activity_keywords": None,
-                "quantity": 10,
-                "page_number": 1,
-                "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
-                "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
-            }
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in [429, 503] and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⚠️ [GEMINI_HTTP_ERROR] Attempt {attempt + 1}/{max_retries}: {e.response.status_code}, waiting {delay}s")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"❌ [GEMINI_HTTP_ERROR] Final attempt failed: {e}")
+                    raise
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⚠️ [GEMINI_ERROR] Attempt {attempt + 1}/{max_retries}: {e}, waiting {delay}s")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
+                    traceback.print_exc()
+                    return {
+                        "intent": "unclear",
+                        "location": None,
+                        "activity_keywords": None,
+                        "quantity": 10,
+                        "page_number": 1,
+                        "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
+                        "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
+                    }
 
     def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response based on found companies."""
@@ -520,6 +602,15 @@ class GeminiService:
         Выполняет оптимизированный и умный Google поиск прошлой благотворительной деятельности компании.
         Делает максимум 2 целенаправленных запроса для максимальной релевантности.
         """
+        # Rate limiting check for Google API
+        if not await google_rate_limiter.acquire():
+            wait_time = google_rate_limiter.get_wait_time()
+            print(f"⚠️ [RATE_LIMIT] Google API rate limit reached. Wait {wait_time:.1f} seconds")
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Google API rate limit exceeded. Please wait {wait_time:.1f} seconds before trying again."
+            )
+
         print(f"🌐 [WEB_RESEARCH] Starting SMART charity research for: {company_name}")
 
         # УЛУЧШЕНИЕ 1: Умная очистка названия компании
@@ -562,34 +653,79 @@ class GeminiService:
                 search_url = f"https://www.googleapis.com/customsearch/v1?key={self.settings.GOOGLE_API_KEY}&cx={self.settings.GOOGLE_SEARCH_ENGINE_ID}&q={query}&num={max_results_per_query}&lr=lang_ru"
                 print(f"   -> Executing strategic query {i}/2: {query}")
                 
-                try:
-                    response = await client.get(search_url)
-                    if response.status_code == 429:
-                        print(f"❌ [WEB_RESEARCH] Rate limit reached. Stopping search.")
-                        break
-                    
-                    response.raise_for_status()
-                    data = response.json()
+                # Retry logic for Google API calls
+                max_retries = 2
+                base_delay = 2.0
+                
+                for attempt in range(max_retries):
+                    try:
+                        response = await client.get(search_url)
+                        
+                        # Handle rate limiting
+                        if response.status_code == 429:
+                            retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                            print(f"⚠️ [GOOGLE_RATE_LIMIT] Query {i}, attempt {attempt + 1}: Rate limited, waiting {retry_after}s")
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(retry_after)
+                                continue
+                            else:
+                                print(f"❌ [WEB_RESEARCH] Rate limit reached. Stopping search.")
+                                break
+                        
+                        # Handle service unavailable
+                        if response.status_code == 503:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"⚠️ [GOOGLE_SERVICE_UNAVAILABLE] Query {i}, attempt {attempt + 1}: Service unavailable, waiting {delay}s")
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                print(f"❌ [WEB_RESEARCH] Service unavailable. Stopping search.")
+                                break
+                        
+                        response.raise_for_status()
+                        data = response.json()
 
-                    if 'items' in data:
-                        for item in data['items']:
-                            link = item.get('link')
-                            title = item.get('title', '')
-                            snippet = item.get('snippet', '')
-                            
-                            # Фильтруем результаты на релевантность
-                            if link and link not in unique_links and self._is_charity_relevant(title, snippet):
-                                unique_links.add(link)
-                                search_results_text += f"📄 Источник:\n"
-                                search_results_text += f"Заголовок: {title}\n"
-                                search_results_text += f"Описание: {snippet}\n"
-                                search_results_text += f"Ссылка: {link}\n\n"
-                    
-                except httpx.HTTPStatusError as e:
-                    print(f"⚠️ [WEB_RESEARCH] HTTP error for query {i}: {e}")
-                except Exception as e:
-                    print(f"⚠️ [WEB_RESEARCH] Error for query {i}: {e}")
-                    traceback.print_exc()
+                        if 'items' in data:
+                            for item in data['items']:
+                                link = item.get('link')
+                                title = item.get('title', '')
+                                snippet = item.get('snippet', '')
+                                
+                                # Фильтруем результаты на релевантность
+                                if link and link not in unique_links and self._is_charity_relevant(title, snippet):
+                                    unique_links.add(link)
+                                    search_results_text += f"📄 Источник:\n"
+                                    search_results_text += f"Заголовок: {title}\n"
+                                    search_results_text += f"Описание: {snippet}\n"
+                                    search_results_text += f"Ссылка: {link}\n\n"
+                        
+                        # Success, break retry loop
+                        break
+                        
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code in [429, 503] and attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"⚠️ [GOOGLE_HTTP_ERROR] Query {i}, attempt {attempt + 1}: {e.response.status_code}, waiting {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            print(f"⚠️ [WEB_RESEARCH] HTTP error for query {i}: {e}")
+                            break
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"⚠️ [GOOGLE_ERROR] Query {i}, attempt {attempt + 1}: {e}, waiting {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            print(f"⚠️ [WEB_RESEARCH] Error for query {i}: {e}")
+                            traceback.print_exc()
+                            break
+                
+                # Задержка между запросами (теперь максимум 2 запроса)
+                if i < len(queries_to_execute) - 1:  # Не ждем после последнего запроса
+                    await asyncio.sleep(2.0)  # Увеличиваем задержку для стабильности
 
         # Если ничего релевантного не найдено
         if not search_results_text.strip():
@@ -603,20 +739,61 @@ class GeminiService:
         
         payload = {"contents": [{"parts": [{"text": summary_prompt}]}]}
         
-        try:
-            timeout = httpx.Timeout(connect=5.0, read=45.0, write=10.0, pool=5.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(self.gemini_url, json=payload)
-                response.raise_for_status()
-                g_data = response.json()
-                summary = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                print(f"✅ [AI_SUMMARY] Smart charity analysis completed successfully.")
-                return summary.strip()
-                
-        except Exception as e:
-            print(f"❌ [AI_SUMMARY] Failed to generate charity summary: {e}")
-            traceback.print_exc()
-            return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за технической ошибки. Попробуйте позже."
+        # Retry logic for Gemini summary generation
+        max_retries = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                timeout = httpx.Timeout(connect=5.0, read=45.0, write=10.0, pool=5.0)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(self.gemini_url, json=payload)
+                    
+                    # Handle rate limiting
+                    if response.status_code == 429:
+                        retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                        print(f"⚠️ [GEMINI_SUMMARY_RATE_LIMIT] Attempt {attempt + 1}/{max_retries}: Rate limited, waiting {retry_after}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_after)
+                            continue
+                        else:
+                            return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за ограничений API. Попробуйте позже."
+                    
+                    # Handle service unavailable
+                    if response.status_code == 503:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"⚠️ [GEMINI_SUMMARY_SERVICE_UNAVAILABLE] Attempt {attempt + 1}/{max_retries}: Service unavailable, waiting {delay}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но сервис временно недоступен. Попробуйте позже."
+                    
+                    response.raise_for_status()
+                    g_data = response.json()
+                    summary = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"✅ [AI_SUMMARY] Smart charity analysis completed successfully.")
+                    return summary.strip()
+                    
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in [429, 503] and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⚠️ [GEMINI_SUMMARY_HTTP_ERROR] Attempt {attempt + 1}/{max_retries}: {e.response.status_code}, waiting {delay}s")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"❌ [AI_SUMMARY] Failed to generate charity summary: {e}")
+                    return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за технической ошибки. Попробуйте позже."
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⚠️ [GEMINI_SUMMARY_ERROR] Attempt {attempt + 1}/{max_retries}: {e}, waiting {delay}s")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"❌ [AI_SUMMARY] Failed to generate charity summary: {e}")
+                    traceback.print_exc()
+                    return f"Найдена информация о возможной благотворительной деятельности компании '{company_name}', но не удалось обработать данные из-за технической ошибки. Попробуйте позже."
 
     def _is_charity_relevant(self, title: str, snippet: str) -> bool:
         """

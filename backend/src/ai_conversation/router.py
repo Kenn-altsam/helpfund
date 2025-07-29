@@ -7,7 +7,10 @@ import httpx
 import json
 import re
 import asyncio
+import time
 from typing import List, Dict, Any
+from datetime import datetime, timedelta
+from collections import defaultdict
 from dotenv import load_dotenv
 
 from .models import ChatRequest, ChatResponse, CompanyCharityRequest, CompanyCharityResponse, GoogleSearchResult
@@ -21,6 +24,40 @@ from ..chats.models import Chat  # Модель чата для проверки
 from ..core.config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
+
+# Rate limiting for individual users
+user_rate_limits = defaultdict(lambda: {"requests": [], "last_reset": datetime.now()})
+
+def check_user_rate_limit(user_id: str, max_requests: int = 20, window_seconds: int = 60) -> bool:
+    """
+    Check if user has exceeded rate limit
+    """
+    now = datetime.now()
+    user_data = user_rate_limits[user_id]
+    
+    # Reset if window has passed
+    if (now - user_data["last_reset"]).total_seconds() > window_seconds:
+        user_data["requests"] = []
+        user_data["last_reset"] = now
+    
+    # Check if limit exceeded
+    if len(user_data["requests"]) >= max_requests:
+        return False
+    
+    # Add current request
+    user_data["requests"].append(now)
+    return True
+
+def get_user_wait_time(user_id: str, window_seconds: int = 60) -> float:
+    """
+    Get wait time for user rate limit
+    """
+    user_data = user_rate_limits[user_id]
+    if not user_data["requests"]:
+        return 0
+    
+    oldest_request = min(user_data["requests"])
+    return max(0, window_seconds - (datetime.now() - oldest_request).total_seconds())
 
 # ============================================================================== 
 # === ИНИЦИАЛИЗАЦИЯ API КЛЮЧЕЙ ДЛЯ GOOGLE SEARCH ===
@@ -59,6 +96,15 @@ async def handle_chat_with_database_search(
 
     if not request.user_input.strip():
         raise HTTPException(status_code=400, detail="User input cannot be empty")
+
+    # Check user rate limit
+    if not check_user_rate_limit(str(current_user.id), max_requests=20, window_seconds=60):
+        wait_time = get_user_wait_time(str(current_user.id), window_seconds=60)
+        print(f"⚠️ [USER_RATE_LIMIT] User {current_user.id} exceeded rate limit. Wait {wait_time:.1f} seconds")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Please wait {wait_time:.1f} seconds before trying again."
+        )
 
     try:
         # 1. Определяем ID чата для сохранения истории
@@ -103,6 +149,9 @@ async def handle_chat_with_database_search(
         print(f"✅ [CHAT_DB] Successfully processed request. Found {len(final_response.companies)} companies.")
         return final_response
 
+    except HTTPException:
+        # Re-raise HTTP exceptions (like rate limits)
+        raise
     except Exception as e:
         print(f"❌ [CHAT_DB] Critical error in chat endpoint: {e}")
         traceback.print_exc()

@@ -43,6 +43,7 @@ export function FinderPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [lastRequestTime, setLastRequestTime] = useState(0); // Add debouncing
 
   // 💡 НОВАЯ ЛОГИКА: Используем chat_id для персистентности
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('activeChatId'));
@@ -134,6 +135,16 @@ export function FinderPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Debouncing: prevent multiple rapid requests
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    const minInterval = 1000; // 1 second minimum between requests
+    
+    if (timeSinceLastRequest < minInterval) {
+      console.log(`Debouncing: request blocked (${timeSinceLastRequest}ms < ${minInterval}ms)`);
+      return;
+    }
+
     const isMore = isMoreCommand(input);
     if (isMore) {
       // Find last user search prompt (not a 'more' command)
@@ -150,6 +161,7 @@ export function FinderPage() {
     const loadingMessage: Message = { id: generateId(), type: 'loading' };
 
     setMessages(prev => [...prev, userMessage, loadingMessage]);
+    setLastRequestTime(now); // Update last request time
 
     const currentInput = input.trim();
     setInput('');
@@ -214,10 +226,23 @@ export function FinderPage() {
       if (response.companies?.length) {
         toast.success(t('finder.companiesFound', { count: response.companies.length }), { duration: 2000 });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[handleSendMessage] Failed to send message:', error);
       setMessages(prev => prev.filter(m => m.type !== 'loading'));
-      toast.error(t('finder.searchError'), { duration: 2000 });
+      
+      // Better error handling with specific messages
+      let errorMessage = t('finder.searchError');
+      if (error.message) {
+        if (error.message.includes('Rate limit')) {
+          errorMessage = 'Too many requests. Please wait a moment before trying again.';
+        } else if (error.message.includes('Service temporarily unavailable')) {
+          errorMessage = 'Service is temporarily unavailable. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage, { duration: 3000 });
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();

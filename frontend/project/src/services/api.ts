@@ -31,6 +31,9 @@ const api = axios.create({
   },
 });
 
+// Request deduplication to prevent multiple concurrent requests
+const pendingRequests = new Map<string, Promise<any>>();
+
 // Request interceptor for auth token with proper types
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -45,23 +48,53 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling with proper types
+// Response interceptor for better error handling
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  (error: AxiosError<{ detail?: string }>) => {
-    if (error.response?.status === 401) {
-      // Only clear token and redirect for actual auth errors
-      const authError = error.response?.data?.detail === "Could not validate credentials";
-      if (authError) {
-        localStorage.removeItem('access_token');
-        if (window.location.pathname !== '/auth/login') {
-          window.location.href = '/auth/login';
-        }
+  (response: AxiosResponse) => {
+    return response;
+  },
+  async (error: AxiosError) => {
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'];
+      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 5000;
+      
+      console.warn(`Rate limit exceeded. Waiting ${waitTime}ms before retry.`);
+      
+      // Wait and retry once
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      // Retry the original request
+      if (error.config) {
+        return api.request(error.config);
       }
     }
+    
     return Promise.reject(error);
   }
 );
+
+// Helper function to create unique request keys
+const createRequestKey = (method: string, url: string, data?: any): string => {
+  return `${method}:${url}:${JSON.stringify(data || {})}`;
+};
+
+// Helper function to deduplicate requests
+const deduplicateRequest = async <T>(
+  key: string,
+  requestFn: () => Promise<T>
+): Promise<T> => {
+  if (pendingRequests.has(key)) {
+    console.log(`Request deduplication: reusing pending request for ${key}`);
+    return pendingRequests.get(key)!;
+  }
+
+  const promise = requestFn().finally(() => {
+    pendingRequests.delete(key);
+  });
+  
+  pendingRequests.set(key, promise);
+  return promise;
+};
 
 // Helper function to transform backend company data to frontend format
 const transformCompanyData = (company: any): Company => {
@@ -203,31 +236,47 @@ export const companiesApi = {
 // Chat API
 export const chatApi = {
   sendMessage: async (request: ChatRequest): Promise<RawChatResponse> => {
-    try {
-      // ИСПРАВЛЕНИЕ: Убираем history из запроса, бэкенд сам загружает из БД
-      const cleanRequest = {
-        user_input: request.user_input,
-        chat_id: request.chat_id, // Используем chat_id вместо thread_id
-        // НЕ отправляем history - бэкенд загружает из БД
-      };
+    const requestKey = createRequestKey('POST', '/v1/ai/chat', request);
+    
+    return deduplicateRequest(requestKey, async () => {
+      try {
+        // ИСПРАВЛЕНИЕ: Убираем history из запроса, бэкенд сам загружает из БД
+        const cleanRequest = {
+          user_input: request.user_input,
+          chat_id: request.chat_id, // Используем chat_id вместо thread_id
+          // НЕ отправляем history - бэкенд загружает из БД
+        };
 
-      const response = await api.post('/v1/ai/chat', cleanRequest);
+        const response = await api.post('/v1/ai/chat', cleanRequest);
 
-      // Work with a strongly-typed copy of the response payload
-      const rawData = response.data as RawChatResponse;
+        // Work with a strongly-typed copy of the response payload
+        const rawData = response.data as RawChatResponse;
 
-      if (rawData.companies) {
-        // Preserve the unmodified companies array
-        rawData.rawCompanies = [...rawData.companies];
-        // Transform companies for UI consumption
-        rawData.companies = rawData.companies.map(transformCompanyData);
+        if (rawData.companies) {
+          // Preserve the unmodified companies array
+          rawData.rawCompanies = [...rawData.companies];
+          // Transform companies for UI consumption
+          rawData.companies = rawData.companies.map(transformCompanyData);
+        }
+
+        return rawData;
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        
+        // Handle specific error types
+        if (axios.isAxiosError(error)) {
+          if (error.response?.status === 429) {
+            throw new Error('Rate limit exceeded. Please wait a moment before trying again.');
+          } else if (error.response?.status === 503) {
+            throw new Error('Service temporarily unavailable. Please try again later.');
+          } else if (error.response?.data?.detail) {
+            throw new Error(error.response.data.detail);
+          }
+        }
+        
+        throw error;
       }
-
-      return rawData;
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      throw error;
-    }
+    });
   },
 
   resetChat: async (): Promise<void> => {
@@ -245,21 +294,25 @@ export const chatApi = {
   getConversationHistory: async (
     chatId: string
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; companies?: Company[]; created_at?: string }>> => {
-    try {
-      // ИСПРАВЛЕНИЕ: Используем новый AI эндпоинт для получения истории
-      const response = await api.get(`/v1/ai/chat/${chatId}/history`);
-      const historyData = response.data.history || [];
-      
-      return historyData.map((msg: any) => ({
-        role: msg.role,
-        content: msg.content,
-        companies: (msg.companies || []).map(transformCompanyData),
-        created_at: msg.created_at,
-      }));
-    } catch (error) {
-      console.error('Failed to load conversation history:', error);
-      throw error;
-    }
+    const requestKey = createRequestKey('GET', `/v1/ai/chat/${chatId}/history`);
+    
+    return deduplicateRequest(requestKey, async () => {
+      try {
+        // ИСПРАВЛЕНИЕ: Используем новый AI эндпоинт для получения истории
+        const response = await api.get(`/v1/ai/chat/${chatId}/history`);
+        const historyData = response.data.history || [];
+        
+        return historyData.map((msg: any) => ({
+          role: msg.role,
+          content: msg.content,
+          companies: (msg.companies || []).map(transformCompanyData),
+          created_at: msg.created_at,
+        }));
+      } catch (error) {
+        console.error('Failed to load conversation history:', error);
+        throw error;
+      }
+    });
   },
 };
 
