@@ -214,7 +214,8 @@ async def get_company_charity_info(
     ]
     
     # Использование httpx.AsyncClient для асинхронных запросов
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         for i, query in enumerate(search_queries):
             print(f"🔍 [CHARITY_RESEARCH] Выполняю запрос {i+1}/{len(search_queries)}: '{query[:80]}...'")
             

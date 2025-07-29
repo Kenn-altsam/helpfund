@@ -312,7 +312,8 @@ class GeminiService:
         payload = {"contents": [{"parts": [{"text": full_prompt_text}]}]}
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(self.gemini_url, json=payload)
                 response.raise_for_status()
                 
@@ -555,7 +556,8 @@ class GeminiService:
         unique_links = set()
         max_results_per_query = 3  # Ограничиваем для концентрации на качестве
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             for i, query in enumerate(queries_to_execute, 1):
                 search_url = f"https://www.googleapis.com/customsearch/v1?key={self.settings.GOOGLE_API_KEY}&cx={self.settings.GOOGLE_SEARCH_ENGINE_ID}&q={query}&num={max_results_per_query}&lr=lang_ru"
                 print(f"   -> Executing strategic query {i}/2: {query}")
@@ -602,7 +604,8 @@ class GeminiService:
         payload = {"contents": [{"parts": [{"text": summary_prompt}]}]}
         
         try:
-            async with httpx.AsyncClient(timeout=45.0) as client:
+            timeout = httpx.Timeout(connect=5.0, read=45.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(self.gemini_url, json=payload)
                 response.raise_for_status()
                 g_data = response.json()
