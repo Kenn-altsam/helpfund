@@ -102,6 +102,17 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = "2024-02-15" # Specify your API version
 
     # ------------------------------------------------------------------
+    # Google Gemini AI
+    # ------------------------------------------------------------------
+    GEMINI_API_KEY: str = ""
+
+    # ------------------------------------------------------------------
+    # Google API Keys for Charity Research
+    # ------------------------------------------------------------------
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_SEARCH_ENGINE_ID: str = ""
+
+    # ------------------------------------------------------------------
     # Backwards-compatibility helpers (legacy lowercase attributes)
     # ------------------------------------------------------------------
     HOST: str = "0.0.0.0"
@@ -143,13 +154,19 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set in the environment.")
         if not self.OPENAI_API_KEY and not self.AZURE_OPENAI_KEY:
             print("⚠️  Warning: Neither OPENAI_API_KEY nor AZURE_OPENAI_KEY is set. OpenAI functionality might be limited.")
+        if not self.GEMINI_API_KEY:
+            print("⚠️  Warning: GEMINI_API_KEY is not set. Gemini AI functionality might be limited.")
+        if not self.GOOGLE_API_KEY:
+            print("⚠️  Warning: GOOGLE_API_KEY is not set. Google search functionality might be limited.")
+        if not self.GOOGLE_SEARCH_ENGINE_ID:
+            print("⚠️  Warning: GOOGLE_SEARCH_ENGINE_ID is not set. Google search functionality might be limited.")
 
 
     def print_settings(self):
         """Prints loaded settings for verification."""
         settings_to_print = self.model_dump()
         # Mask sensitive keys
-        sensitive_keys = ["DATABASE_URL", "SECRET_KEY", "OPENAI_API_KEY", "AZURE_OPENAI_KEY"]
+        sensitive_keys = ["DATABASE_URL", "SECRET_KEY", "OPENAI_API_KEY", "AZURE_OPENAI_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"]
         for key in sensitive_keys:
             if key in settings_to_print and settings_to_print[key]:
                 settings_to_print[key] = f"***{settings_to_print[key][-4:]}"
@@ -167,6 +184,9 @@ class Settings(BaseSettings):
         print(f"  - Azure Key Loaded: {'Yes' if self.AZURE_OPENAI_KEY else 'No'}")
         print(f"  - Azure Endpoint Loaded: {self.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
         print(f"  - Azure Deployment Loaded: {self.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
+        print(f"  - Gemini Key Loaded: {'Yes' if self.GEMINI_API_KEY else 'No'}")
+        print(f"  - Google API Key Loaded: {'Yes' if self.GOOGLE_API_KEY else 'No'}")
+        print(f"  - Google Search Engine ID Loaded: {'Yes' if self.GOOGLE_SEARCH_ENGINE_ID else 'No'}")
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -183,5 +203,8 @@ def get_settings() -> Settings:
     print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
     print(f"  - Azure Deployment Loaded: {settings.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
     print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
+    print(f"  - Gemini Key Loaded: {'Yes' if settings.GEMINI_API_KEY else 'No'}")
+    print(f"  - Google API Key Loaded: {'Yes' if settings.GOOGLE_API_KEY else 'No'}")
+    print(f"  - Google Search Engine ID Loaded: {'Yes' if settings.GOOGLE_SEARCH_ENGINE_ID else 'No'}")
     
     return settings

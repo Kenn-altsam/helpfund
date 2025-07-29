@@ -18,6 +18,7 @@ from ..auth.models import User
 from ..auth.dependencies import get_current_user
 from ..chats import service as chat_service  # Сервис для сохранения истории чатов
 from ..chats.models import Chat  # Модель чата для проверки принадлежности
+from ..core.config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["AI Conversation"])
 
@@ -29,69 +30,17 @@ import pathlib
 env_path = pathlib.Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Get settings for API keys
+settings = get_settings()
+GOOGLE_API_KEY = settings.GOOGLE_API_KEY
+GOOGLE_SEARCH_ENGINE_ID = settings.GOOGLE_SEARCH_ENGINE_ID
+GEMINI_API_KEY = settings.GEMINI_API_KEY
 
 if not GOOGLE_API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
 if not GOOGLE_SEARCH_ENGINE_ID:
     raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID не установлен в переменных окружения. Проверьте ваш .env файл.")
 
-
-# ============================================================================== 
-# === МОНИТОРИНГ И УПРАВЛЕНИЕ СЕРВИСОМ ===
-# ==============================================================================
-@router.get("/status")
-async def get_service_status():
-    """
-    Get the current status of the AI service including circuit breaker state.
-    """
-    try:
-        status = ai_service.get_service_status()
-        return {
-            "status": "success",
-            "data": status,
-            "message": "Service status retrieved successfully"
-        }
-    except Exception as e:
-        print(f"❌ [STATUS] Error getting service status: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting service status: {str(e)}")
-
-@router.post("/reset-circuit-breaker")
-async def reset_circuit_breaker():
-    """
-    Manually reset the circuit breaker to CLOSED state.
-    """
-    try:
-        ai_service.reset_circuit_breaker()
-        return {
-            "status": "success",
-            "message": "Circuit breaker reset successfully",
-            "data": ai_service.get_service_status()
-        }
-    except Exception as e:
-        print(f"❌ [RESET] Error resetting circuit breaker: {e}")
-        raise HTTPException(status_code=500, detail=f"Error resetting circuit breaker: {str(e)}")
-
-@router.post("/health-check")
-async def force_health_check():
-    """
-    Force a health check of the Gemini API.
-    """
-    try:
-        is_healthy = await ai_service.force_health_check()
-        return {
-            "status": "success",
-            "data": {
-                "is_healthy": is_healthy,
-                "service_status": ai_service.get_service_status()
-            },
-            "message": f"Health check completed. API is {'healthy' if is_healthy else 'unhealthy'}"
-        }
-    except Exception as e:
-        print(f"❌ [HEALTH_CHECK] Error during health check: {e}")
-        raise HTTPException(status_code=500, detail=f"Error during health check: {str(e)}")
 
 # ============================================================================== 
 # === НОВЫЙ, ПРАВИЛЬНЫЙ ЭНДПОИНТ ДЛЯ ПОИСКА КОМПАНИЙ ЧЕРЕЗ БД ===
