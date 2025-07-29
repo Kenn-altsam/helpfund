@@ -248,7 +248,7 @@ class GeminiService:
         self.gemini_api_key = self.settings.GEMINI_API_KEY
         if not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
-        self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={self.gemini_api_key}"
+        self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={self.gemini_api_key}"
 
     def _load_chat_history_from_db(self, db: Session, chat_id: uuid.UUID) -> List[Dict[str, Any]]:
         """
