@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     # Google Gemini AI
     # ------------------------------------------------------------------
     GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY_2: str = ""
+    GEMINI_API_KEY_3: str = ""
 
     # ------------------------------------------------------------------
     # Google API Keys for Charity Research
@@ -156,6 +158,10 @@ class Settings(BaseSettings):
             print("⚠️  Warning: Neither OPENAI_API_KEY nor AZURE_OPENAI_KEY is set. OpenAI functionality might be limited.")
         if not self.GEMINI_API_KEY:
             print("⚠️  Warning: GEMINI_API_KEY is not set. Gemini AI functionality might be limited.")
+        if not self.GEMINI_API_KEY_2:
+            print("⚠️  Warning: GEMINI_API_KEY_2 is not set. API key rotation will be limited.")
+        if not self.GEMINI_API_KEY_3:
+            print("⚠️  Warning: GEMINI_API_KEY_3 is not set. API key rotation will be limited.")
         if not self.GOOGLE_API_KEY:
             print("⚠️  Warning: GOOGLE_API_KEY is not set. Google search functionality might be limited.")
         if not self.GOOGLE_SEARCH_ENGINE_ID:
@@ -203,7 +209,9 @@ def get_settings() -> Settings:
     print(f"  - Azure Endpoint Loaded: {settings.AZURE_OPENAI_ENDPOINT or 'Not Set'}")
     print(f"  - Azure Deployment Loaded: {settings.AZURE_OPENAI_DEPLOYMENT_NAME or 'Not Set'}")
     print(f"  - OpenAI Key (Legacy) Loaded: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
-    print(f"  - Gemini Key Loaded: {'Yes' if settings.GEMINI_API_KEY else 'No'}")
+    print(f"  - Gemini Key 1 Loaded: {'Yes' if settings.GEMINI_API_KEY else 'No'}")
+    print(f"  - Gemini Key 2 Loaded: {'Yes' if settings.GEMINI_API_KEY_2 else 'No'}")
+    print(f"  - Gemini Key 3 Loaded: {'Yes' if settings.GEMINI_API_KEY_3 else 'No'}")
     print(f"  - Google API Key Loaded: {'Yes' if settings.GOOGLE_API_KEY else 'No'}")
     print(f"  - Google Search Engine ID Loaded: {'Yes' if settings.GOOGLE_SEARCH_ENGINE_ID else 'No'}")
     

@@ -284,10 +284,39 @@ CHARITY_SUMMARY_PROMPT_TEMPLATE = """
 class GeminiService:
     def __init__(self):
         self.settings = get_settings()
-        self.gemini_api_key = self.settings.GEMINI_API_KEY
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
-        self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={self.gemini_api_key}"
+        # Initialize API keys list - only include non-empty keys
+        self.gemini_api_keys = []
+        if self.settings.GEMINI_API_KEY:
+            self.gemini_api_keys.append(self.settings.GEMINI_API_KEY)
+        if self.settings.GEMINI_API_KEY_2:
+            self.gemini_api_keys.append(self.settings.GEMINI_API_KEY_2)
+        if self.settings.GEMINI_API_KEY_3:
+            self.gemini_api_keys.append(self.settings.GEMINI_API_KEY_3)
+        
+        if not self.gemini_api_keys:
+            raise ValueError("No GEMINI_API_KEY is set in the environment variables.")
+        
+        # Current key index for rotation
+        self.current_key_index = 0
+        self.base_gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
+        
+        print(f"🔑 [GEMINI_ROTATOR] Initialized with {len(self.gemini_api_keys)} API keys")
+    
+    def _get_current_gemini_url(self) -> str:
+        """Get the current Gemini URL with the active API key."""
+        current_key = self.gemini_api_keys[self.current_key_index]
+        return f"{self.base_gemini_url}?key={current_key}"
+    
+    def _rotate_api_key(self) -> None:
+        """Rotate to the next available API key."""
+        self.current_key_index = (self.current_key_index + 1) % len(self.gemini_api_keys)
+        current_key = self.gemini_api_keys[self.current_key_index]
+        print(f"🔄 [GEMINI_ROTATOR] Rotated to API key {self.current_key_index + 1}/{len(self.gemini_api_keys)}")
+    
+    def _should_rotate_key(self, status_code: int) -> bool:
+        """Determine if we should rotate the API key based on the error."""
+        # Rotate on 503 (Service Unavailable), 429 (Rate Limited), 403 (Forbidden/Quota Exceeded)
+        return status_code in [503, 429, 403]
 
     def _load_chat_history_from_db(self, db: Session, chat_id: uuid.UUID) -> List[Dict[str, Any]]:
         """
@@ -464,77 +493,113 @@ class GeminiService:
 
         payload = {"contents": [{"parts": [{"text": full_prompt_text}]}]}
         
-        # Retry logic with exponential backoff
-        max_retries = 3
+        # Retry logic with exponential backoff and API key rotation
+        max_retries_per_key = 2  # Try each key up to 2 times
+        total_keys = len(self.gemini_api_keys)
         base_delay = 1.0
         
-        for attempt in range(max_retries):
-            try:
-                timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(self.gemini_url, json=payload)
+        for key_attempt in range(total_keys):
+            for attempt in range(max_retries_per_key):
+                try:
+                    timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+                    current_url = self._get_current_gemini_url()
                     
-                    # Handle rate limiting
-                    if response.status_code == 429:
-                        retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
-                        print(f"⚠️ [GEMINI_RATE_LIMIT] Attempt {attempt + 1}/{max_retries}: Rate limited, waiting {retry_after}s")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(retry_after)
-                            continue
-                        else:
-                            print(f"🔄 [GEMINI_PARSER] All retries failed for 429 error, using fallback parsing")
-                            user_input = history[-1]["content"] if history else ""
-                            return self._parse_intent_fallback(user_input, history)
-                    
-                    # Handle service unavailable
-                    if response.status_code == 503:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"⚠️ [GEMINI_SERVICE_UNAVAILABLE] Attempt {attempt + 1}/{max_retries}: Service unavailable, waiting {delay}s")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            print(f"🔄 [GEMINI_PARSER] All retries failed for 503 error, using fallback parsing")
-                            user_input = history[-1]["content"] if history else ""
-                            return self._parse_intent_fallback(user_input, history)
-                    
-                    response.raise_for_status()
-                    
-                    g_data = response.json()
-                    raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                    
-                    # Очистка от возможных ```json ... ``` оберток
-                    cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
-                    
-                    parsed_result = json.loads(cleaned_json_text)
-                    print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
-                    return parsed_result
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(current_url, json=payload)
+                        
+                        # Handle rate limiting
+                        if response.status_code == 429:
+                            retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                            print(f"⚠️ [GEMINI_RATE_LIMIT] Key {self.current_key_index + 1}, Attempt {attempt + 1}/{max_retries_per_key}: Rate limited, waiting {retry_after}s")
+                            if attempt < max_retries_per_key - 1:
+                                await asyncio.sleep(retry_after)
+                                continue
+                            else:
+                                # Try next API key
+                                if key_attempt < total_keys - 1:
+                                    self._rotate_api_key()
+                                    break
+                                else:
+                                    print(f"🔄 [GEMINI_PARSER] All API keys failed for 429 error, using fallback parsing")
+                                    user_input = history[-1]["content"] if history else ""
+                                    return self._parse_intent_fallback(user_input, history)
+                        
+                        # Handle service unavailable
+                        if response.status_code == 503:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"⚠️ [GEMINI_SERVICE_UNAVAILABLE] Key {self.current_key_index + 1}, Attempt {attempt + 1}/{max_retries_per_key}: Service unavailable, waiting {delay}s")
+                            if attempt < max_retries_per_key - 1:
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                # Try next API key
+                                if key_attempt < total_keys - 1:
+                                    self._rotate_api_key()
+                                    break
+                                else:
+                                    print(f"🔄 [GEMINI_PARSER] All API keys failed for 503 error, using fallback parsing")
+                                    user_input = history[-1]["content"] if history else ""
+                                    return self._parse_intent_fallback(user_input, history)
+                        
+                        # Handle quota exceeded
+                        if response.status_code == 403:
+                            print(f"⚠️ [GEMINI_QUOTA_EXCEEDED] Key {self.current_key_index + 1}: Quota exceeded")
+                            if key_attempt < total_keys - 1:
+                                self._rotate_api_key()
+                                break
+                            else:
+                                print(f"🔄 [GEMINI_PARSER] All API keys quota exceeded, using fallback parsing")
+                                user_input = history[-1]["content"] if history else ""
+                                return self._parse_intent_fallback(user_input, history)
+                        
+                        response.raise_for_status()
+                        
+                        g_data = response.json()
+                        raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                        
+                        # Очистка от возможных ```json ... ``` оберток
+                        cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
+                        
+                        parsed_result = json.loads(cleaned_json_text)
+                        print(f"✅ [GEMINI_PARSER] Key {self.current_key_index + 1} response parsed successfully: {parsed_result}")
+                        return parsed_result
 
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code in [429, 503] and attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⚠️ [GEMINI_HTTP_ERROR] Attempt {attempt + 1}/{max_retries}: {e.response.status_code}, waiting {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    print(f"❌ [GEMINI_HTTP_ERROR] Final attempt failed: {e}")
-                    print(f"🔄 [GEMINI_PARSER] Using fallback parsing due to HTTP error: {e.response.status_code}")
-                    user_input = history[-1]["content"] if history else ""
-                    return self._parse_intent_fallback(user_input, history)
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⚠️ [GEMINI_ERROR] Attempt {attempt + 1}/{max_retries}: {e}, waiting {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
-                    traceback.print_exc()
-                    print(f"🔄 [GEMINI_PARSER] Falling back to simple parsing due to Gemini unavailability")
-                    
-                    # Use fallback parsing when Gemini is unavailable
-                    user_input = history[-1]["content"] if history else ""
-                    return self._parse_intent_fallback(user_input, history)
+                except httpx.HTTPStatusError as e:
+                    if self._should_rotate_key(e.response.status_code) and key_attempt < total_keys - 1:
+                        print(f"⚠️ [GEMINI_HTTP_ERROR] Key {self.current_key_index + 1}, Attempt {attempt + 1}/{max_retries_per_key}: {e.response.status_code}, rotating to next key")
+                        self._rotate_api_key()
+                        break
+                    elif attempt < max_retries_per_key - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"⚠️ [GEMINI_HTTP_ERROR] Key {self.current_key_index + 1}, Attempt {attempt + 1}/{max_retries_per_key}: {e.response.status_code}, waiting {delay}s")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        print(f"❌ [GEMINI_HTTP_ERROR] All attempts failed for key {self.current_key_index + 1}: {e}")
+                        if key_attempt < total_keys - 1:
+                            self._rotate_api_key()
+                            break
+                        else:
+                            print(f"🔄 [GEMINI_PARSER] Using fallback parsing due to HTTP error: {e.response.status_code}")
+                            user_input = history[-1]["content"] if history else ""
+                            return self._parse_intent_fallback(user_input, history)
+                except Exception as e:
+                    if attempt < max_retries_per_key - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"⚠️ [GEMINI_ERROR] Key {self.current_key_index + 1}, Attempt {attempt + 1}/{max_retries_per_key}: {e}, waiting {delay}s")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing with key {self.current_key_index + 1}: {e}")
+                        if key_attempt < total_keys - 1:
+                            self._rotate_api_key()
+                            break
+                        else:
+                            print(f"🔄 [GEMINI_PARSER] Falling back to simple parsing due to Gemini unavailability")
+                            traceback.print_exc()
+                            # Use fallback parsing when Gemini is unavailable
+                            user_input = history[-1]["content"] if history else ""
+                            return self._parse_intent_fallback(user_input, history)
 
     def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response based on found companies."""

@@ -77,6 +77,8 @@ if not GOOGLE_API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не установлен в переменных окружения. Проверьте ваш .env файл.")
 if not GOOGLE_SEARCH_ENGINE_ID:
     raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID не установлен в переменных окружения. Проверьте ваш .env файл.")
+if not GEMINI_API_KEY:
+    print("⚠️  Warning: GEMINI_API_KEY is not set. The API key rotator will not work properly.")
 
 
 # ============================================================================== 
