@@ -352,95 +352,50 @@ class GeminiService:
 
         payload = {"contents": [{"parts": [{"text": full_prompt_text}]}]}
         
-        # Retry logic with exponential backoff
-        max_retries = 3
-        base_delay = 1.0
-        
-        for attempt in range(max_retries):
-            try:
-                # Increased timeout values to handle complex prompts and slow responses
-                timeout = httpx.Timeout(connect=10.0, read=90.0, write=20.0, pool=10.0)
-                print(f"🔄 [GEMINI_REQUEST] Attempt {attempt + 1}/{max_retries}: Sending request to Gemini...")
+        # Single attempt - let Gemini take its own time
+        try:
+            # No timeout - let Gemini process at its own pace
+            async with httpx.AsyncClient() as client:
+                response = await client.post(self.gemini_url, json=payload)
                 
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(self.gemini_url, json=payload)
-                    
-                    # Handle rate limiting
-                    if response.status_code == 429:
-                        retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
-                        print(f"⚠️ [GEMINI_RATE_LIMIT] Attempt {attempt + 1}/{max_retries}: Rate limited, waiting {retry_after}s")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(retry_after)
-                            continue
-                        else:
-                            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Please try again later.")
-                    
-                    # Handle service unavailable
-                    if response.status_code == 503:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"⚠️ [GEMINI_SERVICE_UNAVAILABLE] Attempt {attempt + 1}/{max_retries}: Service unavailable, waiting {delay}s")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            raise HTTPException(status_code=503, detail="Gemini API service temporarily unavailable. Please try again later.")
-                    
-                    response.raise_for_status()
-                    
-                    g_data = response.json()
-                    raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                    
-                    # Очистка от возможных ```json ... ``` оберток
-                    cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
-                    
-                    parsed_result = json.loads(cleaned_json_text)
-                    print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
-                    return parsed_result
+                # Handle rate limiting
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', 60))
+                    print(f"⚠️ [GEMINI_RATE_LIMIT] Rate limited, retry after {retry_after}s")
+                    raise HTTPException(status_code=429, detail=f"Gemini API rate limit exceeded. Please try again in {retry_after} seconds.")
+                
+                # Handle service unavailable
+                if response.status_code == 503:
+                    print(f"⚠️ [GEMINI_SERVICE_UNAVAILABLE] Service temporarily unavailable")
+                    raise HTTPException(status_code=503, detail="Gemini API service temporarily unavailable. Please try again later.")
+                
+                response.raise_for_status()
+                
+                g_data = response.json()
+                raw_json_text = g_data["candidates"][0]["content"]["parts"][0]["text"]
+                
+                # Очистка от возможных ```json ... ``` оберток
+                cleaned_json_text = re.sub(r'```json\s*([\s\S]*?)\s*```', r'\1', raw_json_text, re.DOTALL).strip()
+                
+                parsed_result = json.loads(cleaned_json_text)
+                print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
+                return parsed_result
 
-            except httpx.TimeoutException as e:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⏰ [GEMINI_TIMEOUT] Attempt {attempt + 1}/{max_retries}: Request timed out after {timeout.read}s, waiting {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    print(f"❌ [GEMINI_TIMEOUT] Final attempt timed out: {e}")
-                    return {
-                        "intent": "unclear",
-                        "location": None,
-                        "activity_keywords": None,
-                        "quantity": 10,
-                        "page_number": 1,
-                        "reasoning": f"Запрос к Gemini превысил время ожидания ({timeout.read}s). Попробуйте упростить запрос.",
-                        "preliminary_response": "Извините, обработка вашего запроса заняла слишком много времени. Пожалуйста, упростите запрос или попробуйте позже."
-                    }
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code in [429, 503] and attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⚠️ [GEMINI_HTTP_ERROR] Attempt {attempt + 1}/{max_retries}: {e.response.status_code}, waiting {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    print(f"❌ [GEMINI_HTTP_ERROR] Final attempt failed: {e}")
-                    raise
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"⚠️ [GEMINI_ERROR] Attempt {attempt + 1}/{max_retries}: {type(e).__name__}: {e}, waiting {delay}s")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {type(e).__name__}: {e}")
-                    traceback.print_exc()
-                    return {
-                        "intent": "unclear",
-                        "location": None,
-                        "activity_keywords": None,
-                        "quantity": 10,
-                        "page_number": 1,
-                        "reasoning": f"Не удалось обработать запрос через Gemini: {type(e).__name__}: {str(e)}",
-                        "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
-                    }
+        except httpx.HTTPStatusError as e:
+            print(f"❌ [GEMINI_HTTP_ERROR] HTTP error: {e}")
+            raise
+        except Exception as e:
+            print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
+            traceback.print_exc()
+            return {
+                "intent": "unclear",
+                "location": None,
+                "activity_keywords": None,
+                "quantity": 10,
+                "page_number": 1,
+                "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
+                "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
+            }
 
     def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response based on found companies."""
