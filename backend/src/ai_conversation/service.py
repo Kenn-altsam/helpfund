@@ -1,7 +1,14 @@
 """
-OpenAI service for AI conversation functionality
+AI conversation service with Gemini API integration and fallback parsing
 
-Handles communication with Azure OpenAI API for charity sponsorship matching.
+Handles communication with Google Gemini API for intent parsing and conversation management.
+Includes fallback parsing mechanism for when Gemini API is unavailable (503/429 errors).
+
+Fallback Strategy:
+- Primary: Gemini API for intelligent intent parsing
+- Fallback: Simple pattern matching for basic search queries
+- Location extraction: Uses existing location service with pattern matching
+- Continuation requests: Handles pagination from conversation history
 """
 
 import httpx
@@ -335,6 +342,111 @@ class GeminiService:
             traceback.print_exc()
             db.rollback()
 
+    def _parse_intent_fallback(self, user_input: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Fallback intent parsing using simple pattern matching when Gemini API is unavailable.
+        
+        This method provides basic parsing capabilities for common search patterns:
+        - "Найди X компаний в Y" -> extracts quantity and location
+        - "Дай еще" -> continuation requests with pagination
+        - Location extraction using the existing location service
+        - Basic activity keyword extraction
+        
+        Used when Gemini API returns 503 (Service Unavailable) or 429 (Rate Limited) errors.
+        """
+        print(f"🔄 [FALLBACK_PARSER] Using fallback parsing for: {user_input}")
+        
+        # Extract location using the existing location service
+        location = get_canonical_location_from_text(user_input)
+        
+        # Simple quantity extraction
+        quantity = 10  # default
+        quantity_patterns = [
+            (r'(\d+)\s*компан', r'\1'),
+            (r'найди\s*(\d+)', r'\1'),
+            (r'покажи\s*(\d+)', r'\1'),
+            (r'дай\s*(\d+)', r'\1'),
+        ]
+        
+        for pattern, replacement in quantity_patterns:
+            match = re.search(pattern, user_input.lower())
+            if match:
+                try:
+                    quantity = int(match.group(1))
+                    break
+                except ValueError:
+                    continue
+        
+        # Determine if this is a continuation request
+        continuation_keywords = [
+            'еще', 'ещё', 'дальше', 'следующие', 'следующая', 'продолжи', 'продолжай',
+            'more', 'next', 'continue', 'дай еще', 'дай ещё', 'покажи еще', 'покажи ещё'
+        ]
+        
+        is_continuation = any(keyword in user_input.lower() for keyword in continuation_keywords)
+        
+        # For continuation requests, try to extract page info from history
+        page_number = 1
+        if is_continuation and history:
+            # Look for the last assistant message with parsed_intent
+            for msg in reversed(history):
+                if msg.get('role') == 'assistant' and 'parsed_intent' in msg:
+                    try:
+                        last_intent = json.loads(msg['parsed_intent'])
+                        page_number = last_intent.get('page_number', 1) + 1
+                        quantity = last_intent.get('quantity', 10)
+                        break
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+        
+        # Determine intent
+        if is_continuation and history:
+            # For continuation requests, try to get location from previous messages
+            for msg in reversed(history):
+                if msg.get('role') == 'assistant' and 'parsed_intent' in msg:
+                    try:
+                        last_intent = json.loads(msg['parsed_intent'])
+                        if last_intent.get('location'):
+                            location = last_intent.get('location')
+                            break
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+        
+        intent = "find_companies" if location else "unclear"
+        
+        # Extract activity keywords (simple approach)
+        activity_keywords = None
+        
+        # Common business activity keywords that might be mentioned
+        business_keywords = [
+            'строительн', 'транспортн', 'торгов', 'производств', 'услуг', 'медицинск',
+            'образовательн', 'финансов', 'банковск', 'страхов', 'нефтегазов', 'горнодобывающ',
+            'сельскохозяйственн', 'пищев', 'текстильн', 'химическ', 'металлургическ',
+            'электротехническ', 'информационн', 'телекоммуникационн', 'гостиничн', 'ресторанн'
+        ]
+        
+        # Look for business activity keywords in the input
+        found_keywords = []
+        for keyword in business_keywords:
+            if keyword in user_input.lower():
+                found_keywords.append(keyword)
+        
+        if found_keywords:
+            activity_keywords = found_keywords
+        
+        result = {
+            "intent": intent,
+            "location": location,
+            "activity_keywords": activity_keywords,
+            "quantity": quantity,
+            "page_number": page_number,
+            "reasoning": f"Fallback parsing used due to Gemini API unavailability. Extracted location: {location}, quantity: {quantity}, page: {page_number}",
+            "preliminary_response": "Обрабатываю ваш запрос..." if intent == "find_companies" else "Извините, не могу понять ваш запрос. Пожалуйста, укажите город или область для поиска компаний."
+        }
+        
+        print(f"✅ [FALLBACK_PARSER] Fallback parsing result: {result}")
+        return result
+
     async def _parse_user_intent_with_gemini(self, history: List[Dict[str, str]]) -> Dict[str, Any]:
         """
         Uses Gemini to parse the user's intent from conversation history with rate limiting and retry logic.
@@ -370,7 +482,9 @@ class GeminiService:
                             await asyncio.sleep(retry_after)
                             continue
                         else:
-                            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Please try again later.")
+                            print(f"🔄 [GEMINI_PARSER] All retries failed for 429 error, using fallback parsing")
+                            user_input = history[-1]["content"] if history else ""
+                            return self._parse_intent_fallback(user_input, history)
                     
                     # Handle service unavailable
                     if response.status_code == 503:
@@ -380,7 +494,9 @@ class GeminiService:
                             await asyncio.sleep(delay)
                             continue
                         else:
-                            raise HTTPException(status_code=503, detail="Gemini API service temporarily unavailable. Please try again later.")
+                            print(f"🔄 [GEMINI_PARSER] All retries failed for 503 error, using fallback parsing")
+                            user_input = history[-1]["content"] if history else ""
+                            return self._parse_intent_fallback(user_input, history)
                     
                     response.raise_for_status()
                     
@@ -402,7 +518,9 @@ class GeminiService:
                     continue
                 else:
                     print(f"❌ [GEMINI_HTTP_ERROR] Final attempt failed: {e}")
-                    raise
+                    print(f"🔄 [GEMINI_PARSER] Using fallback parsing due to HTTP error: {e.response.status_code}")
+                    user_input = history[-1]["content"] if history else ""
+                    return self._parse_intent_fallback(user_input, history)
             except Exception as e:
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
@@ -412,15 +530,11 @@ class GeminiService:
                 else:
                     print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
                     traceback.print_exc()
-                    return {
-                        "intent": "unclear",
-                        "location": None,
-                        "activity_keywords": None,
-                        "quantity": 10,
-                        "page_number": 1,
-                        "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
-                        "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
-                    }
+                    print(f"🔄 [GEMINI_PARSER] Falling back to simple parsing due to Gemini unavailability")
+                    
+                    # Use fallback parsing when Gemini is unavailable
+                    user_input = history[-1]["content"] if history else ""
+                    return self._parse_intent_fallback(user_input, history)
 
     def _generate_summary_response(self, history: List[Dict[str, str]], companies_data: List[Dict[str, Any]]) -> str:
         """Craft a summary response based on found companies."""
