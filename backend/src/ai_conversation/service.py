@@ -358,7 +358,10 @@ class GeminiService:
         
         for attempt in range(max_retries):
             try:
-                timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+                # Increased timeout values to handle complex prompts and slow responses
+                timeout = httpx.Timeout(connect=10.0, read=90.0, write=20.0, pool=10.0)
+                print(f"🔄 [GEMINI_REQUEST] Attempt {attempt + 1}/{max_retries}: Sending request to Gemini...")
+                
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(self.gemini_url, json=payload)
                     
@@ -394,6 +397,23 @@ class GeminiService:
                     print(f"✅ [GEMINI_PARSER] Gemini response parsed successfully: {parsed_result}")
                     return parsed_result
 
+            except httpx.TimeoutException as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⏰ [GEMINI_TIMEOUT] Attempt {attempt + 1}/{max_retries}: Request timed out after {timeout.read}s, waiting {delay}s")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    print(f"❌ [GEMINI_TIMEOUT] Final attempt timed out: {e}")
+                    return {
+                        "intent": "unclear",
+                        "location": None,
+                        "activity_keywords": None,
+                        "quantity": 10,
+                        "page_number": 1,
+                        "reasoning": f"Запрос к Gemini превысил время ожидания ({timeout.read}s). Попробуйте упростить запрос.",
+                        "preliminary_response": "Извините, обработка вашего запроса заняла слишком много времени. Пожалуйста, упростите запрос или попробуйте позже."
+                    }
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in [429, 503] and attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
@@ -406,11 +426,11 @@ class GeminiService:
             except Exception as e:
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
-                    print(f"⚠️ [GEMINI_ERROR] Attempt {attempt + 1}/{max_retries}: {e}, waiting {delay}s")
+                    print(f"⚠️ [GEMINI_ERROR] Attempt {attempt + 1}/{max_retries}: {type(e).__name__}: {e}, waiting {delay}s")
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {e}")
+                    print(f"❌ [GEMINI_PARSER] Error during Gemini intent parsing: {type(e).__name__}: {e}")
                     traceback.print_exc()
                     return {
                         "intent": "unclear",
@@ -418,7 +438,7 @@ class GeminiService:
                         "activity_keywords": None,
                         "quantity": 10,
                         "page_number": 1,
-                        "reasoning": f"Не удалось обработать запрос через Gemini: {str(e)}",
+                        "reasoning": f"Не удалось обработать запрос через Gemini: {type(e).__name__}: {str(e)}",
                         "preliminary_response": "Извините, у меня возникла проблема с пониманием вашего запроса. Пожалуйста, перефразируйте."
                     }
 
