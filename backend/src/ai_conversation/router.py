@@ -236,19 +236,13 @@ async def get_company_charity_info(
         ]
         print(f"📝 [CHARITY_RESEARCH] Создан 1 строгий запрос с контекстом (AROUND)")
     else:
-        # Улучшенные запросы для поиска конкретной благотворительной деятельности
+        # Два строгих запроса с операторами близости AROUND
         search_queries = [
-            # Запрос 1: Конкретные благотворительные действия
-            f'"{company_name}" ("детский дом" OR "интернат" OR "малообеспеченные семьи" OR "тяжелобольные дети" OR "инвалиды" OR "благотворительные акции")',
+            # Запрос 1: Строгий поиск русских терминов (название компании в пределах 15 слов от ключевых терминов)
+            f'"{company_name}" AROUND(15) ("благотворительный фонд" OR "социальная ответственность" OR "КСО" OR "благотворительность" OR "спонсирует" OR "финансирует" OR "поддерживает")',
             
-            # Запрос 2: Благотворительные термины с действиями
-            f'"{company_name}" ("оказывает помощь" OR "организует праздники" OR "дарит подарки" OR "сбор средств" OR "благотворительные концерты" OR "материальная помощь")',
-            
-            # Запрос 3: Социальная ответственность и фонды
-            f'"{company_name}" ("благотворительный фонд" OR "социальная ответственность" OR "КСО" OR "благотворительность" OR "спонсирует" OR "финансирует" OR "поддерживает")',
-            
-            # Запрос 4: Английские термины
-            f'"{company_name}" ("charitable foundation" OR "charity program" OR "CSR" OR "corporate social responsibility" OR "donates" OR "sponsors" OR "charity")'
+            # Запрос 2: Строгий поиск английских терминов
+            f'"{company_name}" AROUND(15) ("charitable foundation" OR "charity program" OR "CSR" OR "corporate social responsibility" OR "donates" OR "sponsors" OR "charity")'
         ]
         print(f"📝 [CHARITY_RESEARCH] Созданы 2 строгих запроса с AROUND (русский + английский)")
 
@@ -267,135 +261,88 @@ async def get_company_charity_info(
     exclude_keywords = [
         'вакансия', 'работа', 'новости', 'реклама', 'продажа', 'услуги',
         'vacancy', 'job', 'news', 'advertisement', 'sale', 'services',
-        'купить', 'цена', 'стоимость', 'прайс', 'госзаказ', 'тендер', 'закупки',
-        'goszakup', 'tender', 'procurement', 'филиал', 'областной', 'региональный',
-        'кадровые изменения', 'назначение', 'увольнение', 'директор', 'руководитель'
+        'купить', 'цена', 'стоимость', 'прайс'
     ]
     
-    # Проверяем, доступен ли Google API
-    google_api_available = True
-    try:
-        # Тестовый запрос к Google API
-        test_url = (
-            f"https://www.googleapis.com/customsearch/v1?"
-            f"key={GOOGLE_API_KEY}&"
-            f"cx={GOOGLE_SEARCH_ENGINE_ID}&"
-            f"q=test&"
-            f"num=1"
-        )
-        timeout = httpx.Timeout(connect=5.0, read=10.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(test_url)
-            if response.status_code != 200:
-                google_api_available = False
-                print(f"⚠️ [CHARITY_RESEARCH] Google API недоступен (статус: {response.status_code})")
-    except Exception as e:
-        google_api_available = False
-        print(f"⚠️ [CHARITY_RESEARCH] Google API недоступен: {e}")
-    
-    if google_api_available:
-        # Использование httpx.AsyncClient для асинхронных запросов
-        timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            for i, query in enumerate(search_queries):
-                print(f"🔍 [CHARITY_RESEARCH] Выполняю запрос {i+1}/{len(search_queries)}: '{query[:80]}...'")
+    # Использование httpx.AsyncClient для асинхронных запросов
+    timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for i, query in enumerate(search_queries):
+            print(f"🔍 [CHARITY_RESEARCH] Выполняю запрос {i+1}/{len(search_queries)}: '{query[:80]}...'")
+            
+            search_url = (
+                f"https://www.googleapis.com/customsearch/v1?"
+                f"key={GOOGLE_API_KEY}&"
+                f"cx={GOOGLE_SEARCH_ENGINE_ID}&"
+                f"q={query}&"
+                f"num=10&"  # Увеличиваем результаты на запрос (компенсируем меньшее кол-во запросов)
+                f"lr=lang_ru&"  # Предпочтение русскому языку
+                f"gl=kz"  # Географическое ограничение - Казахстан
+            )
+
+            try:
+                response = await client.get(search_url)
+                response.raise_for_status()
+                search_data = response.json()
                 
-                search_url = (
-                    f"https://www.googleapis.com/customsearch/v1?"
-                    f"key={GOOGLE_API_KEY}&"
-                    f"cx={GOOGLE_SEARCH_ENGINE_ID}&"
-                    f"q={query}&"
-                    f"num=10&"  # Увеличиваем результаты на запрос (компенсируем меньшее кол-во запросов)
-                    f"lr=lang_ru&"  # Предпочтение русскому языку
-                    f"gl=kz"  # Географическое ограничение - Казахстан
-                )
+                found_relevant = 0
+                total_found = len(search_data.get('items', []))
 
-                try:
-                    response = await client.get(search_url)
-                    response.raise_for_status()
-                    search_data = response.json()
-                    
-                    found_relevant = 0
-                    total_found = len(search_data.get('items', []))
-
-                    if 'items' in search_data:
-                        for item in search_data['items']:
-                            title = item.get('title', '').lower()
-                            snippet = item.get('snippet', '').lower()
-                            link = item.get('link', '')
-                            full_text = f"{title} {snippet}"
-                            
-                            # 🎯 СТРОГАЯ ФИЛЬТРАЦИЯ: Проверяем что есть и название компании, и ключевые слова
-                            company_name_variants = [
-                                company_name.lower(),
-                                company_name.lower().replace('"', ''),  # без кавычек
-                                company_name.lower().replace('ао ', '').replace('тоо ', '').replace('оао ', ''),  # без правовых форм
-                            ]
-                            
-                            # Проверяем наличие названия компании в результате
-                            has_company_name = any(variant in full_text for variant in company_name_variants)
-                            
-                            # Проверяем релевантность результата (наличие благотворительных ключевых слов)
-                            is_charity_relevant = any(keyword in full_text for keyword in charity_keywords)
-                            
-                            # Проверяем отсутствие исключающих слов (шум)
-                            has_exclude_keywords = any(exclude in full_text for exclude in exclude_keywords)
-                            
-                            # 🔍 СТРОГИЕ КРИТЕРИИ: результат принимается только если:
-                            # 1. Есть название компании 2. Есть ключевые слова благотворительности 3. Нет исключающих слов
-                            if has_company_name and is_charity_relevant and not has_exclude_keywords:
-                                all_search_results.append(GoogleSearchResult(
-                                    title=item.get('title', 'Нет заголовка'),
-                                    link=link,
-                                    snippet=item.get('snippet', 'Нет описания')
-                                ))
-                                found_relevant += 1
-                                print(f"✅ [CHARITY_RESEARCH] Строгий фильтр ПРОЙДЕН: {item.get('title', '')[:50]}...")
-                            else:
-                                # Детальное логирование причин отклонения
-                                reasons = []
-                                if not has_company_name:
-                                    reasons.append("нет названия компании")
-                                if not is_charity_relevant:
-                                    reasons.append("нет ключевых слов")
-                                if has_exclude_keywords:
-                                    reasons.append("есть исключающие слова")
-                                print(f"🚫 [CHARITY_RESEARCH] Строгий фильтр НЕ ПРОЙДЕН ({', '.join(reasons)}): {item.get('title', '')[:50]}...")
-                    
-                    print(f"📊 [CHARITY_RESEARCH] Запрос {i+1}: найдено {total_found}, релевантных {found_relevant}")
-                    
-                    # Задержка между запросами (теперь максимум 2 запроса)
-                    if i < len(search_queries) - 1:  # Не ждем после последнего запроса
-                        await asyncio.sleep(1.0)  # Немного увеличиваем задержку для стабильности
-                    
-                except httpx.RequestError as e:
-                    print(f"❌ [CHARITY_RESEARCH] Ошибка HTTP для запроса '{query[:50]}...': {e}")
-                except Exception as e:
-                    print(f"❌ [CHARITY_RESEARCH] Неизвестная ошибка для запроса '{query[:50]}...': {e}")
-                    traceback.print_exc()
-    else:
-        # Используем fallback механизм
-        print("🔄 [CHARITY_RESEARCH] Используем fallback механизм")
-        from .charity_fallback import charity_fallback
-        
-        # Поиск в локальной базе данных
-        local_results = charity_fallback.search_local_database(company_name)
-        
-        # Поиск в альтернативных источниках
-        alternative_results = await charity_fallback.search_alternative_sources(company_name)
-        
-        # Объединяем результаты
-        all_fallback_results = local_results + alternative_results
-        
-        # Конвертируем в формат GoogleSearchResult
-        for result in all_fallback_results:
-            all_search_results.append(GoogleSearchResult(
-                title=result.title,
-                link=result.source,
-                snippet=result.description
-            ))
-        
-        print(f"📊 [CHARITY_RESEARCH] Fallback: найдено {len(all_fallback_results)} результатов")
+                if 'items' in search_data:
+                    for item in search_data['items']:
+                        title = item.get('title', '').lower()
+                        snippet = item.get('snippet', '').lower()
+                        link = item.get('link', '')
+                        full_text = f"{title} {snippet}"
+                        
+                        # 🎯 СТРОГАЯ ФИЛЬТРАЦИЯ: Проверяем что есть и название компании, и ключевые слова
+                        company_name_variants = [
+                            company_name.lower(),
+                            company_name.lower().replace('"', ''),  # без кавычек
+                            company_name.lower().replace('ао ', '').replace('тоо ', '').replace('оао ', ''),  # без правовых форм
+                        ]
+                        
+                        # Проверяем наличие названия компании в результате
+                        has_company_name = any(variant in full_text for variant in company_name_variants)
+                        
+                        # Проверяем релевантность результата (наличие благотворительных ключевых слов)
+                        is_charity_relevant = any(keyword in full_text for keyword in charity_keywords)
+                        
+                        # Проверяем отсутствие исключающих слов (шум)
+                        has_exclude_keywords = any(exclude in full_text for exclude in exclude_keywords)
+                        
+                        # 🔍 СТРОГИЕ КРИТЕРИИ: результат принимается только если:
+                        # 1. Есть название компании 2. Есть ключевые слова благотворительности 3. Нет исключающих слов
+                        if has_company_name and is_charity_relevant and not has_exclude_keywords:
+                            all_search_results.append(GoogleSearchResult(
+                                title=item.get('title', 'Нет заголовка'),
+                                link=link,
+                                snippet=item.get('snippet', 'Нет описания')
+                            ))
+                            found_relevant += 1
+                            print(f"✅ [CHARITY_RESEARCH] Строгий фильтр ПРОЙДЕН: {item.get('title', '')[:50]}...")
+                        else:
+                            # Детальное логирование причин отклонения
+                            reasons = []
+                            if not has_company_name:
+                                reasons.append("нет названия компании")
+                            if not is_charity_relevant:
+                                reasons.append("нет ключевых слов")
+                            if has_exclude_keywords:
+                                reasons.append("есть исключающие слова")
+                            print(f"🚫 [CHARITY_RESEARCH] Строгий фильтр НЕ ПРОЙДЕН ({', '.join(reasons)}): {item.get('title', '')[:50]}...")
+                
+                print(f"📊 [CHARITY_RESEARCH] Запрос {i+1}: найдено {total_found}, релевантных {found_relevant}")
+                
+                # Задержка между запросами (теперь максимум 2 запроса)
+                if i < len(search_queries) - 1:  # Не ждем после последнего запроса
+                    await asyncio.sleep(1.0)  # Немного увеличиваем задержку для стабильности
+                
+            except httpx.RequestError as e:
+                print(f"❌ [CHARITY_RESEARCH] Ошибка HTTP для запроса '{query[:50]}...': {e}")
+            except Exception as e:
+                print(f"❌ [CHARITY_RESEARCH] Неизвестная ошибка для запроса '{query[:50]}...': {e}")
+                traceback.print_exc()
 
     # 🎯 СТРОГАЯ ГЕНЕРАЦИЯ СВОДКИ: анализируем только прямые доказательства
     if not all_search_results:
