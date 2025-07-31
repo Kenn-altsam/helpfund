@@ -5,9 +5,9 @@ export function Footer() {
   const { t } = useTranslation();
 
   return (
-    <footer className="border-t bg-background">
-      <div className="container px-12 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-12">
+    <footer className="border-t bg-background safe-area-bottom">
+      <div className="container px-4 md:px-12 py-8 md:py-12">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-12 mobile-grid">
           <div className="space-y-4 text-center">
             <div className="flex items-center justify-center space-x-2">
               <Heart className="h-5 w-5 text-primary" />
@@ -18,33 +18,33 @@ export function Footer() {
             </p>
           </div>
           
-          <div className="space-y-6 text-center">
+          <div className="space-y-4 md:space-y-6 text-center">
             <h4 className="font-semibold text-base">{t('footer.about')}</h4>
-            <ul className="space-y-4 text-sm text-muted-foreground text-center">
-              <li><a href="#" className="hover:text-primary transition-colors">{t('footer.mission')}</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">{t('footer.team')}</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">{t('footer.reports')}</a></li>
+            <ul className="space-y-3 md:space-y-4 text-sm text-muted-foreground text-center">
+              <li><a href="#" className="hover:text-primary transition-colors touch-target block py-1">{t('footer.mission')}</a></li>
+              <li><a href="#" className="hover:text-primary transition-colors touch-target block py-1">{t('footer.team')}</a></li>
+              <li><a href="#" className="hover:text-primary transition-colors touch-target block py-1">{t('footer.reports')}</a></li>
             </ul>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <h4 className="font-semibold text-base text-center">{t('footer.services')}</h4>
             <div className="text-center">
-              <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors touch-target block py-1">
                 {t('footer.sponsorSearch')}
               </a>
             </div>
           </div>
 
-          <div className="space-y-6 text-center">
+          <div className="space-y-4 md:space-y-6 text-center">
             <h4 className="font-semibold text-base">{t('footer.initiative')}</h4>
-            <ul className="space-y-4 text-sm text-muted-foreground text-center">
+            <ul className="space-y-3 md:space-y-4 text-sm text-muted-foreground text-center">
               <li>
                 <a 
                   href="https://ayala.kz" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors"
+                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors touch-target block py-1"
                 >
                   <Globe className="h-4 w-4" />
                   <span>ayala.kz</span>
@@ -55,7 +55,7 @@ export function Footer() {
                   href="https://www.instagram.com/ayala.fond/" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors"
+                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors touch-target block py-1"
                 >
                   <Instagram className="h-4 w-4" />
                   <span>Instagram</span>
@@ -66,7 +66,7 @@ export function Footer() {
                   href="https://www.youtube.com/channel/UCwnOJRml7Zik2ZSRX1F6FCA" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors"
+                  className="flex items-center justify-center space-x-2 hover:text-primary transition-colors touch-target block py-1"
                 >
                   <Youtube className="h-4 w-4" />
                   <span>YouTube</span>
@@ -75,16 +75,16 @@ export function Footer() {
             </ul>
           </div>
           
-          <div className="space-y-6 text-center">
+          <div className="space-y-4 md:space-y-6 text-center">
             <h4 className="font-semibold text-base">{t('footer.contacts')}</h4>
-            <ul className="space-y-4 text-sm text-muted-foreground text-center">
+            <ul className="space-y-3 md:space-y-4 text-sm text-muted-foreground text-center">
               <li>
-                <a href="tel:+77271234567" className="hover:text-primary transition-colors">
+                <a href="tel:+77271234567" className="hover:text-primary transition-colors touch-target block py-1">
                   +7 (727) 123-45-67
                 </a>
               </li>
               <li>
-                <a href="mailto:info@helpfund.pro" className="hover:text-primary transition-colors">
+                <a href="mailto:info@helpfund.pro" className="hover:text-primary transition-colors touch-target block py-1">
                   info@helpfund.pro
                 </a>
               </li>
@@ -93,14 +93,14 @@ export function Footer() {
           </div>
         </div>
         
-        <div className="mt-12 pt-8 border-t text-sm text-center text-muted-foreground space-y-2">
+        <div className="mt-8 md:mt-12 pt-6 md:pt-8 border-t text-sm text-center text-muted-foreground space-y-2">
           <p>{t('footer.copyright')}</p>
           <p className="flex items-center justify-center">
             <a
               href="https://www.instagram.com/kenn_altsam/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary transition-colors flex items-center space-x-2"
+              className="hover:text-primary transition-colors flex items-center space-x-2 touch-target py-1"
             >
               <span>Made by Kenzhe</span>
               <Instagram className="h-4 w-4" />
@@ -111,7 +111,7 @@ export function Footer() {
               href="https://www.nfactorial.school"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary transition-colors flex items-center space-x-2"
+              className="hover:text-primary transition-colors flex items-center space-x-2 touch-target py-1"
             >
               <span>Supported by nFactorial</span>
             </a>

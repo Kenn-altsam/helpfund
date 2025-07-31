@@ -358,13 +358,13 @@ export function FinderPage() {
   /* --------------------------- Auth fallback --------------------------- */
   if (!user) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 mobile-padding">
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">{t('finder.notLoggedIn.title')}</h2>
             <p className="text-muted-foreground mb-6">{t('finder.notLoggedIn.description')}</p>
-            <Button onClick={() => navigate('/login')}>{t('finder.notLoggedIn.login')}</Button>
+            <Button onClick={() => navigate('/login')} className="touch-target">{t('finder.notLoggedIn.login')}</Button>
           </div>
         </div>
       </div>
@@ -373,7 +373,7 @@ export function FinderPage() {
 
   /* =============================== JSX =============================== */
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background mobile-h-screen">
       {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-80 bg-background border-r transform transition-transform duration-300 ease-in-out ${
@@ -381,13 +381,13 @@ export function FinderPage() {
         }`}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-4 border-b safe-area-top">
             <h2 className="font-semibold">{t('finder.title')}</h2>
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" onClick={startNewChat} className="text-xs">
+              <Button variant="ghost" size="sm" onClick={startNewChat} className="text-xs touch-target">
                 {t('finder.newChat')}
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="touch-target">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -401,15 +401,15 @@ export function FinderPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur relative">
+        <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur relative safe-area-top">
           <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} className="touch-target">
               <Menu className="h-4 w-4" />
             </Button>
             <Link to="/finder">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+              <Button variant="ghost" size="sm" className="flex items-center space-x-2 touch-target">
                 <MessageSquare className="h-5 w-5 text-primary" />
-                <span>{t('finder.title')}</span>
+                <span className="hidden sm:inline">{t('finder.title')}</span>
               </Button>
             </Link>
           </div>
@@ -417,18 +417,18 @@ export function FinderPage() {
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
             <Link to="/" className="flex items-center space-x-2">
               <Heart className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">helpfund.pro</span>
+              <span className="text-lg md:text-xl font-bold">helpfund.pro</span>
             </Link>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Link to="/consideration">
-              <Button variant="ghost" size="sm">
+            <Link to="/consideration" className="hidden sm:block">
+              <Button variant="ghost" size="sm" className="touch-target">
                 {t('header.consideration')}
               </Button>
             </Link>
-            <Link to="/profile">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-1">
+            <Link to="/profile" className="hidden sm:block">
+              <Button variant="ghost" size="sm" className="flex items-center space-x-1 touch-target">
                 <User className="h-4 w-4" />
                 <span>{t('header.profile')}</span>
               </Button>
@@ -437,10 +437,10 @@ export function FinderPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 mobile-padding">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
+              <div className="text-center max-w-md px-4">
                 <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">{t('finder.welcome.title')}</h3>
                 <p className="text-muted-foreground mb-4">{t('finder.welcome.description')}</p>
@@ -465,7 +465,7 @@ export function FinderPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t bg-background p-4">
+        <div className="border-t bg-background p-4 safe-area-bottom">
           <div className="max-w-4xl mx-auto">
             <div className="flex space-x-2">
               <Input
@@ -475,9 +475,9 @@ export function FinderPage() {
                 onKeyPress={handleKeyPress}
                 placeholder={t('finder.placeholder')}
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 mobile-input"
               />
-              <Button onClick={handleSendMessage} disabled={!input.trim() || isLoading} size="icon">
+              <Button onClick={handleSendMessage} disabled={!input.trim() || isLoading} size="icon" className="touch-target">
                 <Send className="h-4 w-4" />
               </Button>
             </div>

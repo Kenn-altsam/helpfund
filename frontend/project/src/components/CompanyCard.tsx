@@ -33,12 +33,12 @@ export function CompanyCard({ company }: CompanyCardProps) {
   };
 
   return (
-    <Card className="w-full hover:shadow-md transition-shadow">
+    <Card className="w-full hover:shadow-md transition-shadow mobile-card">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-lg leading-tight">{company.name}</CardTitle>
-            <div className="flex items-center space-x-2">
+          <div className="space-y-1 flex-1 min-w-0">
+            <CardTitle className="text-base md:text-lg leading-tight break-words">{company.name}</CardTitle>
+            <div className="flex items-center space-x-2 flex-wrap">
               <Badge variant="outline" className="text-xs">
                 {t('company.bin')}: {company.bin}
               </Badge>
@@ -76,7 +76,7 @@ export function CompanyCard({ company }: CompanyCardProps) {
               }
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 underline"
+              className="text-blue-600 underline break-all"
             >
               {company.website}
             </a>
@@ -88,23 +88,26 @@ export function CompanyCard({ company }: CompanyCardProps) {
         <Button
           onClick={handleAddToConsideration}
           disabled={isAdded || loading}
-          className="w-full"
+          className="w-full touch-target mobile-button"
           variant={isAdded ? 'secondary' : 'default'}
         >
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {t('company.addToConsideration')}
+              <span className="hidden sm:inline">{t('company.addToConsideration')}</span>
+              <span className="sm:hidden">Добавить</span>
             </>
           ) : isAdded ? (
             <>
               <Check className="h-4 w-4 mr-2" />
-              {t('company.addedToConsideration')}
+              <span className="hidden sm:inline">{t('company.addedToConsideration')}</span>
+              <span className="sm:hidden">Добавлено</span>
             </>
           ) : (
             <>
               <Plus className="h-4 w-4 mr-2" />
-              {t('company.addToConsideration')}
+              <span className="hidden sm:inline">{t('company.addToConsideration')}</span>
+              <span className="sm:hidden">Добавить</span>
             </>
           )}
         </Button>
