@@ -9,7 +9,7 @@ import { useGlobalContext } from '@/context/GlobalContext';
 import { authApi } from '@/services/api';
 import { toast } from 'sonner';
 import { AuthResponse } from '@/types';
-import authImage from '@/assets/hannah-busing-Zyx1bK9mqmA-unsplash.jpg';
+import handsImage from '@/assets/hannah-busing-Zyx1bK9mqmA-unsplash.jpg';
 
 export function AuthPage() {
   const { t } = useTranslation();
@@ -112,25 +112,22 @@ export function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${authImage})` }}
+          style={{ backgroundImage: `url(${handsImage})` }}
         />
         <div className="absolute inset-0 bg-black/20" />
-        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
-          <div className="text-center max-w-md">
-            <Heart className="h-16 w-16 mx-auto mb-6 text-white/90" />
-            <h1 className="text-4xl font-bold mb-4">
-              {t('header.title')}
-            </h1>
-            <p className="text-xl text-white/80 leading-relaxed">
-              {isLogin 
-                ? t('auth.login.subtitle') 
-                : t('auth.register.subtitle')
-              }
-            </p>
-            <div className="mt-8 p-4 bg-white/10 backdrop-blur-sm rounded-lg">
-              <p className="text-sm text-white/70">
-                "Unity in diversity, strength in connection"
+        <div className="relative z-10 flex items-center justify-center h-full p-12">
+          <div className="text-center text-white">
+            <div className="mb-8">
+              <Heart className="h-16 w-16 mx-auto mb-4 text-white/90" />
+              <h2 className="text-4xl font-bold mb-4">helpfund.pro</h2>
+              <p className="text-xl text-white/80 max-w-md">
+                Объединяем руки для создания лучшего будущего. Находим корпоративных спонсоров для социальных проектов.
               </p>
+            </div>
+            <div className="space-y-2 text-white/70">
+              <p>✨ Поддержка социальных инициатив</p>
+              <p>🤝 Связываем благотворителей и проекты</p>
+              <p>💝 Создаем позитивные изменения</p>
             </div>
           </div>
         </div>
