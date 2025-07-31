@@ -9,6 +9,7 @@ import { useGlobalContext } from '@/context/GlobalContext';
 import { authApi } from '@/services/api';
 import { toast } from 'sonner';
 import { AuthResponse } from '@/types';
+import authImage from '@/assets/hannah-busing-Zyx1bK9mqmA-unsplash.jpg';
 
 export function AuthPage() {
   const { t } = useTranslation();
@@ -106,114 +107,145 @@ export function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-2 mb-6">
-            <Heart className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">{t('header.title')}</span>
-          </Link>
-          <h1 className="text-2xl font-bold">
-            {isLogin ? t('auth.login.title') : t('auth.register.title')}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {isLogin ? t('auth.login.subtitle') : t('auth.register.subtitle')}
-          </p>
+    <div className="min-h-screen flex">
+      {/* Left side - Beautiful image */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${authImage})` }}
+        />
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
+          <div className="text-center max-w-md">
+            <Heart className="h-16 w-16 mx-auto mb-6 text-white/90" />
+            <h1 className="text-4xl font-bold mb-4">
+              {t('header.title')}
+            </h1>
+            <p className="text-xl text-white/80 leading-relaxed">
+              {isLogin 
+                ? t('auth.login.subtitle') 
+                : t('auth.register.subtitle')
+              }
+            </p>
+            <div className="mt-8 p-4 bg-white/10 backdrop-blur-sm rounded-lg">
+              <p className="text-sm text-white/70">
+                "Unity in diversity, strength in connection"
+              </p>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-center">
-              {isLogin ? t('auth.login.button') : t('auth.register.button')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
+      {/* Right side - Auth form */}
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 px-4 py-8">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <Link to="/" className="inline-flex items-center space-x-2 mb-6">
+              <Heart className="h-8 w-8 text-primary" />
+              <span className="text-2xl font-bold">{t('header.title')}</span>
+            </Link>
+            <h1 className="text-2xl font-bold">
+              {isLogin ? t('auth.login.title') : t('auth.register.title')}
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              {isLogin ? t('auth.login.subtitle') : t('auth.register.subtitle')}
+            </p>
+          </div>
+
+          <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-center">
+                {isLogin ? t('auth.login.button') : t('auth.register.button')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {!isLogin && (
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">
+                      {t('auth.fields.name')}
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="name"
+                        name="full_name"
+                        type="text"
+                        placeholder={t('auth.fields.namePlaceholder')}
+                        value={formData.full_name}
+                        onChange={handleInputChange}
+                        className="pl-10"
+                        required={!isLogin}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium">
-                    {t('auth.fields.name')}
+                  <label htmlFor="email" className="text-sm font-medium">
+                    {t('auth.fields.email')}
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="name"
-                      name="full_name"
-                      type="text"
-                      placeholder={t('auth.fields.namePlaceholder')}
-                      value={formData.full_name}
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder={t('auth.fields.emailPlaceholder')}
+                      value={formData.email}
                       onChange={handleInputChange}
                       className="pl-10"
-                      required={!isLogin}
+                      required
                     />
                   </div>
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
-                  {t('auth.fields.email')}
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder={t('auth.fields.emailPlaceholder')}
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="pl-10"
-                    required
-                  />
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    {t('auth.fields.password')}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      placeholder={t('auth.fields.passwordPlaceholder')}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading 
+                    ? (isLogin ? t('auth.login.loading') : t('auth.register.loading'))
+                    : (isLogin ? t('auth.login.button') : t('auth.register.button'))
+                  }
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {isLogin ? t('auth.login.noAccount') : t('auth.register.hasAccount')}{' '}
+                  <Link
+                    to={isLogin ? '/auth/register' : '/auth/login'}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    {isLogin ? t('auth.login.register') : t('auth.register.login')}
+                  </Link>
+                </p>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium">
-                  {t('auth.fields.password')}
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder={t('auth.fields.passwordPlaceholder')}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading 
-                  ? (isLogin ? t('auth.login.loading') : t('auth.register.loading'))
-                  : (isLogin ? t('auth.login.button') : t('auth.register.button'))
-                }
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {isLogin ? t('auth.login.noAccount') : t('auth.register.hasAccount')}{' '}
-                <Link
-                  to={isLogin ? '/auth/register' : '/auth/login'}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {isLogin ? t('auth.login.register') : t('auth.register.login')}
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="mt-8 text-center">
-          <p className="text-xs text-muted-foreground">
-            {t('auth.terms')}
-          </p>
+          <div className="mt-8 text-center">
+            <p className="text-xs text-muted-foreground">
+              {t('auth.terms')}
+            </p>
+          </div>
         </div>
       </div>
     </div>
