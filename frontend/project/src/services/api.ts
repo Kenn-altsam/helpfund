@@ -54,6 +54,32 @@ api.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
+    // Handle "Could not validate credentials" error globally
+    if (error.response?.status === 401 && (error.response?.data as any)?.detail === "Could not validate credentials") {
+      // Clear the invalid token
+      localStorage.removeItem('access_token');
+      
+      // Import toast dynamically to avoid circular dependencies
+      const { toast } = await import('sonner');
+      
+      // Get current language for proper error message
+      const currentLang = localStorage.getItem('i18nextLng') || 'en';
+      let message = 'Session expired. Please login again.';
+      
+      if (currentLang === 'ru') {
+        message = 'Сессия истекла. Пожалуйста, войдите снова.';
+      } else if (currentLang === 'kz') {
+        message = 'Сессия аяқталды. Қайта кіріңіз.';
+      }
+      
+      toast.error(message, { duration: 4000 });
+      
+      // Redirect to login page if not already there
+      if (window.location.pathname !== '/auth') {
+        window.location.href = '/auth';
+      }
+    }
+    
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'];
       const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 5000;

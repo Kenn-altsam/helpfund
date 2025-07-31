@@ -75,7 +75,7 @@ export function AuthPage() {
       localStorage.removeItem('access_token');
       
       if (error.response?.status === 400) {
-        const errorMessage = error.response.data?.detail;
+        const errorMessage = (error.response.data as any)?.detail;
         if (errorMessage === 'Email already registered') {
           toast.error(t('auth.errors.emailExists'), { duration: 2000 });
         } else {
@@ -84,7 +84,12 @@ export function AuthPage() {
       } else if (error.response?.status === 404) {
         toast.error(isLogin ? t('auth.errors.loginError') : t('auth.errors.registerError'), { duration: 2000 });
       } else if (error.response?.status === 401) {
-        toast.error(t('auth.errors.wrongPassword'), { duration: 2000 });
+        const errorMessage = (error.response.data as any)?.detail;
+        if (errorMessage === 'Could not validate credentials') {
+          toast.error(t('auth.errors.invalidCredentials'), { duration: 2000 });
+        } else {
+          toast.error(t('auth.errors.wrongPassword'), { duration: 2000 });
+        }
       } else if (error.response?.status === 500) {
         toast.error(t('auth.errors.serverError'), { duration: 2000 });
       } else {

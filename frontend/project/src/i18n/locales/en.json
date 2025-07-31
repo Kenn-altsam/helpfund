@@ -188,7 +188,8 @@
       "serverError": "Server error occurred",
       "invalidData": "Invalid data provided",
       "emailExists": "Email already registered",
-      "wrongPassword": "Incorrect password"
+      "wrongPassword": "Incorrect password",
+      "invalidCredentials": "Session expired. Please login again."
     },
     "terms": "By continuing, you agree to our Terms of Use and Privacy Policy"
   },
