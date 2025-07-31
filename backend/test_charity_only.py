@@ -30,7 +30,7 @@ async def test_charity_search_only():
     async with httpx.AsyncClient(timeout=timeout) as client:
         for i, query in enumerate(queries, 1):
             print(f"\n🔍 Запрос {i}: {query}")
-            print("-" * 50)
+            print("-" * 50) 
             
             search_url = (
                 f"https://www.googleapis.com/customsearch/v1?"
